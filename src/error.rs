@@ -692,9 +692,9 @@ mod tests {
         );
     }
 
+    /// success:false with no error code: classify on the HTTP status alone.
     #[test]
-    fn defensive_rows_classify() {
-        // success:false with no error code: classify on the HTTP status prefix.
+    fn codeless_errors_classify_on_the_http_status() {
         assert_classified(
             404,
             None,
@@ -721,8 +721,11 @@ mod tests {
             Exit::Forbidden,
         );
         assert_classified(401, None, None, "rule", "auth.denied", Exit::Auth);
+    }
 
-        // Empty/non-JSON bodies.
+    #[test]
+    fn unparseable_bodies_classify_with_a_synthesized_upstream() {
+        // Non-2xx: classify on the status, upstream fully null-membered.
         let e = classify_unparseable(500, "rule", None);
         assert_eq!(
             (e.code.as_str(), e.exit()),
@@ -733,14 +736,16 @@ mod tests {
         assert_eq!(upstream.http_status, Some(500));
         assert_eq!(upstream.message, None);
 
-        // 2xx with an unparseable body: success cannot be confirmed.
+        // 2xx: success cannot be confirmed, so still exit 8.
         let e = classify_unparseable(200, "rule", None);
         assert_eq!(
             (e.code.as_str(), e.exit()),
             ("upstream.error", Exit::Retryable)
         );
+    }
 
-        // A garbage code that yields no plausible status falls back to HTTP.
+    #[test]
+    fn an_implausible_code_prefix_falls_back_to_the_http_status() {
         assert_classified(404, Some(7), None, "rule", "rule.not_found", Exit::NotFound);
     }
 
@@ -775,26 +780,31 @@ mod tests {
     }
 
     #[test]
-    fn collapse_handles_hostile_text() {
-        // The multi-line PHP print_r dump.
+    fn collapse_flattens_the_multiline_php_dump() {
         let php = "do must be one of Array\n(\n    [0] => 0\n    [1] => 1\n)\n ";
         assert_eq!(
             collapse_to_single_line(php),
             "do must be one of Array ( [0] => 0 [1] => 1 )"
         );
-        // CRLF.
+    }
+
+    #[test]
+    fn collapse_joins_crlf_lines() {
         assert_eq!(
             collapse_to_single_line("line one\r\nline two"),
             "line one line two"
         );
-        // ANSI escapes are stripped, never forwarded.
+    }
+
+    #[test]
+    fn collapse_strips_ansi_escapes() {
         let ansi = "bad \u{1b}[31mred\u{1b}[0m input";
         assert_eq!(collapse_to_single_line(ansi), "bad [31mred[0m input");
         assert!(!collapse_to_single_line(ansi).contains('\u{1b}'));
     }
 
     #[test]
-    fn details_serialize_to_the_d4_shapes() {
+    fn multi_target_details_serialize_to_the_d4_shape() {
         // Through the constructors: a Failed row derives its members from an
         // already-classified Error, so the slug is the CLI's by construction.
         let failure = classify_response(500, Some(50001), Some("boom"), "rule", None);
@@ -825,7 +835,10 @@ mod tests {
             let keys: Vec<&String> = row.as_object().expect("object").keys().collect();
             assert_eq!(keys, ["target", "outcome", "code", "retryable", "upstream"]);
         }
+    }
 
+    #[test]
+    fn collision_details_serialize_to_the_d4_shape() {
         let collisions = Details::Collisions {
             collisions: vec![Collision {
                 hostname: "x.example".into(),
@@ -839,7 +852,10 @@ mod tests {
             value.get("retry_argv").is_none(),
             "collisions carry no retry_argv"
         );
+    }
 
+    #[test]
+    fn unconvergeable_details_serialize_to_the_d4_shape() {
         let unconvergeable = Details::Unconvergeable {
             rules: vec![UnconvergeableRule {
                 hostname: "v6.example".into(),
