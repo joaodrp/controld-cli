@@ -1258,6 +1258,429 @@ fn api_rejects_explicit_json_flags() {
     }
 }
 
+// --- profile list/get: human/plain/json rendering, name resolution, hazards ---
+
+/// The insta filter shared by every profile snapshot: the mock server's
+/// ephemeral port — precautionary, since stdout never embeds the URI today.
+/// The `UPDATED` column's relative-time phrase needs no filter —
+/// `CONTROLD_UNIX_NOW` freezes `now()`, so it renders a stable phrase on
+/// its own.
+fn profile_snapshot_filters() -> Vec<(&'static str, &'static str)> {
+    vec![(r"127\.0\.0\.1:\d+", "127.0.0.1:[port]")]
+}
+
+/// A `MockServer` with `GET /profiles` mounted, serving `fixture_name` as the
+/// raw body; `expect` is the number of `/profiles` calls the test drives.
+async fn profiles_server(fixture_name: &str, expect: u64) -> MockServer {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/profiles"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(fixture(fixture_name), "application/json"),
+        )
+        .expect(expect)
+        .mount(&server)
+        .await;
+    server
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn profile_list_renders_all_three_modes() {
+    let server = profiles_server("profiles.json", 3).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let human_assert = cdctl_against(&uri, dir.path())
+            .env("CONTROLD_UNIX_NOW", "1783300000")
+            .args(["profile", "list"])
+            .assert()
+            .success();
+        let human = String::from_utf8_lossy(&human_assert.get_output().stdout).into_owned();
+
+        let plain_assert = cdctl_against(&uri, dir.path())
+            .env("CONTROLD_UNIX_NOW", "1783300000")
+            .args(["profile", "list", "--plain"])
+            .assert()
+            .success();
+        let plain = String::from_utf8_lossy(&plain_assert.get_output().stdout).into_owned();
+        assert!(
+            !plain.contains('│') && !plain.contains('─'),
+            "plain mode drops border glyphs: {plain}"
+        );
+
+        let json_assert = cdctl_against(&uri, dir.path())
+            .env("CONTROLD_UNIX_NOW", "1783300000")
+            .args(["profile", "list", "--json"])
+            .assert()
+            .success();
+        let json = String::from_utf8_lossy(&json_assert.get_output().stdout).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        let profiles = doc.as_array().expect("array of profiles");
+        assert_eq!(profiles.len(), 4);
+        let first = profiles[0].as_object().expect("object");
+        assert_eq!(
+            first.keys().collect::<Vec<_>>(),
+            vec![
+                "id",
+                "name",
+                "enabled_rules",
+                "enabled_filters",
+                "enabled_services",
+                "folders",
+                "options",
+                "default_action",
+                "enabled",
+                "disabled_until",
+                "updated",
+            ]
+        );
+
+        insta::with_settings!({filters => profile_snapshot_filters()}, {
+            insta::assert_snapshot!("profile_list_human", human);
+            insta::assert_snapshot!("profile_list_plain", plain);
+            insta::assert_snapshot!("profile_list_json", json);
+        });
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn profile_list_normalizes_disabled_and_unset_defaults() {
+    let server = profiles_server("profiles_dup_names.json", 1).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["profile", "list", "--json"])
+            .assert()
+            .success();
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stdout).expect("data");
+        let profiles = doc.as_array().expect("array");
+
+        let paused = profiles
+            .iter()
+            .find(|p| p["name"] == "Paused")
+            .expect("Paused profile present");
+        assert_eq!(paused["enabled"], false);
+        assert_eq!(paused["disabled_until"], "2026-07-15T08:00:00Z");
+        assert_eq!(paused["default_action"]["action"], "block");
+
+        let fresh = profiles
+            .iter()
+            .find(|p| p["name"] == "Fresh")
+            .expect("Fresh profile present");
+        assert_eq!(
+            fresh["default_action"],
+            serde_json::json!({"action": "bypass", "via": null, "enabled": true})
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn profile_get_resolves_names_case_insensitively() {
+    let server = profiles_server("profiles.json", 2).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let by_name = cdctl_against(&uri, dir.path())
+            .args(["profile", "get", "kids", "--json"])
+            .assert()
+            .success();
+        let doc: serde_json::Value =
+            serde_json::from_slice(&by_name.get_output().stdout).expect("data");
+        assert!(doc.is_object(), "get returns one object, not an array");
+        assert_eq!(doc["name"], "Kids");
+        assert_eq!(doc["id"], "pk69038f3c");
+
+        let by_id = cdctl_against(&uri, dir.path())
+            .args(["profile", "get", "pk69038f3c", "--json"])
+            .assert()
+            .success();
+        let doc: serde_json::Value =
+            serde_json::from_slice(&by_id.get_output().stdout).expect("data");
+        assert_eq!(doc["id"], "pk69038f3c");
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn profile_get_human_renders_key_values() {
+    let server = profiles_server("profiles.json", 1).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .env("CONTROLD_UNIX_NOW", "1783300000")
+            .args(["profile", "get", "Kids"])
+            .assert()
+            .success();
+        let stdout = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+        insta::with_settings!({filters => profile_snapshot_filters()}, {
+            insta::assert_snapshot!("profile_get_human", stdout);
+        });
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn profile_get_ambiguous_name_exits_2() {
+    let server = profiles_server("profiles_dup_names.json", 1).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["profile", "get", "Home"])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            stderr.contains("pk11aa22bb"),
+            "names the first match: {stderr}"
+        );
+        assert!(
+            stderr.contains("pk33cc44dd"),
+            "names the second match: {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn profile_get_unknown_selector_exits_3() {
+    let server = profiles_server("profiles.json", 1).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["profile", "get", "nope", "--json"])
+            .assert()
+            .code(3)
+            .stdout(predicates::str::is_empty());
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "profile.not_found");
+        assert_eq!(doc["error"]["retryable"], false);
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn profile_selector_control_chars_exit_2_before_any_request() {
+    let server = MockServer::start().await;
+    Mock::given(wiremock::matchers::any())
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl_against(&uri, dir.path())
+            .args(["profile", "get", "bad\u{7}name"])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+    })
+    .await
+    .expect("command runs");
+    // MockServer verifies .expect(0) on drop: no request was ever built.
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn profile_tables_escape_hostile_names() {
+    let server = profiles_server("profiles_hostile_name.json", 1).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .env("CONTROLD_UNIX_NOW", "1783300000")
+            .args(["profile", "list"])
+            .assert()
+            .success();
+        let stdout = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+        assert!(
+            !stdout.contains('\u{1b}'),
+            "no raw escape reaches the terminal: {stdout:?}"
+        );
+        assert!(
+            stdout.contains("^["),
+            "the escape is caret-rendered: {stdout}"
+        );
+
+        insta::with_settings!({filters => profile_snapshot_filters()}, {
+            insta::assert_snapshot!("profile_list_hostile_human", stdout);
+        });
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn profile_list_empty_is_exit_0_with_empty_json_array() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/profiles"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"profiles": []},
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["profile", "list", "--json"])
+            .assert()
+            .success();
+        assert_eq!(assert.get_output().stdout, b"[]\n");
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn profile_list_error_keeps_stdout_empty() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/profiles"))
+        .respond_with(error_envelope(400, 40001, "No session token provided"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl_against(&uri, dir.path())
+            .args(["profile", "list"])
+            .assert()
+            .code(4)
+            .stdout(predicates::str::is_empty());
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn profile_list_projects_fields() {
+    let server = profiles_server("profiles.json", 1).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["profile", "list", "--fields", "name,id"])
+            .assert()
+            .success();
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stdout).expect("data");
+        let profiles = doc.as_array().expect("array");
+        assert_eq!(profiles.len(), 4);
+        for profile in profiles {
+            let keys: std::collections::HashSet<&str> = profile
+                .as_object()
+                .expect("object")
+                .keys()
+                .map(String::as_str)
+                .collect();
+            let expected: std::collections::HashSet<&str> = ["name", "id"].into_iter().collect();
+            assert_eq!(keys, expected);
+        }
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(!stderr.contains("warning"), "no typo warning: {stderr}");
+    })
+    .await
+    .expect("command runs");
+}
+
+/// `body` flips to `[]` on success too (the documented hazard) — but a
+/// non-object body defeats `keyed("profiles")`, so it must classify as an
+/// unconfirmable shape, exit 8, never a panic or a false-empty list.
+/// `--no-retry`: exit-8 errors are retryable and GETs retry by default,
+/// which would trip the `.expect(1)` mock.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn profile_list_shape_error_exits_8() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/profiles"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": [],
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["profile", "list", "--json", "--no-retry"])
+            .assert()
+            .code(8)
+            .stdout(predicates::str::is_empty());
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "upstream.error");
+        assert_eq!(doc["error"]["retryable"], true);
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn fields_typo_warns_on_stderr() {
+    let server = profiles_server("profiles.json", 1).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["profile", "list", "--fields", "name,nmae"])
+            .assert()
+            .success();
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stdout).expect("data");
+        let profiles = doc.as_array().expect("array");
+        for profile in profiles {
+            let keys: Vec<&str> = profile
+                .as_object()
+                .expect("object")
+                .keys()
+                .map(String::as_str)
+                .collect();
+            assert_eq!(keys, ["name"]);
+        }
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            stderr.contains("warning: --fields: no such field \"nmae\""),
+            "got: {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
 // --- SIGPIPE: `cdctl reference | head` must die quietly with 141, never panic ---
 
 #[cfg(unix)]

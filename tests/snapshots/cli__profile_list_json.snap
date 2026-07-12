@@ -1,0 +1,74 @@
+---
+source: tests/cli.rs
+expression: json
+---
+[
+  {
+    "id": "pk4cada1c5",
+    "name": "Aggressive",
+    "enabled_rules": 8,
+    "enabled_filters": 8,
+    "enabled_services": 0,
+    "folders": 0,
+    "options": 4,
+    "default_action": {
+      "action": "bypass",
+      "via": null,
+      "enabled": true
+    },
+    "enabled": true,
+    "disabled_until": null,
+    "updated": "2026-07-01T17:32:28Z"
+  },
+  {
+    "id": "pkae1060cf",
+    "name": "Hardened",
+    "enabled_rules": 8,
+    "enabled_filters": 7,
+    "enabled_services": 0,
+    "folders": 0,
+    "options": 4,
+    "default_action": {
+      "action": "bypass",
+      "via": null,
+      "enabled": true
+    },
+    "enabled": true,
+    "disabled_until": null,
+    "updated": "2026-07-04T13:59:48Z"
+  },
+  {
+    "id": "pk69038f3c",
+    "name": "Kids",
+    "enabled_rules": 0,
+    "enabled_filters": 13,
+    "enabled_services": 16,
+    "folders": 0,
+    "options": 7,
+    "default_action": {
+      "action": "bypass",
+      "via": null,
+      "enabled": true
+    },
+    "enabled": true,
+    "disabled_until": null,
+    "updated": "2025-03-11T11:41:01Z"
+  },
+  {
+    "id": "pkc73939ba",
+    "name": "Relaxed",
+    "enabled_rules": 3,
+    "enabled_filters": 4,
+    "enabled_services": 0,
+    "folders": 0,
+    "options": 4,
+    "default_action": {
+      "action": "bypass",
+      "via": null,
+      "enabled": true
+    },
+    "enabled": true,
+    "disabled_until": null,
+    "updated": "2025-03-11T11:40:17Z"
+  }
+]

@@ -1,0 +1,15 @@
+---
+source: tests/cli.rs
+expression: stdout
+---
+name              Kids
+id                pk69038f3c
+enabled_rules     0
+enabled_filters   13
+enabled_services  16
+folders           0
+options           7
+default_action    bypass
+enabled           true
+disabled_until    
+updated           2025-03-11T11:41:01Z

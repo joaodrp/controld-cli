@@ -8,6 +8,7 @@ mod cli;
 mod commands;
 mod config;
 mod error;
+mod model;
 mod output;
 
 use std::io::Write;
@@ -90,6 +91,7 @@ async fn dispatch(command: Command, globals: &Globals) -> Result<(), Error> {
     match command {
         Command::Api(args) => commands::api::run(args, globals).await,
         Command::Auth(command) => commands::auth::run(command, globals).await,
+        Command::Profile(command) => commands::profile::run(command, globals).await,
         Command::Config(command) => commands::config::run(command, globals),
         Command::Completions { shell } => commands::completions::run(shell, globals),
         Command::Reference => commands::reference::run(globals),

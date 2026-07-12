@@ -6,7 +6,10 @@ pub mod api;
 pub mod auth;
 pub mod completions;
 pub mod config;
+pub mod profile;
 pub mod reference;
+pub mod scope;
+pub mod validate;
 
 use crate::api::client::{Client, ClientConfig};
 use crate::cli::Globals;

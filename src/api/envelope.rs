@@ -13,7 +13,7 @@
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-use crate::error::{Error, Exit};
+use crate::error::Error;
 
 /// A parsed response envelope. Success is `success == true` — `body: []` is
 /// *not* an error marker (successful deletes return it too), and errors are
@@ -61,9 +61,16 @@ impl Envelope {
     }
 
     /// Keyed: `{"body": {"profiles": [...]}}` — the common shape.
-    #[allow(dead_code, reason = "first caller is Phase 3 (`profile list`)")]
     pub fn keyed(self, key: &str) -> Result<Value, Error> {
         self.keyed_with_siblings(key).map(|(payload, _)| payload)
+    }
+
+    /// [`Envelope::keyed`], then deserialized into `T` — a shape mismatch is
+    /// still `upstream.error`, exit 8, never a panic.
+    pub fn keyed_as<T: serde::de::DeserializeOwned>(self, key: &str) -> Result<T, Error> {
+        let payload = self.keyed(key)?;
+        serde_json::from_value(payload)
+            .map_err(|e| crate::error::upstream_shape(format_args!("in {key}: {e}")))
     }
 
     /// Flat: `/users`, `/ip` — the body itself is the payload, no controller key.
@@ -103,16 +110,13 @@ pub fn object_or_empty_array(value: Value) -> Result<Map<String, Value>, Error> 
 /// A 2xx whose body defies the verified shape: success cannot be confirmed,
 /// so it classifies exactly like an unparseable 2xx body — exit 8.
 fn shape_error(expected: &str) -> Error {
-    Error::new(
-        "upstream.error",
-        format!("unexpected API response shape: expected {expected}; success cannot be confirmed"),
-        Exit::Retryable,
-    )
+    crate::error::upstream_shape(format_args!("expected {expected}"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::Exit;
     use std::fs;
     use std::path::PathBuf;
 

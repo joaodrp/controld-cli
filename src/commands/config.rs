@@ -62,9 +62,7 @@ fn get(store: &Store, key: Key) -> Result<(), Error> {
 }
 
 fn set(store: &Store, key: Key, value: String) -> Result<(), Error> {
-    if value.chars().any(char::is_control) {
-        return Err(Error::usage("the value contains control characters"));
-    }
+    super::validate::reject_control_chars(&value, "the value")?;
     let mut config = super::load_config(store)?;
     match key {
         Key::CurrentContext => {

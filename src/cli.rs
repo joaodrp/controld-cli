@@ -2,7 +2,9 @@
 
 use clap::{Args, Parser, Subcommand};
 
-use crate::commands::{api::ApiArgs, auth::AuthCommand, config::ConfigCommand};
+use crate::commands::{
+    api::ApiArgs, auth::AuthCommand, config::ConfigCommand, profile::ProfileCommand,
+};
 use crate::error::Error;
 use crate::output::Mode;
 
@@ -76,6 +78,9 @@ pub enum Command {
     /// Authenticate cdctl with an API token
     #[command(subcommand)]
     Auth(AuthCommand),
+    /// Inspect the account's profiles
+    #[command(subcommand)]
+    Profile(ProfileCommand),
     /// Read and write cdctl's own configuration
     #[command(subcommand)]
     Config(ConfigCommand),
@@ -89,10 +94,7 @@ pub enum Command {
 /// ambient — only an explicit `--json`/`--fields` conflicts with commands
 /// whose stdout is never JSON (`completions`, `reference`, `api`).
 #[derive(Debug)]
-#[expect(
-    dead_code,
-    reason = "profile and plain are read from Phase 3 (rules & folders)"
-)]
+#[expect(dead_code, reason = "read from the rule/folder commands (next PR)")]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "CLI flags are boolean by nature"
