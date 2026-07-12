@@ -63,6 +63,12 @@ async fn run() -> ExitCode {
         Ok(()) => Exit::Success.into(),
         Err(err) => {
             err.render_to_stderr(globals.json(), globals.debug);
+            // SIGINT leaves the process directly: a normal return drops the
+            // runtime, whose shutdown waits on blocking tasks — a Ctrl-C
+            // during a stdin read would turn into a hang until EOF.
+            if err.exit() == Exit::Interrupt {
+                std::process::exit(i32::from(Exit::Interrupt as u8));
+            }
             err.exit().into()
         }
     }

@@ -1050,6 +1050,52 @@ async fn api_never_sends_the_token_to_an_unpinned_origin() {
     .expect("command runs");
 }
 
+/// Ctrl-C must stay live while `--input -` waits on stdin: the read runs off
+/// the runtime thread and the interrupt path exits without waiting for it.
+/// The pipe is held open so the read never completes on its own.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sigint_while_reading_stdin_exits_130() {
+    use nix::sys::signal::{Signal, kill};
+    use nix::unistd::Pid;
+
+    let dir = tempdir();
+    let status = tokio::task::spawn_blocking(move || {
+        let mut child = std::process::Command::new(assert_cmd::cargo::cargo_bin("cdctl"))
+            .env_clear()
+            .env("XDG_CONFIG_HOME", dir.path())
+            // Default origin; the request is never sent — stdin blocks first.
+            .env("CONTROLD_API_TOKEN", "api.test-token")
+            .args(["api", "/x", "-X", "PUT", "--yes", "--input", "-"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawns");
+        // Keep the write end open: dropping it would EOF the read and turn
+        // this into the empty-body rejection instead of a blocked read.
+        let stdin = child.stdin.take();
+
+        std::thread::sleep(Duration::from_millis(800));
+        kill(
+            Pid::from_raw(i32::try_from(child.id()).expect("pid fits")),
+            Signal::SIGINT,
+        )
+        .expect("signal delivered");
+        let status = child.wait().expect("wait");
+        drop(stdin);
+        status
+    })
+    .await
+    .expect("task runs");
+
+    assert_eq!(
+        status.code(),
+        Some(130),
+        "SIGINT contract holds during stdin reads"
+    );
+}
+
 #[test]
 fn api_rejects_explicit_json_flags() {
     let dir = tempdir();
