@@ -950,6 +950,39 @@ async fn api_writes_are_never_retried_and_errors_classify() {
     .expect("commands run");
 }
 
+/// Production envelope parsing accepts unknown fields, so a non-envelope
+/// JSON error (a gateway, an undocumented endpoint) parses as a marker-less
+/// envelope — it must classify on the HTTP status: terminal exit 3, one
+/// request, never the retryable unconfirmed-success stance. Unit tests
+/// cannot catch a regression here: the test-only `deny_unknown_fields`
+/// pushes this body down the parse-error branch instead.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn api_classifies_non_envelope_json_errors_on_the_http_status() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/plain-404"))
+        .respond_with(
+            ResponseTemplate::new(404)
+                .set_body_raw(r#"{"detail": "no such endpoint"}"#, "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        // No --no-retry: a second request would trip the .expect(1) above.
+        cdctl_against(&uri, dir.path())
+            .args(["api", "/plain-404"])
+            .assert()
+            .code(3)
+            .stdout(predicates::str::is_empty());
+    })
+    .await
+    .expect("command runs");
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn api_never_sends_the_token_to_an_unpinned_origin() {
     let server = MockServer::start().await;
