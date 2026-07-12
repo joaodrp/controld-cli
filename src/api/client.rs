@@ -272,7 +272,14 @@ impl Client {
         path: &str,
         body: Option<RawBody>,
     ) -> Result<WireResponse, Error> {
-        let url = join_pinned_to_origin(&self.base_url, path)?;
+        let url =
+            join_pinned_to_origin(&self.base_url, path).map_err(|rejection| match rejection {
+                JoinRejection::Malformed(error) => error,
+                JoinRejection::OffOrigin => Error::usage(format!(
+                    "request path {path:?} resolves outside the API origin ({origin})",
+                    origin = self.base_url.origin().ascii_serialization()
+                )),
+            })?;
 
         if self.debug {
             // The Authorization header is never traced (token redaction, D6).
@@ -326,21 +333,32 @@ impl Client {
     }
 }
 
+/// Why [`join_pinned_to_origin`] refused a path. Callers word the
+/// off-origin message for their own audience (the choke point names the
+/// real origin; `validate_path` must not leak its probe base).
+#[expect(
+    clippy::large_enum_variant,
+    reason = "rejection paths are cold; matches the crate-wide result_large_err allowance"
+)]
+pub(crate) enum JoinRejection {
+    /// The path itself did not parse; carries the precise diagnosis.
+    Malformed(Error),
+    OffOrigin,
+}
+
 /// Join `path` onto `base`, refusing any result that leaves `base`'s origin
 /// (D9). WHATWG parsing treats `\` like `/` and lets absolute or
 /// scheme-relative input replace the host — so the joined result is checked,
 /// never the input's shape. `cdctl api` runs the same algorithm pre-auth.
-pub(crate) fn join_pinned_to_origin(base: &Url, path: &str) -> Result<Url, Error> {
-    let url = base
-        .join(path)
-        .map_err(|e| Error::usage(format!("invalid request path {path:?}: {e}")))?;
-    if url.origin() != base.origin() {
-        return Err(Error::usage(format!(
-            "request path {path:?} resolves outside the API origin ({origin})",
-            origin = base.origin().ascii_serialization()
-        )));
+pub(crate) fn join_pinned_to_origin(base: &Url, path: &str) -> Result<Url, JoinRejection> {
+    let url = base.join(path).map_err(|e| {
+        JoinRejection::Malformed(Error::usage(format!("invalid request path {path:?}: {e}")))
+    })?;
+    if url.origin() == base.origin() {
+        Ok(url)
+    } else {
+        Err(JoinRejection::OffOrigin)
     }
-    Ok(url)
 }
 
 /// The D12 write contract's failure hint: a retryable error keeps exit 8 but
@@ -402,9 +420,12 @@ fn interpret_raw(wire: &WireResponse, resource: &'static str) -> Result<Bytes, E
             retry_after,
         )),
         Ok(envelope) => Err(classify_envelope_error(&envelope, wire, resource)),
+        // For the escape hatch the raw body (an HTML block page, gateway
+        // text) is often the only actionable evidence — say where it went.
         Err(parse_err) => Err(
             classify_unparseable(wire.status.as_u16(), resource, retry_after)
-                .with_debug_note(unparseable_body_note(&wire.body, &parse_err)),
+                .with_debug_note(unparseable_body_note(&wire.body, &parse_err))
+                .with_hint("re-run with --debug to see the unparseable response body"),
         ),
     }
 }
