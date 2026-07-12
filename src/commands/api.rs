@@ -130,14 +130,18 @@ async fn read_body(body: PendingBody) -> Result<RawBody, Error> {
 /// of the path's shape alone, so probing against a fixed base runs the same
 /// join-and-compare algorithm the client enforces at its choke point.
 fn validate_path(path: &str) -> Result<(), Error> {
+    use crate::api::client::{JoinRejection, join_pinned_to_origin};
     let probe = Url::parse("https://cdctl-path-probe.invalid").expect("the probe base is valid");
-    crate::api::client::join_pinned_to_origin(&probe, path)
+    join_pinned_to_origin(&probe, path)
         .map(drop)
-        .map_err(|_| {
-            Error::usage(format!(
+        .map_err(|rejection| match rejection {
+            // A path that would not even parse: the precise diagnosis beats
+            // a wrong "not relative" claim.
+            JoinRejection::Malformed(error) => error,
+            JoinRejection::OffOrigin => Error::usage(format!(
                 "{path:?} is not a relative path; pass one relative to the API origin, \
                  e.g. \"/users\" (absolute and scheme-relative URLs are rejected)"
-            ))
+            )),
         })
 }
 
