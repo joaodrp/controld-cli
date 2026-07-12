@@ -2,6 +2,7 @@
 //! The per-request ritual (config -> warnings -> token -> client) lives here,
 //! once — handlers receive a ready [`Client`], never re-derive one.
 
+pub mod api;
 pub mod auth;
 pub mod completions;
 pub mod config;

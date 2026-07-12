@@ -50,7 +50,6 @@ impl Default for RetryPolicy {
 #[derive(Debug)]
 pub enum RawBody {
     Form(Vec<(String, String)>),
-    #[allow(dead_code, reason = "first constructor is the `cdctl api` command")]
     Json(Vec<u8>),
 }
 
@@ -245,7 +244,6 @@ impl Client {
 
     /// Raw GET for `cdctl api` (D9): the body bytes verbatim, with the D12
     /// retry loop. Errors still classify through the standard rules.
-    #[allow(dead_code, reason = "first caller is the `cdctl api` command")]
     pub async fn get_raw(&self, path: &str, resource: &'static str) -> Result<Vec<u8>, Error> {
         self.get_with(path, |wire| {
             interpret_raw(wire.status, wire.retry_after.seconds(), &wire.body, resource)
@@ -255,7 +253,6 @@ impl Client {
 
     /// Raw mutation for `cdctl api` (D9): sent exactly once, body bytes back
     /// verbatim. Same never-replay contract as [`Client::write`].
-    #[allow(dead_code, reason = "first caller is the `cdctl api` command")]
     pub async fn write_raw(
         &self,
         method: Method,

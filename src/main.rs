@@ -86,6 +86,7 @@ async fn wait_for_sigint() -> Error {
 
 async fn dispatch(command: Command, globals: &Globals) -> Result<(), Error> {
     match command {
+        Command::Api(args) => commands::api::run(args, globals).await,
         Command::Auth(command) => commands::auth::run(command, globals).await,
         Command::Config(command) => commands::config::run(command, globals),
         Command::Completions { shell } => commands::completions::run(shell, globals),
