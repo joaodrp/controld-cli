@@ -144,6 +144,25 @@ fn auth_status_without_token_is_exit_4() {
     assert_eq!(doc["error"]["upstream"], serde_json::Value::Null);
 }
 
+/// The missing token outranks request-only environment problems: resolving
+/// auth is an authenticated command's first concern, so a malformed
+/// CONTROLD_API_URL must not demote the documented exit 4 to a usage error.
+#[test]
+fn missing_token_outranks_a_malformed_base_url() {
+    let dir = tempdir();
+    let assert = cdctl(dir.path())
+        .env("CONTROLD_API_URL", "not a url")
+        .args(["auth", "status", "--json"])
+        .assert()
+        .code(4)
+        .stdout(predicates::str::is_empty());
+
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    let doc: serde_json::Value =
+        serde_json::from_str(&stderr).expect("stderr is one JSON document");
+    assert_eq!(doc["error"]["code"], "auth.missing_token");
+}
+
 // --- Hostile upstream messages: one clean line, verbatim JSON, escaped debug ---
 
 async fn stderr_for(server: &MockServer, dir: &std::path::Path, extra_args: &[&str]) -> String {
@@ -1106,6 +1125,75 @@ async fn api_never_sends_the_token_to_an_unpinned_origin() {
             stderr.contains("pinned origin"),
             "the refusal names the policy: {stderr}"
         );
+    })
+    .await
+    .expect("command runs");
+}
+
+/// D7: with no token configured the request still goes out, carrying no
+/// `Authorization` header — the spec marks `/network` (and `/ip`, service
+/// categories/catalog) `security: []`, and `cdctl api` is the only route to
+/// them until their typed commands ship.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn api_tokenless_get_sends_no_authorization_header() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/network"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(fixture("network.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        // No CONTROLD_API_TOKEN, no config file, no unsafe switch: a
+        // tokenless client has nothing to leak off the pinned origin.
+        cdctl(dir.path())
+            .env("CONTROLD_API_URL", &uri)
+            .args(["api", "/network"])
+            .assert()
+            .success();
+    })
+    .await
+    .expect("command runs");
+
+    let requests = server
+        .received_requests()
+        .await
+        .expect("request recording is on");
+    assert!(
+        requests
+            .iter()
+            .all(|r| !r.headers.contains_key("authorization")),
+        "a tokenless invocation must not invent an Authorization header"
+    );
+}
+
+/// A tokenless request the server rejects classifies like any other auth
+/// failure: the 400/`40001` trap maps to exit 4 — the server's verdict,
+/// not a client-side preemption.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn api_tokenless_request_rejected_upstream_exits_4() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/users"))
+        .respond_with(error_envelope(400, 40001, "No session token provided"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl(dir.path())
+            .env("CONTROLD_API_URL", &uri)
+            .args(["api", "/users"])
+            .assert()
+            .code(4)
+            .stdout(predicates::str::is_empty());
     })
     .await
     .expect("command runs");
