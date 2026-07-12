@@ -187,8 +187,7 @@ mod tests {
     #[test]
     fn form_fields_do_not_leak_into_the_global_fields_flag() {
         use clap::Parser;
-        let cli =
-            crate::cli::Cli::parse_from(["cdctl", "api", "/x", "-X", "POST", "-F", "a=b"]);
+        let cli = crate::cli::Cli::parse_from(["cdctl", "api", "/x", "-X", "POST", "-F", "a=b"]);
         assert_eq!(cli.globals.fields, None);
         assert!(!cli.globals.json);
     }

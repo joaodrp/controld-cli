@@ -681,6 +681,320 @@ async fn retries_are_logged_to_stderr() {
     .expect("command runs");
 }
 
+// --- cdctl api: the D9 escape hatch (plan.md Phase 2 gate) ---
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn api_get_prints_the_body_verbatim_and_query_rides_the_path() {
+    // Distinctive spacing and no trailing newline: any reshaping would show.
+    let raw_body = "{\"body\": {\"actively\":  \"unstable\"},   \"success\": true}";
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/access"))
+        .and(wiremock::matchers::query_param("device_id", "abc"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(raw_body, "application/json"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["api", "/access?device_id=abc"])
+            .assert()
+            .success();
+        assert_eq!(
+            assert.get_output().stdout,
+            raw_body.as_bytes(),
+            "the body must pass through byte-for-byte"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+#[test]
+fn api_rejects_urls_that_leave_the_origin() {
+    let dir = tempdir();
+    for url in [
+        "https://evil.example/x",
+        "//evil.example/x",
+        "/\\evil.example/x",
+        "https://user:pw@evil.example/x",
+    ] {
+        // No token in the environment: rejection happens before any auth work.
+        cdctl(dir.path())
+            .args(["api", url])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn api_non_get_requires_yes_and_exits_7() {
+    let server = MockServer::start().await;
+    // The gate fires before any request leaves the process.
+    Mock::given(wiremock::matchers::any())
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .env("CONTROLD_OUTPUT", "json")
+            .args(["api", "/profiles", "-X", "POST", "-F", "name=x"])
+            .assert()
+            .code(7)
+            .stdout(predicates::str::is_empty());
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "confirmation.required");
+        assert_eq!(doc["error"]["retryable"], false);
+    })
+    .await
+    .expect("command runs");
+}
+
+#[test]
+fn api_body_forms_require_a_non_get_method_and_are_exclusive() {
+    let dir = tempdir();
+    // -F without -X.
+    cdctl(dir.path())
+        .args(["api", "/x", "-F", "a=b"])
+        .assert()
+        .code(2)
+        .stdout(predicates::str::is_empty());
+    // --input - without -X; stdin must not be drained (no hang without input).
+    cdctl(dir.path())
+        .args(["api", "/x", "--input", "-"])
+        .write_stdin("{}")
+        .assert()
+        .code(2);
+    // An explicit -X GET is still a GET.
+    cdctl(dir.path())
+        .args(["api", "/x", "-X", "GET", "-F", "a=b"])
+        .assert()
+        .code(2);
+    // -F and --input are mutually exclusive (clap).
+    cdctl(dir.path())
+        .args([
+            "api", "/x", "-X", "PUT", "--yes", "-F", "a=b", "--input", "-",
+        ])
+        .assert()
+        .code(2);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn api_form_keys_reach_the_wire_with_literal_brackets() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/profiles/p1/rules"))
+        .and(wiremock::matchers::header(
+            "content-type",
+            "application/x-www-form-urlencoded",
+        ))
+        .and(wiremock::matchers::body_string_contains("do=1"))
+        .and(wiremock::matchers::body_string_contains(
+            "hostnames%5B%5D=a.example",
+        ))
+        .and(wiremock::matchers::body_string_contains(
+            "hostnames%5B%5D=b.example",
+        ))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"body": [], "success": true})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl_against(&uri, dir.path())
+            .args([
+                "api",
+                "/profiles/p1/rules",
+                "-X",
+                "POST",
+                "--yes",
+                "-F",
+                "do=1",
+                "-F",
+                "hostnames[]=a.example",
+                "-F",
+                "hostnames[]=b.example",
+            ])
+            .assert()
+            .success();
+    })
+    .await
+    .expect("matched mock proves the bracketed keys went as typed");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn api_stdin_json_reaches_the_wire_verbatim() {
+    // Odd spacing survives: no validation, no reshaping (D9b).
+    let raw_json = "{\"filters\": [ {\"filter\":\"ads\",\"status\":1} ]}";
+    let server = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(path("/profiles/p1/filters"))
+        .and(wiremock::matchers::header(
+            "content-type",
+            "application/json",
+        ))
+        .and(wiremock::matchers::body_string(raw_json))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"body": [], "success": true})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl_against(&uri, dir.path())
+            .args([
+                "api",
+                "/profiles/p1/filters",
+                "-X",
+                "PUT",
+                "--yes",
+                "--input",
+                "-",
+            ])
+            .write_stdin(raw_json)
+            .assert()
+            .success();
+    })
+    .await
+    .expect("matched mock proves stdin went verbatim");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn api_delete_carries_its_body() {
+    let server = MockServer::start().await;
+    Mock::given(method("DELETE"))
+        .and(path("/access"))
+        .and(wiremock::matchers::body_string_contains(
+            "ips%5B%5D=1.2.3.4",
+        ))
+        .and(wiremock::matchers::body_string_contains("device_id=abc"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"body": [], "success": true})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl_against(&uri, dir.path())
+            .args([
+                "api",
+                "/access",
+                "-X",
+                "DELETE",
+                "--yes",
+                "-F",
+                "ips[]=1.2.3.4",
+                "-F",
+                "device_id=abc",
+            ])
+            .assert()
+            .success();
+    })
+    .await
+    .expect("matched mock proves DELETE carried its form body");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn api_writes_are_never_retried_and_errors_classify() {
+    let server = MockServer::start().await;
+    // .expect(1): a second request panics — no --no-retry is passed here.
+    Mock::given(method("POST"))
+        .and(path("/profiles"))
+        .respond_with(ResponseTemplate::new(500))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/nope"))
+        .respond_with(error_envelope(404, 40401, "No such thing"))
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl_against(&uri, dir.path())
+            .args(["api", "/profiles", "-X", "POST", "--yes", "-F", "name=x"])
+            .assert()
+            .code(8)
+            .stdout(predicates::str::is_empty());
+        cdctl_against(&uri, dir.path())
+            .args(["api", "/nope", "--no-retry"])
+            .assert()
+            .code(3)
+            .stdout(predicates::str::is_empty());
+    })
+    .await
+    .expect("commands run");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn api_never_sends_the_token_to_an_unpinned_origin() {
+    let server = MockServer::start().await;
+    Mock::given(wiremock::matchers::any())
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl(dir.path())
+            .env("CONTROLD_API_URL", &uri)
+            .env("CONTROLD_API_TOKEN", "api.test-token")
+            // Deliberately no CONTROLD_UNSAFE_BASE_URL.
+            .args(["api", "/users"])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            stderr.contains("pinned origin"),
+            "the refusal names the policy: {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+#[test]
+fn api_rejects_explicit_json_flags() {
+    let dir = tempdir();
+    for args in [
+        ["api", "/users", "--json"].as_slice(),
+        ["api", "/users", "--fields", "email"].as_slice(),
+    ] {
+        cdctl(dir.path())
+            .args(args)
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+    }
+}
+
 // --- SIGPIPE: `cdctl reference | head` must die quietly with 141, never panic ---
 
 #[cfg(unix)]

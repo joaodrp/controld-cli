@@ -246,7 +246,12 @@ impl Client {
     /// retry loop. Errors still classify through the standard rules.
     pub async fn get_raw(&self, path: &str, resource: &'static str) -> Result<Vec<u8>, Error> {
         self.get_with(path, |wire| {
-            interpret_raw(wire.status, wire.retry_after.seconds(), &wire.body, resource)
+            interpret_raw(
+                wire.status,
+                wire.retry_after.seconds(),
+                &wire.body,
+                resource,
+            )
         })
         .await
     }
@@ -268,7 +273,12 @@ impl Client {
         self.send(method, path, body.as_ref())
             .await
             .and_then(|wire| {
-                interpret_raw(wire.status, wire.retry_after.seconds(), &wire.body, resource)
+                interpret_raw(
+                    wire.status,
+                    wire.retry_after.seconds(),
+                    &wire.body,
+                    resource,
+                )
             })
             .map_err(warn_write_may_have_landed)
     }
