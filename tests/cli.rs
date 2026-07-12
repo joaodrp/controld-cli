@@ -144,6 +144,25 @@ fn auth_status_without_token_is_exit_4() {
     assert_eq!(doc["error"]["upstream"], serde_json::Value::Null);
 }
 
+/// The missing token outranks request-only environment problems: resolving
+/// auth is an authenticated command's first concern, so a malformed
+/// CONTROLD_API_URL must not demote the documented exit 4 to a usage error.
+#[test]
+fn missing_token_outranks_a_malformed_base_url() {
+    let dir = tempdir();
+    let assert = cdctl(dir.path())
+        .env("CONTROLD_API_URL", "not a url")
+        .args(["auth", "status", "--json"])
+        .assert()
+        .code(4)
+        .stdout(predicates::str::is_empty());
+
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    let doc: serde_json::Value =
+        serde_json::from_str(&stderr).expect("stderr is one JSON document");
+    assert_eq!(doc["error"]["code"], "auth.missing_token");
+}
+
 // --- Hostile upstream messages: one clean line, verbatim JSON, escaped debug ---
 
 async fn stderr_for(server: &MockServer, dir: &std::path::Path, extra_args: &[&str]) -> String {

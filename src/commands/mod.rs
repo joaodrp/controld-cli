@@ -14,6 +14,7 @@ use crate::config::{
     Config, ResolvedToken, Store, TOKEN_ENV_VAR, TokenSource, env_var, resolve_token,
 };
 use crate::error::Error;
+use secrecy::SecretString;
 
 /// Load a config and surface its warnings — the pair is never split, so the
 /// world-readable-token warning cannot be silently dropped by a handler.
@@ -25,6 +26,22 @@ pub(crate) fn load_config(store: &Store) -> Result<Config, Error> {
     Ok(loaded.config)
 }
 
+/// The stored-or-env token, if any, after config warnings surfaced.
+fn optional_token() -> Result<Option<ResolvedToken>, Error> {
+    let store = Store::discover()?;
+    let config = load_config(&store)?;
+    Ok(resolve_token(env_var(TOKEN_ENV_VAR)?, &config))
+}
+
+fn build_client(token: Option<SecretString>, globals: &Globals) -> Result<Client, Error> {
+    Client::new(ClientConfig::from_env(
+        token,
+        globals.timeout,
+        globals.no_retry,
+        globals.debug,
+    )?)
+}
+
 /// A [`Client`] that carries the token when one resolves and none otherwise.
 /// For `cdctl api`: the spec's `security: []` endpoints must stay reachable
 /// tokenless (D7), and only the server knows which paths those are — a
@@ -32,26 +49,21 @@ pub(crate) fn load_config(store: &Store) -> Result<Config, Error> {
 pub(crate) fn client_with_optional_token(
     globals: &Globals,
 ) -> Result<(Client, Option<TokenSource>), Error> {
-    let store = Store::discover()?;
-    let config = load_config(&store)?;
-    let (token, source) = match resolve_token(env_var(TOKEN_ENV_VAR)?, &config) {
+    let (token, source) = match optional_token()? {
         Some(ResolvedToken { token, source }) => (Some(token), Some(source)),
         None => (None, None),
     };
-    let client = Client::new(ClientConfig::from_env(
-        token,
-        globals.timeout,
-        globals.no_retry,
-        globals.debug,
-    )?)?;
-    Ok((client, source))
+    Ok((build_client(token, globals)?, source))
 }
 
 /// An authenticated [`Client`] for the current invocation, plus where the
-/// token came from. Missing token is `auth.missing_token` (lazy auth, D7).
+/// token came from. Missing token is `auth.missing_token` (lazy auth, D7),
+/// raised **before** the client builds — request-only environment problems
+/// (a malformed `CONTROLD_API_URL`) must not outrank the documented exit 4.
 pub(crate) fn authenticated_client(globals: &Globals) -> Result<(Client, TokenSource), Error> {
-    let (client, source) = client_with_optional_token(globals)?;
-    Ok((client, source.ok_or_else(Error::auth_missing_token)?))
+    let ResolvedToken { token, source } =
+        optional_token()?.ok_or_else(Error::auth_missing_token)?;
+    Ok((build_client(Some(token), globals)?, source))
 }
 
 /// Commands whose stdout is never JSON (`completions`, `reference`, `api`):
