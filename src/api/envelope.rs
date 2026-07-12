@@ -38,7 +38,7 @@ pub struct ApiError {
     pub code: Option<i64>,
     pub message: Option<String>,
     /// Server timestamp.
-    #[allow(dead_code, reason = "modeled for the strict fixture tests; never read")]
+    #[expect(dead_code, reason = "modeled for the strict fixture tests; never read")]
     pub date: Option<String>,
     /// Dashboard call-to-action links (the 402 plan gate).
     #[allow(dead_code, reason = "modeled for the strict fixture tests; never read")]
@@ -47,7 +47,7 @@ pub struct ApiError {
 
 #[derive(Debug, Deserialize)]
 #[cfg_attr(test, serde(deny_unknown_fields))]
-#[allow(dead_code, reason = "modeled for the strict fixture tests; never read")]
+#[expect(dead_code, reason = "modeled for the strict fixture tests; never read")]
 pub struct ApiErrorAction {
     pub name: Option<String>,
     pub path: Option<String>,
