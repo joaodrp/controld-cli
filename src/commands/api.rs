@@ -94,9 +94,21 @@ fn read_body(body: PendingBody) -> Result<RawBody, Error> {
         PendingBody::Ready(body) => Ok(body),
         PendingBody::Stdin => {
             let mut raw = Vec::new();
+            // An I/O failure here is environmental, not a malformed
+            // invocation — exit 1, not the usage code scripts treat as
+            // "fix your argv".
             std::io::stdin()
                 .read_to_end(&mut raw)
-                .map_err(|e| Error::usage(format!("could not read the body from stdin: {e}")))?;
+                .map_err(|e| Error::generic(format!("could not read the body from stdin: {e}")))?;
+            // Emptiness is the absence of a body, not a body to forward
+            // verbatim (D9b) — the classic cause is a failed upstream
+            // pipeline stage, and firing the mutation anyway could exit 0
+            // having rewritten live DNS config with nothing.
+            if raw.is_empty() {
+                return Err(Error::usage(
+                    "--input - read an empty body from stdin; did the upstream pipeline fail?",
+                ));
+            }
             Ok(RawBody::Json(raw))
         }
     }

@@ -877,6 +877,43 @@ async fn api_stdin_json_reaches_the_wire_verbatim() {
     .expect("matched mock proves stdin went verbatim");
 }
 
+/// A failed upstream pipeline stage (`jq bad | cdctl api --input -`) hands
+/// us an empty stdin — that must never become a 0-byte mutation that could
+/// exit 0 against live DNS config. The `.expect(0)` mock proves nothing is
+/// sent.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn api_rejects_an_empty_stdin_body() {
+    let server = MockServer::start().await;
+    Mock::given(wiremock::matchers::any())
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "api",
+                "/profiles/p1/filters",
+                "-X",
+                "PUT",
+                "--yes",
+                "--input",
+                "-",
+            ])
+            .write_stdin("")
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(stderr.contains("empty body"), "names the cause: {stderr}");
+    })
+    .await
+    .expect("command runs");
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn api_delete_carries_its_body() {
     let server = MockServer::start().await;
