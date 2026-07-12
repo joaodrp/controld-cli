@@ -163,6 +163,34 @@ mod tests {
         command().debug_assert();
     }
 
+    /// A subcommand arg whose id matches a global flag's is silently captured
+    /// by the global's value lookup — clap's own `debug_assert` does not catch
+    /// it (`cdctl api -F` once fed the global `--fields` this way).
+    #[test]
+    fn subcommand_args_never_reuse_global_ids() {
+        fn walk(command: &clap::Command, global_ids: &[String]) {
+            for sub in command.get_subcommands() {
+                for arg in sub.get_arguments().filter(|a| !a.is_global_set()) {
+                    assert!(
+                        !global_ids.contains(&arg.get_id().to_string()),
+                        "arg id {:?} in `{}` collides with a global flag; rename the field or set an explicit id",
+                        arg.get_id(),
+                        sub.get_name(),
+                    );
+                }
+                walk(sub, global_ids);
+            }
+        }
+        let root = command();
+        let global_ids: Vec<String> = root
+            .get_arguments()
+            .filter(|a| a.is_global_set())
+            .map(|a| a.get_id().to_string())
+            .collect();
+        assert!(!global_ids.is_empty(), "the global flags exist");
+        walk(&root, &global_ids);
+    }
+
     #[test]
     fn fields_implies_json() {
         let cli = Cli::parse_from(["cdctl", "auth", "status", "--fields", "email,region"]);

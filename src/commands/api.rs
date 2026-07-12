@@ -36,19 +36,15 @@ pub struct ApiArgs {
 
     /// Form field (repeatable); keys are sent literally — write
     /// 'hostnames[]=a' yourself. Requires a non-GET -X
-    // The explicit id keeps this distinct from the global `--fields`
-    // projection flag, whose value lookup would otherwise capture -F values.
-    #[arg(
-        id = "form_field",
-        short = 'F',
-        long = "field",
-        value_name = "key=value"
-    )]
+    // Not named `fields`: a subcommand arg whose id matches a global flag's
+    // is silently captured by the global's value lookup (guarded by
+    // cli::tests::subcommand_args_never_reuse_global_ids).
+    #[arg(short = 'F', long = "field", value_name = "key=value")]
     pub form_fields: Vec<String>,
 
     /// Read a JSON body from stdin, sent verbatim; "-" is the only accepted
     /// value. Requires a non-GET -X
-    #[arg(long, value_name = "-", conflicts_with = "form_field")]
+    #[arg(long, value_name = "-", conflicts_with = "form_fields")]
     pub input: Option<String>,
 }
 
