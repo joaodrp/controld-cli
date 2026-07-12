@@ -1,0 +1,499 @@
+{
+  "body": {
+    "network": [
+      {
+        "iata_code": "AMS",
+        "city_name": "Amsterdam",
+        "country_name": "NL",
+        "location": {
+          "lat": 52.377956,
+          "long": 4.89707
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": 1
+        }
+      },
+      {
+        "iata_code": "ATL",
+        "city_name": "Atlanta",
+        "country_name": "US",
+        "location": {
+          "lat": 33.783088112636555,
+          "long": -84.39823699888953
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "BMA",
+        "city_name": "Stockholm",
+        "country_name": "SE",
+        "location": {
+          "lat": 59.352665256,
+          "long": 17.937162918
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "BOG",
+        "city_name": "Bogota",
+        "country_name": "CO",
+        "location": {
+          "lat": 4.677706352652501,
+          "long": -74.05632464165001
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "CDG",
+        "city_name": "Paris",
+        "country_name": "FR",
+        "location": {
+          "lat": 48.81340913389218,
+          "long": 2.5556617457046547
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "CGH",
+        "city_name": "S\u00e3o Paulo",
+        "country_name": "BR",
+        "location": {
+          "lat": -23.72876040612837,
+          "long": -46.48397842634525
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": 1
+        }
+      },
+      {
+        "iata_code": "CHI",
+        "city_name": "Chicago",
+        "country_name": "US",
+        "location": {
+          "lat": 41.855159216729724,
+          "long": -87.67313302781018
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "DAL",
+        "city_name": "Dallas",
+        "country_name": "US",
+        "location": {
+          "lat": 32.83519150465354,
+          "long": -96.66913588349176
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "DEN",
+        "city_name": "Denver",
+        "country_name": "US",
+        "location": {
+          "lat": 39.735853604160084,
+          "long": -104.9890473953828
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "DUB",
+        "city_name": "Dublin",
+        "country_name": "IE",
+        "location": {
+          "lat": 53.3442,
+          "long": -6.2672
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "DXB",
+        "city_name": "Dubai",
+        "country_name": "AE",
+        "location": {
+          "lat": 25.204063935788312,
+          "long": 55.26642063859186
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "FRA",
+        "city_name": "Frankfurt",
+        "country_name": "DE",
+        "location": {
+          "lat": 50.15105567037819,
+          "long": 8.661277246272602
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": 1
+        }
+      },
+      {
+        "iata_code": "HKG",
+        "city_name": "Hong Kong",
+        "country_name": "HK",
+        "location": {
+          "lat": 22.325602505040592,
+          "long": 114.18407812895455
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "IAD",
+        "city_name": "Ashburn",
+        "country_name": "US",
+        "location": {
+          "lat": 38.98135145345811,
+          "long": -77.44423217371352
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "JFK",
+        "city_name": "New York",
+        "country_name": "US",
+        "location": {
+          "lat": 40.73061,
+          "long": -73.935242
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": 1
+        }
+      },
+      {
+        "iata_code": "JNB",
+        "city_name": "Johannesburg",
+        "country_name": "ZA",
+        "location": {
+          "lat": -26.1887582521843,
+          "long": 28.01598947598751
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": 1
+        }
+      },
+      {
+        "iata_code": "LAX",
+        "city_name": "Los Angeles",
+        "country_name": "US",
+        "location": {
+          "lat": 34.052235,
+          "long": -118.243683
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": 1
+        }
+      },
+      {
+        "iata_code": "LHR",
+        "city_name": "London",
+        "country_name": "GB",
+        "location": {
+          "lat": 51.6150353777339,
+          "long": -0.29632673739840126
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": 1
+        }
+      },
+      {
+        "iata_code": "MAD",
+        "city_name": "Madrid",
+        "country_name": "ES",
+        "location": {
+          "lat": 40.441058974015014,
+          "long": -3.7014121801091022
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "MAN",
+        "city_name": "Manchester",
+        "country_name": "GB",
+        "location": {
+          "lat": 53.46102504618612,
+          "long": -2.2348488974116782
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "MCI",
+        "city_name": "Kansas City",
+        "country_name": "US",
+        "location": {
+          "lat": 39.08808457631118,
+          "long": -94.57864360745283
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "MIA",
+        "city_name": "Miami",
+        "country_name": "US",
+        "location": {
+          "lat": 25.761681,
+          "long": -80.191788
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": 1
+        }
+      },
+      {
+        "iata_code": "NBO",
+        "city_name": "Nairobi",
+        "country_name": "KE",
+        "location": {
+          "lat": -1.333731,
+          "long": 36.927109
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "NRT",
+        "city_name": "Tokyo",
+        "country_name": "JP",
+        "location": {
+          "lat": 35.765278,
+          "long": 140.385556
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": 1
+        }
+      },
+      {
+        "iata_code": "OTP",
+        "city_name": "Bucharest",
+        "country_name": "RO",
+        "location": {
+          "lat": 44.5711,
+          "long": 26.085
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": 1
+        }
+      },
+      {
+        "iata_code": "PHX",
+        "city_name": "Phoenix",
+        "country_name": "US",
+        "location": {
+          "lat": 33.43598895274586,
+          "long": -112.07103398811529
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "PNQ",
+        "city_name": "Pune",
+        "country_name": "IN",
+        "location": {
+          "lat": 18.489116643244344,
+          "long": 73.77679121288921
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "RDU",
+        "city_name": "Raleigh",
+        "country_name": "US",
+        "location": {
+          "lat": 35.79632972425579,
+          "long": -78.65262150894058
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "SCL",
+        "city_name": "Santiago",
+        "country_name": "CL",
+        "location": {
+          "lat": -33.461535359170036,
+          "long": -70.63736889467879
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "SEA",
+        "city_name": "Seattle",
+        "country_name": "US",
+        "location": {
+          "lat": 47.617951678075734,
+          "long": -122.35070688529511
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "SJC",
+        "city_name": "San Jose",
+        "country_name": "US",
+        "location": {
+          "lat": 37.334933535561014,
+          "long": -121.87880979499809
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "SYD",
+        "city_name": "Sydney",
+        "country_name": "AU",
+        "location": {
+          "lat": -33.865143,
+          "long": 151.2099
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": 1
+        }
+      },
+      {
+        "iata_code": "WAW",
+        "city_name": "Warsaw",
+        "country_name": "PL",
+        "location": {
+          "lat": 52.253456664781304,
+          "long": 21.120239658978463
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": -1
+        }
+      },
+      {
+        "iata_code": "XSP",
+        "city_name": "Singapore",
+        "country_name": "SG",
+        "location": {
+          "lat": 1.4205431520911582,
+          "long": 103.87347128475126
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": 1
+        }
+      },
+      {
+        "iata_code": "YYZ",
+        "city_name": "Toronto",
+        "country_name": "CA",
+        "location": {
+          "lat": 43.65107,
+          "long": -79.347015
+        },
+        "status": {
+          "api": 1,
+          "dns": 1,
+          "pxy": 1
+        }
+      }
+    ],
+    "time": 1783766187,
+    "current_pop": "MAD"
+  },
+  "success": true
+}

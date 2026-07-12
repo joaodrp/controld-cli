@@ -1,0 +1,202 @@
+{
+  "body": {
+    "services": [
+      {
+        "unlock_location": "JFK",
+        "category": "gaming",
+        "name": "Battle.net",
+        "PK": "blizzard",
+        "action": {
+          "do": 0,
+          "status": 0
+        }
+      },
+      {
+        "name": "Clash of Clans",
+        "category": "gaming",
+        "unlock_location": "JFK",
+        "warning": "Some domains shared with Brawl Stars. Enable both if blocking the other.",
+        "PK": "clashofclans",
+        "action": {
+          "do": 0,
+          "status": 1
+        }
+      },
+      {
+        "warning": "",
+        "category": "social",
+        "name": "DeviantArt",
+        "unlock_location": "JFK",
+        "PK": "deviantart",
+        "action": {
+          "do": 0,
+          "status": 0
+        }
+      },
+      {
+        "warning": "",
+        "unlock_location": "JFK",
+        "category": "gaming",
+        "name": "EA Origin",
+        "PK": "ea",
+        "action": {
+          "do": 0,
+          "status": 1
+        }
+      },
+      {
+        "unlock_location": "JFK",
+        "category": "gaming",
+        "name": "Fortnite",
+        "PK": "fortnite",
+        "action": {
+          "do": 0,
+          "status": 1
+        }
+      },
+      {
+        "warning": "",
+        "unlock_location": "JFK",
+        "category": "gaming",
+        "name": "GeForce Now",
+        "PK": "geforcenow",
+        "action": {
+          "do": 0,
+          "status": 1
+        }
+      },
+      {
+        "unlock_location": "JFK",
+        "category": "gaming",
+        "name": "League of Legends",
+        "PK": "lol",
+        "action": {
+          "do": 0,
+          "status": 1
+        }
+      },
+      {
+        "unlock_location": "JFK",
+        "category": "gaming",
+        "name": "Minecraft",
+        "PK": "minecraft",
+        "action": {
+          "do": 0,
+          "status": 1
+        }
+      },
+      {
+        "warning": "",
+        "unlock_location": "JFK",
+        "category": "gaming",
+        "name": "Nintendo",
+        "PK": "nintendo",
+        "action": {
+          "do": 0,
+          "status": 1
+        }
+      },
+      {
+        "warning": "",
+        "unlock_location": "JFK",
+        "category": "gaming",
+        "name": "PUBG",
+        "PK": "pubg",
+        "action": {
+          "do": 0,
+          "status": 1
+        }
+      },
+      {
+        "name": "Playstation",
+        "category": "gaming",
+        "unlock_location": "JFK",
+        "warning": "We provide no support or refunds if you attempt to redirect this service, which is offered on a best effort basis. ",
+        "PK": "playstation",
+        "action": {
+          "do": 0,
+          "status": 1
+        }
+      },
+      {
+        "warning": "",
+        "unlock_location": "JFK",
+        "category": "gaming",
+        "name": "Riot Games",
+        "PK": "riotgames",
+        "action": {
+          "do": 0,
+          "status": 1
+        }
+      },
+      {
+        "unlock_location": "JFK",
+        "category": "gaming",
+        "name": "Roblox",
+        "PK": "roblox",
+        "action": {
+          "do": 0,
+          "status": 1
+        }
+      },
+      {
+        "warning": "",
+        "unlock_location": "JFK",
+        "category": "gaming",
+        "name": "Rockstar Games",
+        "PK": "rockstargames",
+        "action": {
+          "do": 0,
+          "status": 1
+        }
+      },
+      {
+        "name": "Steam",
+        "unlock_location": "JFK",
+        "category": "gaming",
+        "PK": "steam",
+        "action": {
+          "do": 0,
+          "status": 1
+        }
+      },
+      {
+        "unlock_location": "JFK",
+        "category": "gaming",
+        "name": "Twitch",
+        "PK": "twitch",
+        "action": {
+          "do": 0,
+          "status": 1
+        }
+      },
+      {
+        "warning": "",
+        "unlock_location": "JFK",
+        "category": "gaming",
+        "name": "Wargaming",
+        "locations": [
+          "JFK",
+          "FRA",
+          "SIN"
+        ],
+        "PK": "wargaming",
+        "action": {
+          "do": 0,
+          "status": 1
+        }
+      },
+      {
+        "unlock_location": "JFK",
+        "category": "gaming",
+        "name": "Xbox",
+        "PK": "xbox",
+        "action": {
+          "do": 0,
+          "status": 1
+        }
+      }
+    ]
+  },
+  "success": true
+}

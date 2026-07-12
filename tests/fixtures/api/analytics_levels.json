@@ -1,0 +1,19 @@
+{
+  "body": {
+    "levels": [
+      {
+        "PK": 0,
+        "title": "No Analytics"
+      },
+      {
+        "PK": 1,
+        "title": "Some Analytics"
+      },
+      {
+        "PK": 2,
+        "title": "Full Analytics"
+      }
+    ]
+  },
+  "success": true
+}

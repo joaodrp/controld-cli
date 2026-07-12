@@ -1,0 +1,1 @@
+{"body":[],"success":false,"error":{"date": "Sat, 11 Jul 2026 00:00:00 -0400","message":"do must be one of Array\n(\n    [0] => 0\n    [1] => 1\n    [2] => 2\n    [3] => 3\n)\n ","code":40003}}

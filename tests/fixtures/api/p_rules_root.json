@@ -1,0 +1,9 @@
+{
+  "body": [],
+  "success": false,
+  "error": {
+    "date": "Sat, 11 Jul 2026 06:38:25 -0400",
+    "message": "No such group exists.",
+    "code": 40401
+  }
+}

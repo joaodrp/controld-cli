@@ -1,0 +1,239 @@
+{
+  "body": {
+    "profiles": [
+      {
+        "PK": "pk4cada1c5",
+        "user": "pk14ba0f1c",
+        "org": null,
+        "name": "Aggressive",
+        "featured": null,
+        "updated": 1782927148,
+        "disable": null,
+        "lock": null,
+        "profile": {
+          "flt": {
+            "count": 8
+          },
+          "cflt": {
+            "count": 0
+          },
+          "ipflt": {
+            "count": 1
+          },
+          "rule": {
+            "count": 8
+          },
+          "svc": {
+            "count": 0
+          },
+          "grp": {
+            "count": 0
+          },
+          "opt": {
+            "count": 4,
+            "data": [
+              {
+                "PK": "ttl_blck",
+                "value": 60
+              },
+              {
+                "PK": "ttl_pass",
+                "value": 3600
+              },
+              {
+                "PK": "ttl_spff",
+                "value": 300
+              },
+              {
+                "PK": "no_dnssec",
+                "value": 1
+              }
+            ]
+          },
+          "da": {
+            "do": 1,
+            "status": 1
+          }
+        }
+      },
+      {
+        "PK": "pkae1060cf",
+        "user": "pk14ba0f1c",
+        "org": null,
+        "name": "Hardened",
+        "featured": null,
+        "updated": 1783173588,
+        "disable": null,
+        "lock": null,
+        "profile": {
+          "flt": {
+            "count": 7
+          },
+          "cflt": {
+            "count": 0
+          },
+          "ipflt": {
+            "count": 1
+          },
+          "rule": {
+            "count": 8
+          },
+          "svc": {
+            "count": 0
+          },
+          "grp": {
+            "count": 0
+          },
+          "opt": {
+            "count": 4,
+            "data": [
+              {
+                "PK": "ttl_blck",
+                "value": 60
+              },
+              {
+                "PK": "ttl_pass",
+                "value": 3600
+              },
+              {
+                "PK": "ttl_spff",
+                "value": 300
+              },
+              {
+                "PK": "no_dnssec",
+                "value": 1
+              }
+            ]
+          },
+          "da": {
+            "do": 1,
+            "status": 1
+          }
+        }
+      },
+      {
+        "PK": "pk69038f3c",
+        "user": "pk14ba0f1c",
+        "org": null,
+        "name": "Kids",
+        "featured": null,
+        "updated": 1741693261,
+        "disable": null,
+        "lock": null,
+        "profile": {
+          "flt": {
+            "count": 13
+          },
+          "cflt": {
+            "count": 0
+          },
+          "ipflt": {
+            "count": 1
+          },
+          "rule": {
+            "count": 0
+          },
+          "svc": {
+            "count": 16
+          },
+          "grp": {
+            "count": 0
+          },
+          "opt": {
+            "count": 7,
+            "data": [
+              {
+                "PK": "ttl_blck",
+                "value": 60
+              },
+              {
+                "PK": "block_rfc1918",
+                "value": 1
+              },
+              {
+                "PK": "ttl_spff",
+                "value": 300
+              },
+              {
+                "PK": "no_dnssec",
+                "value": 1
+              },
+              {
+                "PK": "ttl_pass",
+                "value": 3600
+              },
+              {
+                "PK": "safesearch",
+                "value": 1
+              },
+              {
+                "PK": "safeyoutube",
+                "value": 1
+              }
+            ]
+          },
+          "da": {
+            "do": 1,
+            "status": 1
+          }
+        }
+      },
+      {
+        "PK": "pkc73939ba",
+        "user": "pk14ba0f1c",
+        "org": null,
+        "name": "Relaxed",
+        "featured": null,
+        "updated": 1741693217,
+        "disable": null,
+        "lock": null,
+        "profile": {
+          "flt": {
+            "count": 4
+          },
+          "cflt": {
+            "count": 0
+          },
+          "ipflt": {
+            "count": 0
+          },
+          "rule": {
+            "count": 3
+          },
+          "svc": {
+            "count": 0
+          },
+          "grp": {
+            "count": 0
+          },
+          "opt": {
+            "count": 4,
+            "data": [
+              {
+                "PK": "ttl_blck",
+                "value": 60
+              },
+              {
+                "PK": "ttl_spff",
+                "value": 300
+              },
+              {
+                "PK": "no_dnssec",
+                "value": 1
+              },
+              {
+                "PK": "ttl_pass",
+                "value": 3600
+              }
+            ]
+          },
+          "da": {
+            "do": 1,
+            "status": 1
+          }
+        }
+      }
+    ]
+  },
+  "success": true
+}

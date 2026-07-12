@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Control D's own docs placeholder, transcribed verbatim in the API contract"
+regexes = ['''YOUR_FANCY_TOKEN''']

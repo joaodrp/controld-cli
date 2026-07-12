@@ -1,0 +1,33 @@
+{
+  "body": {
+    "subscriptions": [
+      {
+        "id": "5d8e2c40-7a1b-4f3e-9c62-e0d4b8a61f27",
+        "sub_id": "sub_00example00example0000",
+        "user": "pk14ba0f1c",
+        "org": null,
+        "product": {
+          "proxy_access": 0,
+          "type": "standard",
+          "priority": 2,
+          "name": "Some Control",
+          "PK": 2
+        },
+        "method": "stripe",
+        "currency": "eur",
+        "amount": 2,
+        "currency_amount": 2,
+        "started": "2025-04-05",
+        "ended": null,
+        "cancel_reason": null,
+        "price": 1,
+        "status": 1,
+        "state": "active",
+        "next_bill": 1785969210,
+        "PK": "sub_00example00example0000",
+        "next_rebill_date": "2026-08-05"
+      }
+    ]
+  },
+  "success": true
+}

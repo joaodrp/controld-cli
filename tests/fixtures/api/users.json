@@ -1,0 +1,38 @@
+{
+  "body": {
+    "id": "3f2c8a10-9e4b-4d6c-8a71-0b5e2f9c4d13",
+    "PK": "pk14ba0f1c",
+    "email": "user@example.com",
+    "email_status": 1,
+    "date": "2025-03-07",
+    "status": 1,
+    "last_active": 1783766232,
+    "cid": null,
+    "haptics": null,
+    "stats_endpoint": "europe",
+    "max_devices": null,
+    "max_profiles": null,
+    "max_legacy_resolvers": null,
+    "learned": null,
+    "org_id": null,
+    "tutorials": null,
+    "v": 2,
+    "proxy_access": null,
+    "res_proxy_access": null,
+    "sso": null,
+    "tailnet": null,
+    "safe_countries": [
+      "US"
+    ],
+    "passkey_enforced": false,
+    "twofa": 1,
+    "has_usable_password": true,
+    "auth_methods": {
+      "password": true,
+      "passkey": true,
+      "sso": false
+    },
+    "debug": []
+  },
+  "success": true
+}

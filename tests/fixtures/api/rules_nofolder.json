@@ -1,0 +1,82 @@
+{
+  "body": {
+    "rules": [
+      {
+        "PK": "host1.example.com",
+        "order": 1,
+        "group": 0,
+        "action": {
+          "do": 2,
+          "status": 1,
+          "via": "192.0.2.10"
+        }
+      },
+      {
+        "PK": "*.host2.example.com",
+        "order": 2,
+        "group": 0,
+        "action": {
+          "do": 2,
+          "status": 0,
+          "via": "192.0.2.10"
+        }
+      },
+      {
+        "PK": "*.host3.example.com",
+        "order": 3,
+        "group": 0,
+        "action": {
+          "do": 2,
+          "status": 1,
+          "via": "192.0.2.10"
+        }
+      },
+      {
+        "PK": "host4.example.com",
+        "order": 5,
+        "group": 0,
+        "action": {
+          "do": 1,
+          "status": 1
+        }
+      },
+      {
+        "PK": "host5.example.com",
+        "order": 6,
+        "group": 0,
+        "action": {
+          "do": 1,
+          "status": 1
+        }
+      },
+      {
+        "PK": "host6.example.com",
+        "order": 7,
+        "group": 0,
+        "action": {
+          "do": 1,
+          "status": 1
+        }
+      },
+      {
+        "PK": "host7.example.com",
+        "order": 8,
+        "group": 0,
+        "action": {
+          "do": 1,
+          "status": 1
+        }
+      },
+      {
+        "PK": "host8.example.com",
+        "order": 9,
+        "group": 0,
+        "action": {
+          "do": 1,
+          "status": 1
+        }
+      }
+    ]
+  },
+  "success": true
+}

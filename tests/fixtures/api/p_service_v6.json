@@ -1,0 +1,1 @@
+{"body": {"services": [{"name": "Netflix", "unlock_location": "JFK", "warning": "Not all unlock locations will show local content. This service is offered on best effort basis. ", "category": "video", "PK": "netflix", "action": {"do": 2, "status": 1, "via": "192.0.2.10", "via_v6": "2001:db8::1"}}]}, "success": true}

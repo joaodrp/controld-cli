@@ -1,0 +1,281 @@
+{
+  "body": {
+    "devices": [
+      {
+        "PK": "dev6ed2281d",
+        "ts": 1780559476,
+        "name": "Device 1",
+        "user": "pk14ba0f1c",
+        "stats": 2,
+        "device_id": "dev6ed2281d",
+        "status": 1,
+        "client_count": 1,
+        "learn_ip": 0,
+        "ctrld": {
+          "status": 1,
+          "last_fetch": 1783765370,
+          "version": "v1.5.3",
+          "version_target": "v1.5.3"
+        },
+        "resolvers": {
+          "uid": "dev6ed2281d",
+          "doh": "https://dns.controld.com/dev6ed2281d",
+          "dot": "dev6ed2281d.dns.controld.com",
+          "v6": [
+            "2001:db8:0:0::1",
+            "2001:db8:1:0::1"
+          ]
+        },
+        "icon": "desktop-linux",
+        "profile": {
+          "PK": "pk4cada1c5",
+          "updated": 1782927148,
+          "name": "Aggressive"
+        },
+        "ip_count": 0
+      },
+      {
+        "PK": "dev2f9ee38e",
+        "ts": 1779830995,
+        "name": "Device 2",
+        "user": "pk14ba0f1c",
+        "stats": 2,
+        "device_id": "dev2f9ee38e",
+        "status": 1,
+        "client_count": 1,
+        "learn_ip": 0,
+        "resolvers": {
+          "uid": "dev2f9ee38e",
+          "doh": "https://dns.controld.com/dev2f9ee38e",
+          "dot": "dev2f9ee38e.dns.controld.com",
+          "v6": [
+            "2001:db8:0:1::1",
+            "2001:db8:1:1::1"
+          ]
+        },
+        "icon": "desktop-linux",
+        "profile": {
+          "PK": "pk4cada1c5",
+          "updated": 1782927148,
+          "name": "Aggressive"
+        },
+        "ip_count": 0
+      },
+      {
+        "PK": "dev1d8383a5",
+        "ts": 1741548094,
+        "name": "Device 3",
+        "user": "pk14ba0f1c",
+        "stats": 2,
+        "device_id": "dev1d8383a5",
+        "status": 1,
+        "client_count": 1,
+        "learn_ip": 0,
+        "resolvers": {
+          "uid": "dev1d8383a5",
+          "doh": "https://dns.controld.com/dev1d8383a5",
+          "dot": "dev1d8383a5.dns.controld.com",
+          "v6": [
+            "2001:db8:0:2::1",
+            "2001:db8:1:2::1"
+          ]
+        },
+        "icon": "desktop-linux",
+        "profile": {
+          "PK": "pk4cada1c5",
+          "updated": 1782927148,
+          "name": "Aggressive"
+        },
+        "ip_count": 0
+      },
+      {
+        "PK": "dev01d8dd50",
+        "ts": 1741361826,
+        "name": "Device 4",
+        "user": "pk14ba0f1c",
+        "stats": 2,
+        "device_id": "dev01d8dd50",
+        "status": 1,
+        "client_count": 1,
+        "learn_ip": 0,
+        "resolvers": {
+          "uid": "dev01d8dd50",
+          "doh": "https://dns.controld.com/dev01d8dd50",
+          "dot": "dev01d8dd50.dns.controld.com",
+          "v6": [
+            "2001:db8:0:3::1",
+            "2001:db8:1:3::1"
+          ]
+        },
+        "icon": "desktop-linux",
+        "profile": {
+          "PK": "pk4cada1c5",
+          "updated": 1782927148,
+          "name": "Aggressive"
+        },
+        "ip_count": 0
+      },
+      {
+        "PK": "dev699b6baa",
+        "ts": 1745091063,
+        "name": "Device 5",
+        "user": "pk14ba0f1c",
+        "stats": 2,
+        "device_id": "dev699b6baa",
+        "status": 1,
+        "client_count": 1,
+        "learn_ip": 0,
+        "resolvers": {
+          "uid": "dev699b6baa",
+          "doh": "https://dns.controld.com/dev699b6baa",
+          "dot": "dev699b6baa.dns.controld.com",
+          "v6": [
+            "2001:db8:0:4::1",
+            "2001:db8:1:4::1"
+          ]
+        },
+        "icon": "desktop-linux",
+        "profile": {
+          "PK": "pkae1060cf",
+          "updated": 1783173588,
+          "name": "Hardened"
+        },
+        "ip_count": 0
+      },
+      {
+        "PK": "dev6d73f64b",
+        "ts": 1745090755,
+        "name": "Device 6",
+        "user": "pk14ba0f1c",
+        "stats": 2,
+        "device_id": "dev6d73f64b",
+        "status": 1,
+        "client_count": 1,
+        "learn_ip": 0,
+        "resolvers": {
+          "uid": "dev6d73f64b",
+          "doh": "https://dns.controld.com/dev6d73f64b",
+          "dot": "dev6d73f64b.dns.controld.com",
+          "v6": [
+            "2001:db8:0:5::1",
+            "2001:db8:1:5::1"
+          ]
+        },
+        "icon": "desktop-linux",
+        "profile": {
+          "PK": "pkae1060cf",
+          "updated": 1783173588,
+          "name": "Hardened"
+        },
+        "ip_count": 0
+      },
+      {
+        "PK": "devf83dd744",
+        "ts": 1741556437,
+        "name": "Device 7",
+        "user": "pk14ba0f1c",
+        "stats": 2,
+        "device_id": "devf83dd744",
+        "status": 1,
+        "client_count": 1,
+        "learn_ip": 0,
+        "resolvers": {
+          "uid": "devf83dd744",
+          "doh": "https://dns.controld.com/devf83dd744",
+          "dot": "devf83dd744.dns.controld.com",
+          "v6": [
+            "2001:db8:0:6::1",
+            "2001:db8:1:6::1"
+          ]
+        },
+        "icon": "desktop-linux",
+        "profile": {
+          "PK": "pkae1060cf",
+          "updated": 1783173588,
+          "name": "Hardened"
+        },
+        "ip_count": 0
+      },
+      {
+        "PK": "dev47ffe49e",
+        "ts": 1741546793,
+        "name": "Device 8",
+        "user": "pk14ba0f1c",
+        "stats": 2,
+        "device_id": "dev47ffe49e",
+        "status": 1,
+        "client_count": 1,
+        "learn_ip": 0,
+        "resolvers": {
+          "uid": "dev47ffe49e",
+          "doh": "https://dns.controld.com/dev47ffe49e",
+          "dot": "dev47ffe49e.dns.controld.com",
+          "v6": [
+            "2001:db8:0:7::1",
+            "2001:db8:1:7::1"
+          ]
+        },
+        "icon": "desktop-linux",
+        "profile": {
+          "PK": "pkae1060cf",
+          "updated": 1783173588,
+          "name": "Hardened"
+        },
+        "ip_count": 0
+      },
+      {
+        "PK": "dev1695fbab",
+        "ts": 1741693817,
+        "name": "Device 9",
+        "user": "pk14ba0f1c",
+        "stats": 2,
+        "device_id": "dev1695fbab",
+        "status": 1,
+        "client_count": 1,
+        "learn_ip": 0,
+        "resolvers": {
+          "uid": "dev1695fbab",
+          "doh": "https://dns.controld.com/dev1695fbab",
+          "dot": "dev1695fbab.dns.controld.com",
+          "v6": [
+            "2001:db8:0:8::1",
+            "2001:db8:1:8::1"
+          ]
+        },
+        "icon": "desktop-linux",
+        "profile": {
+          "PK": "pkae1060cf",
+          "updated": 1783173588,
+          "name": "Hardened"
+        },
+        "ip_count": 0
+      },
+      {
+        "PK": "dev8ab889e0",
+        "ts": 1741553570,
+        "name": "Device 10",
+        "user": "pk14ba0f1c",
+        "device_id": "dev8ab889e0",
+        "status": 1,
+        "client_count": 1,
+        "learn_ip": 0,
+        "resolvers": {
+          "uid": "dev8ab889e0",
+          "doh": "https://dns.controld.com/dev8ab889e0",
+          "dot": "dev8ab889e0.dns.controld.com",
+          "v6": [
+            "2001:db8:0:9::1",
+            "2001:db8:1:9::1"
+          ]
+        },
+        "profile": {
+          "PK": "pkae1060cf",
+          "updated": 1783173588,
+          "name": "Hardened"
+        },
+        "ip_count": 0
+      }
+    ]
+  },
+  "success": true
+}

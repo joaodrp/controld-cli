@@ -1,0 +1,22 @@
+{
+  "body": {
+    "endpoints": [
+      {
+        "PK": "america",
+        "title": "New York, US",
+        "country_code": "US"
+      },
+      {
+        "PK": "europe",
+        "title": "Amsterdam, NL",
+        "country_code": "NL"
+      },
+      {
+        "PK": "asia",
+        "title": "Sydney, AU",
+        "country_code": "AU"
+      }
+    ]
+  },
+  "success": true
+}

@@ -1,0 +1,12 @@
+HTTP/2 500 
+date: Sat, 11 Jul 2026 13:44:43 GMT
+content-type: application/json
+access-control-allow-methods: GET, POST, PUT, DELETE,  OPTIONS
+access-control-allow-headers: DNT,User-Agent,X-Requested-With,X-Force-Org-Id,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization
+access-control-expose-headers: Content-Length,Content-Range
+x-frame-options: DENY
+strict-transport-security: max-age=31536000; includeSubDomains; preload;
+x-controld-srv: mad-h05
+x-controld-pop: mad
+x-content-type-options: nosniff
+

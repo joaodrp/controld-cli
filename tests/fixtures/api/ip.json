@@ -1,0 +1,12 @@
+{
+  "body": {
+    "ip": "192.0.2.10",
+    "type": "v6",
+    "org": "Example ISP",
+    "asn": 64496,
+    "country": "US",
+    "handler": "jfk-h01",
+    "pop": "JFK"
+  },
+  "success": true
+}

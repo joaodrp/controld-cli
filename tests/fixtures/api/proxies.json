@@ -1,0 +1,937 @@
+{
+  "body": {
+    "proxies": [
+      {
+        "city": "Tirana",
+        "country": "AL",
+        "country_name": "Albania",
+        "PK": "TIA",
+        "gps_lat": 41.3275,
+        "gps_long": 19.8189,
+        "uid": "Albania:Tirana"
+      },
+      {
+        "city": "Troll",
+        "country": "AQ",
+        "country_name": "Antarctica",
+        "PK": "WFR",
+        "gps_lat": -79.4063,
+        "gps_long": 0.314931,
+        "uid": "Antarctica:Troll"
+      },
+      {
+        "city": "Buenos Aires",
+        "country": "AR",
+        "country_name": "Argentina",
+        "PK": "EZE",
+        "gps_lat": -34.5334,
+        "gps_long": -58.5094,
+        "uid": "Argentina:Buenos Aires"
+      },
+      {
+        "city": "Adelaide",
+        "country": "AU",
+        "country_name": "Australia",
+        "PK": "ADL",
+        "gps_lat": -34.9212,
+        "gps_long": 138.6,
+        "uid": "Australia:Adelaide"
+      },
+      {
+        "city": "Brisbane",
+        "country": "AU",
+        "country_name": "Australia",
+        "PK": "BNE",
+        "gps_lat": -27.471,
+        "gps_long": 153.023,
+        "uid": "Australia:Brisbane"
+      },
+      {
+        "city": "Melbourne",
+        "country": "AU",
+        "country_name": "Australia",
+        "PK": "MEL",
+        "gps_lat": -37.8143,
+        "gps_long": 144.963,
+        "uid": "Australia:Melbourne"
+      },
+      {
+        "city": "Perth",
+        "country": "AU",
+        "country_name": "Australia",
+        "PK": "PER",
+        "gps_lat": -31.9535,
+        "gps_long": 115.857,
+        "uid": "Australia:Perth"
+      },
+      {
+        "city": "Sydney",
+        "country": "AU",
+        "country_name": "Australia",
+        "PK": "SYD",
+        "gps_lat": -33.8591,
+        "gps_long": 151.2,
+        "uid": "Australia:Sydney"
+      },
+      {
+        "city": "Vienna",
+        "country": "AT",
+        "country_name": "Austria",
+        "PK": "VIE",
+        "gps_lat": 48.21,
+        "gps_long": 16.3634,
+        "uid": "Austria:Vienna"
+      },
+      {
+        "city": "Brussels",
+        "country": "BE",
+        "country_name": "Belgium",
+        "PK": "BRU",
+        "gps_lat": 50.8833,
+        "gps_long": 4.5,
+        "uid": "Belgium:Brussels"
+      },
+      {
+        "city": "Sarajevo",
+        "country": "BA",
+        "country_name": "Bosnia",
+        "PK": "SJJ",
+        "gps_lat": 43.8563,
+        "gps_long": 18.4131,
+        "uid": "Bosnia:Sarajevo"
+      },
+      {
+        "city": "Sao Paulo",
+        "country": "BR",
+        "country_name": "Brazil",
+        "PK": "GRU",
+        "gps_lat": -23.5338,
+        "gps_long": -46.6253,
+        "uid": "Brazil:Sao Paulo"
+      },
+      {
+        "city": "Sofia",
+        "country": "BG",
+        "country_name": "Bulgaria",
+        "PK": "SOF",
+        "gps_lat": 42.6833,
+        "gps_long": 23.3167,
+        "uid": "Bulgaria:Sofia"
+      },
+      {
+        "city": "Halifax",
+        "country": "CA",
+        "country_name": "Canada",
+        "PK": "YHZ",
+        "gps_lat": 44.6511,
+        "gps_long": -63.5827,
+        "uid": "Canada:Halifax"
+      },
+      {
+        "city": "Montreal",
+        "country": "CA",
+        "country_name": "Canada",
+        "PK": "YUL",
+        "gps_lat": 45.5061,
+        "gps_long": -73.5573,
+        "uid": "Canada:Montreal"
+      },
+      {
+        "city": "Res Toronto",
+        "country": "CA",
+        "country_name": "Canada",
+        "PK": "RES_YYZ",
+        "gps_lat": 43.5924,
+        "gps_long": -79.7611,
+        "uid": "Canada:Res Toronto",
+        "hidden": true
+      },
+      {
+        "city": "Toronto",
+        "country": "CA",
+        "country_name": "Canada",
+        "PK": "YYZ",
+        "gps_lat": 43.5924,
+        "gps_long": -79.7611,
+        "uid": "Canada:Toronto"
+      },
+      {
+        "city": "Vancouver",
+        "country": "CA",
+        "country_name": "Canada",
+        "PK": "YVR",
+        "gps_lat": 49.2267,
+        "gps_long": -122.847,
+        "uid": "Canada:Vancouver"
+      },
+      {
+        "city": "Santiago",
+        "country": "CL",
+        "country_name": "Chile",
+        "PK": "SCL",
+        "gps_lat": -33.4475,
+        "gps_long": -70.6737,
+        "uid": "Chile:Santiago"
+      },
+      {
+        "city": "Bogota",
+        "country": "CO",
+        "country_name": "Colombia",
+        "PK": "BOG",
+        "gps_lat": 4.62433,
+        "gps_long": -74.0636,
+        "uid": "Colombia:Bogota"
+      },
+      {
+        "city": "Zagreb",
+        "country": "HR",
+        "country_name": "Croatia",
+        "PK": "ZAG",
+        "gps_lat": 45.8144,
+        "gps_long": 15.978,
+        "uid": "Croatia:Zagreb"
+      },
+      {
+        "city": "Limassol",
+        "country": "CY",
+        "country_name": "Cyprus",
+        "PK": "QLI",
+        "gps_lat": 35.1753,
+        "gps_long": 33.3642,
+        "uid": "Cyprus:Limassol"
+      },
+      {
+        "city": "Nicosia",
+        "country": "CY",
+        "country_name": "Cyprus",
+        "PK": "LCA",
+        "gps_lat": 35.1638,
+        "gps_long": 33.3639,
+        "uid": "Cyprus:Nicosia"
+      },
+      {
+        "city": "Prague",
+        "country": "CZ",
+        "country_name": "Czech Republic",
+        "PK": "PRG",
+        "gps_lat": 50.088,
+        "gps_long": 14.4208,
+        "uid": "Czech Republic:Prague"
+      },
+      {
+        "city": "Copenhagen",
+        "country": "DK",
+        "country_name": "Denmark",
+        "PK": "CPH",
+        "gps_lat": 55.6761,
+        "gps_long": 12.5683,
+        "uid": "Denmark:Copenhagen"
+      },
+      {
+        "city": "Quito",
+        "country": "EC",
+        "country_name": "Ecuador",
+        "PK": "UIO",
+        "gps_lat": -0.180653,
+        "gps_long": -78.4678,
+        "uid": "Ecuador:Quito"
+      },
+      {
+        "city": "Tallinn",
+        "country": "EE",
+        "country_name": "Estonia",
+        "PK": "TLL",
+        "gps_lat": 59.4133,
+        "gps_long": 24.8325,
+        "uid": "Estonia:Tallinn"
+      },
+      {
+        "city": "Helsinki",
+        "country": "FI",
+        "country_name": "Finland",
+        "PK": "HEL",
+        "gps_lat": 60.1921,
+        "gps_long": 24.9458,
+        "uid": "Finland:Helsinki"
+      },
+      {
+        "city": "Paris",
+        "country": "FR",
+        "country_name": "France",
+        "PK": "CDG",
+        "gps_lat": 48.8566,
+        "gps_long": 2.3522,
+        "uid": "France:Paris"
+      },
+      {
+        "city": "Tbilisi",
+        "country": "GE",
+        "country_name": "Georgia",
+        "PK": "TBS",
+        "gps_lat": 41.7208,
+        "gps_long": 44.7321,
+        "uid": "Georgia:Tbilisi"
+      },
+      {
+        "city": "Frankfurt",
+        "country": "DE",
+        "country_name": "Germany",
+        "PK": "FRA",
+        "gps_lat": 50.1109,
+        "gps_long": 8.6821,
+        "uid": "Germany:Frankfurt"
+      },
+      {
+        "city": "Athens",
+        "country": "GR",
+        "country_name": "Greece",
+        "PK": "ATH",
+        "gps_lat": 37.9667,
+        "gps_long": 23.7167,
+        "uid": "Greece:Athens"
+      },
+      {
+        "city": "Hong Kong",
+        "country": "HK",
+        "country_name": "Hong Kong",
+        "PK": "HKG",
+        "gps_lat": 22.2855,
+        "gps_long": 114.158,
+        "uid": "Hong Kong:Hong Kong"
+      },
+      {
+        "city": "Budapest",
+        "country": "HU",
+        "country_name": "Hungary",
+        "PK": "BUD",
+        "gps_lat": 47.4968,
+        "gps_long": 19.0776,
+        "uid": "Hungary:Budapest"
+      },
+      {
+        "city": "Reykjavik",
+        "country": "IS",
+        "country_name": "Iceland",
+        "PK": "KEF",
+        "gps_lat": 64.1283,
+        "gps_long": -21.8278,
+        "uid": "Iceland:Reykjavik"
+      },
+      {
+        "city": "Mumbai",
+        "country": "IN",
+        "country_name": "India",
+        "PK": "BOM",
+        "gps_lat": 19.0761,
+        "gps_long": 72.8774,
+        "uid": "India:Mumbai"
+      },
+      {
+        "city": "Jakarta",
+        "country": "ID",
+        "country_name": "Indonesia",
+        "PK": "CGK",
+        "gps_lat": -6.2146,
+        "gps_long": 106.845,
+        "uid": "Indonesia:Jakarta"
+      },
+      {
+        "city": "Dublin",
+        "country": "IE",
+        "country_name": "Ireland",
+        "PK": "DUB",
+        "gps_lat": 53.2734,
+        "gps_long": -7.77832,
+        "uid": "Ireland:Dublin"
+      },
+      {
+        "city": "Tel Aviv",
+        "country": "IL",
+        "country_name": "Israel",
+        "PK": "TLV",
+        "gps_lat": 31.8014,
+        "gps_long": 34.6435,
+        "uid": "Israel:Tel Aviv"
+      },
+      {
+        "city": "Milan",
+        "country": "IT",
+        "country_name": "Italy",
+        "PK": "MXP",
+        "gps_lat": 45.4654,
+        "gps_long": 9.1859,
+        "uid": "Italy:Milan"
+      },
+      {
+        "city": "Palermo",
+        "country": "IT",
+        "country_name": "Italy",
+        "PK": "PMO",
+        "gps_lat": 38.11566,
+        "gps_long": 13.35591,
+        "uid": "Italy:Palermo"
+      },
+      {
+        "city": "Tokyo",
+        "country": "JP",
+        "country_name": "Japan",
+        "PK": "HND",
+        "gps_lat": 35.6895,
+        "gps_long": 139.692,
+        "uid": "Japan:Tokyo"
+      },
+      {
+        "city": "Riga",
+        "country": "LV",
+        "country_name": "Latvia",
+        "PK": "RIX",
+        "gps_lat": 56.9496,
+        "gps_long": 24.1052,
+        "uid": "Latvia:Riga"
+      },
+      {
+        "city": "Vilnius",
+        "country": "LT",
+        "country_name": "Lithuania",
+        "PK": "VNO",
+        "gps_lat": 54.6825,
+        "gps_long": 25.2747,
+        "uid": "Lithuania:Vilnius"
+      },
+      {
+        "city": "Luxembourg",
+        "country": "LU",
+        "country_name": "Luxembourg",
+        "PK": "LUX",
+        "gps_lat": 49.505,
+        "gps_long": 6.1123,
+        "uid": "Luxembourg:Luxembourg"
+      },
+      {
+        "city": "Skopje",
+        "country": "MK",
+        "country_name": "Macedonia",
+        "PK": "SKP",
+        "gps_lat": 41.9973,
+        "gps_long": 21.428,
+        "uid": "Macedonia:Skopje"
+      },
+      {
+        "city": "Kuala Lumpur",
+        "country": "MY",
+        "country_name": "Malaysia",
+        "PK": "KUL",
+        "gps_lat": 3.139,
+        "gps_long": 101.687,
+        "uid": "Malaysia:Kuala Lumpur"
+      },
+      {
+        "city": "Queretaro",
+        "country": "MX",
+        "country_name": "Mexico",
+        "PK": "QRO",
+        "gps_lat": 20.58806,
+        "gps_long": -100.38806,
+        "uid": "Mexico:Queretaro"
+      },
+      {
+        "city": "Chisinau",
+        "country": "MD",
+        "country_name": "Moldova",
+        "PK": "KIV",
+        "gps_lat": 47.0056,
+        "gps_long": 28.8575,
+        "uid": "Moldova:Chisinau"
+      },
+      {
+        "city": "Amsterdam",
+        "country": "NL",
+        "country_name": "Netherlands",
+        "PK": "AMS",
+        "gps_lat": 52.3667,
+        "gps_long": 4.89517,
+        "uid": "Netherlands:Amsterdam"
+      },
+      {
+        "city": "Auckland",
+        "country": "NZ",
+        "country_name": "New Zealand",
+        "PK": "AKL",
+        "gps_lat": -36.85,
+        "gps_long": 174.765,
+        "uid": "New Zealand:Auckland"
+      },
+      {
+        "city": "Lagos",
+        "country": "NG",
+        "country_name": "Nigeria",
+        "PK": "LOS",
+        "gps_lat": 6.45503,
+        "gps_long": 3.38408,
+        "uid": "Nigeria:Lagos"
+      },
+      {
+        "city": "Oslo",
+        "country": "NO",
+        "country_name": "Norway",
+        "PK": "OSL",
+        "gps_lat": 59.9139,
+        "gps_long": 10.7522,
+        "uid": "Norway:Oslo"
+      },
+      {
+        "city": "Panama City",
+        "country": "PA",
+        "country_name": "Panama",
+        "PK": "PTY",
+        "gps_lat": 8.98333,
+        "gps_long": -79.5167,
+        "uid": "Panama:Panama City"
+      },
+      {
+        "city": "Lima",
+        "country": "PE",
+        "country_name": "Peru",
+        "PK": "LIM",
+        "gps_lat": -12.0464,
+        "gps_long": -77.0428,
+        "uid": "Peru:Lima"
+      },
+      {
+        "city": "Manila",
+        "country": "PH",
+        "country_name": "Philippines",
+        "PK": "MNL",
+        "gps_lat": 14.5995,
+        "gps_long": 120.984,
+        "uid": "Philippines:Manila"
+      },
+      {
+        "city": "Warsaw",
+        "country": "PL",
+        "country_name": "Poland",
+        "PK": "WAW",
+        "gps_lat": 52.2333,
+        "gps_long": 21.0167,
+        "uid": "Poland:Warsaw"
+      },
+      {
+        "city": "Lisbon",
+        "country": "PT",
+        "country_name": "Portugal",
+        "PK": "LIS",
+        "gps_lat": 38.71,
+        "gps_long": -9.14,
+        "uid": "Portugal:Lisbon"
+      },
+      {
+        "city": "Bucharest",
+        "country": "RO",
+        "country_name": "Romania",
+        "PK": "OTP",
+        "gps_lat": 44.4397,
+        "gps_long": 26.0963,
+        "uid": "Romania:Bucharest"
+      },
+      {
+        "city": "Saint Petersburg",
+        "country": "RU",
+        "country_name": "Russia",
+        "PK": "LED",
+        "gps_lat": 59.9386,
+        "gps_long": 30.3141,
+        "uid": "Russia:Saint Petersburg"
+      },
+      {
+        "city": "Belgrade",
+        "country": "RS",
+        "country_name": "Serbia",
+        "PK": "BEG",
+        "gps_lat": 44.7866,
+        "gps_long": 20.4489,
+        "uid": "Serbia:Belgrade"
+      },
+      {
+        "city": "Singapore",
+        "country": "SG",
+        "country_name": "Singapore",
+        "PK": "SIN",
+        "gps_lat": 1.3667,
+        "gps_long": 103.8,
+        "uid": "Singapore:Singapore"
+      },
+      {
+        "city": "Bratislava",
+        "country": "SK",
+        "country_name": "Slovakia",
+        "PK": "BTS",
+        "gps_lat": 48.1482,
+        "gps_long": 17.1067,
+        "uid": "Slovakia:Bratislava"
+      },
+      {
+        "city": "Johannesburg",
+        "country": "ZA",
+        "country_name": "South Africa",
+        "PK": "JNB",
+        "gps_lat": -26.2041,
+        "gps_long": 28.0473,
+        "uid": "South Africa:Johannesburg"
+      },
+      {
+        "city": "Seoul",
+        "country": "KR",
+        "country_name": "South Korea",
+        "PK": "ICN",
+        "gps_lat": 37.57,
+        "gps_long": 126.98,
+        "uid": "South Korea:Seoul"
+      },
+      {
+        "city": "Barcelona",
+        "country": "ES",
+        "country_name": "Spain",
+        "PK": "BCN",
+        "gps_lat": 41.3902,
+        "gps_long": 2.15401,
+        "uid": "Spain:Barcelona"
+      },
+      {
+        "city": "Madrid",
+        "country": "ES",
+        "country_name": "Spain",
+        "PK": "MAD",
+        "gps_lat": 40.4168,
+        "gps_long": -3.70379,
+        "uid": "Spain:Madrid"
+      },
+      {
+        "city": "Stockholm",
+        "country": "SE",
+        "country_name": "Sweden",
+        "PK": "ARN",
+        "gps_lat": 59.2885,
+        "gps_long": 18.0793,
+        "uid": "Sweden:Stockholm"
+      },
+      {
+        "city": "Zurich",
+        "country": "CH",
+        "country_name": "Switzerland",
+        "PK": "ZRH",
+        "gps_lat": 47.3769,
+        "gps_long": 8.54169,
+        "uid": "Switzerland:Zurich"
+      },
+      {
+        "city": "Taipei",
+        "country": "TW",
+        "country_name": "Taiwan",
+        "PK": "TPE",
+        "gps_lat": 25.1055,
+        "gps_long": 121.597,
+        "uid": "Taiwan:Taipei"
+      },
+      {
+        "city": "Bangkok",
+        "country": "TH",
+        "country_name": "Thailand",
+        "PK": "BKK",
+        "gps_lat": 13.754,
+        "gps_long": 100.501,
+        "uid": "Thailand:Bangkok"
+      },
+      {
+        "city": "Istanbul",
+        "country": "TR",
+        "country_name": "Turkey",
+        "PK": "IST",
+        "gps_lat": 41.0138,
+        "gps_long": 28.9497,
+        "uid": "Turkey:Istanbul"
+      },
+      {
+        "city": "Kyiv",
+        "country": "UA",
+        "country_name": "Ukraine",
+        "PK": "KBP",
+        "gps_lat": 50.4546,
+        "gps_long": 30.5238,
+        "uid": "Ukraine:Kyiv"
+      },
+      {
+        "city": "Dubai",
+        "country": "AE",
+        "country_name": "United Arab Emirates",
+        "PK": "DXB",
+        "gps_lat": 25.2582,
+        "gps_long": 55.3047,
+        "uid": "United Arab Emirates:Dubai"
+      },
+      {
+        "city": "Edinburgh",
+        "country": "GB",
+        "country_name": "United Kingdom",
+        "PK": "EDI",
+        "gps_lat": 55.9533,
+        "gps_long": -3.18827,
+        "uid": "United Kingdom:Edinburgh"
+      },
+      {
+        "city": "London",
+        "country": "GB",
+        "country_name": "United Kingdom",
+        "PK": "LHR",
+        "gps_lat": 51.5072,
+        "gps_long": 0.1275,
+        "uid": "United Kingdom:London"
+      },
+      {
+        "city": "Manchester",
+        "country": "GB",
+        "country_name": "United Kingdom",
+        "PK": "MAN",
+        "gps_lat": 53.4836,
+        "gps_long": -2.24464,
+        "uid": "United Kingdom:Manchester"
+      },
+      {
+        "city": "Atlanta",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "ATL",
+        "gps_lat": 33.748,
+        "gps_long": -84.3858,
+        "uid": "United States:Atlanta"
+      },
+      {
+        "city": "Bend",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "PDX",
+        "gps_lat": 44.0582,
+        "gps_long": -121.315,
+        "uid": "United States:Bend"
+      },
+      {
+        "city": "Boston",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "BOS",
+        "gps_lat": 42.3601,
+        "gps_long": -71.0589,
+        "uid": "United States:Boston"
+      },
+      {
+        "city": "Buffalo",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "BUF",
+        "gps_lat": 42.8802,
+        "gps_long": -78.8787,
+        "uid": "United States:Buffalo"
+      },
+      {
+        "city": "Charlotte",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "CLT",
+        "gps_lat": 35.2271,
+        "gps_long": -80.8431,
+        "uid": "United States:Charlotte"
+      },
+      {
+        "city": "Chicago",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "ORD",
+        "gps_lat": 41.8781,
+        "gps_long": -87.6298,
+        "uid": "United States:Chicago"
+      },
+      {
+        "city": "Cleveland",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "CLE",
+        "gps_lat": 41.5055,
+        "gps_long": -81.6813,
+        "uid": "United States:Cleveland"
+      },
+      {
+        "city": "Dallas",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "DFW",
+        "gps_lat": 32.7831,
+        "gps_long": -96.8067,
+        "uid": "United States:Dallas"
+      },
+      {
+        "city": "Denver",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "DEN",
+        "gps_lat": 39.742,
+        "gps_long": -104.992,
+        "uid": "United States:Denver"
+      },
+      {
+        "city": "Detroit",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "DTW",
+        "gps_lat": 42.3314,
+        "gps_long": -83.0458,
+        "uid": "United States:Detroit"
+      },
+      {
+        "city": "Kansas City",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "MCI",
+        "gps_lat": 39.0997,
+        "gps_long": -94.5783,
+        "uid": "United States:Kansas City"
+      },
+      {
+        "city": "Las Vegas",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "LAS",
+        "gps_lat": 36.1146,
+        "gps_long": -115.173,
+        "uid": "United States:Las Vegas"
+      },
+      {
+        "city": "Los Angeles",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "LAX",
+        "gps_lat": 34.0522,
+        "gps_long": -118.244,
+        "uid": "United States:Los Angeles"
+      },
+      {
+        "city": "Miami",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "MIA",
+        "gps_lat": 25.7806,
+        "gps_long": -80.1826,
+        "uid": "United States:Miami"
+      },
+      {
+        "city": "New York",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "JFK",
+        "gps_lat": 40.7306,
+        "gps_long": -73.9352,
+        "uid": "United States:New York"
+      },
+      {
+        "city": "Orlando",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "MCO",
+        "gps_lat": 28.5383,
+        "gps_long": -81.3792,
+        "uid": "United States:Orlando"
+      },
+      {
+        "city": "Philadelphia",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "PHL",
+        "gps_lat": 39.9526,
+        "gps_long": -75.1652,
+        "uid": "United States:Philadelphia"
+      },
+      {
+        "city": "Phoenix",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "PHX",
+        "gps_lat": 33.4484,
+        "gps_long": -112.074,
+        "uid": "United States:Phoenix"
+      },
+      {
+        "city": "Res Chicago",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "RES_ORD",
+        "gps_lat": 41.8781,
+        "gps_long": -87.6298,
+        "uid": "United States:Res Chicago",
+        "hidden": true
+      },
+      {
+        "city": "Res Dallas",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "RES_DFW",
+        "gps_lat": 32.7831,
+        "gps_long": -96.8067,
+        "uid": "United States:Res Dallas",
+        "hidden": true
+      },
+      {
+        "city": "San Francisco",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "SFO",
+        "gps_lat": 37.7749,
+        "gps_long": -122.419,
+        "uid": "United States:San Francisco"
+      },
+      {
+        "city": "San Jose",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "SJC",
+        "gps_lat": 37.3382,
+        "gps_long": -121.886,
+        "uid": "United States:San Jose"
+      },
+      {
+        "city": "Seattle",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "SEA",
+        "gps_lat": 47.6062,
+        "gps_long": -122.332,
+        "uid": "United States:Seattle"
+      },
+      {
+        "city": "Tampa",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "TPA",
+        "gps_lat": 27.9642,
+        "gps_long": -82.4526,
+        "uid": "United States:Tampa"
+      },
+      {
+        "city": "Washington DC",
+        "country": "US",
+        "country_name": "United States",
+        "PK": "WAS",
+        "gps_lat": 38.9047,
+        "gps_long": -77.0164,
+        "uid": "United States:Washington DC"
+      },
+      {
+        "city": "Hanoi",
+        "country": "VN",
+        "country_name": "Vietnam",
+        "PK": "HAN",
+        "gps_lat": 21.0892,
+        "gps_long": 105.662,
+        "uid": "Vietnam:Hanoi"
+      }
+    ]
+  },
+  "success": true
+}

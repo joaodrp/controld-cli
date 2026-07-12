@@ -1,0 +1,56 @@
+{
+  "body": {
+    "products": [
+      {
+        "proxy_access": 0,
+        "type": "standard",
+        "name": "Some Control",
+        "PK": 2,
+        "expiry": "2026-08-05",
+        "subscription": {
+          "id": "5d8e2c40-7a1b-4f3e-9c62-e0d4b8a61f27",
+          "sub_id": "sub_00example00example0000",
+          "user": "pk14ba0f1c",
+          "org": null,
+          "product": 2,
+          "method": "stripe",
+          "currency": "eur",
+          "amount": 2,
+          "currency_amount": 2,
+          "started": "2025-04-05",
+          "ended": null,
+          "cancel_reason": null,
+          "price": 1,
+          "status": 1,
+          "state": "active",
+          "next_bill": 1785969210,
+          "PK": "sub_00example00example0000"
+        },
+        "price": {
+          "gbp_price": 3,
+          "comment": "N/A",
+          "chf_stripe_id": "price_1TW0XjCIehNKujQTPMhZgc2U",
+          "gbp_stripe_id": "price_1TW0XiCIehNKujQT0CbAlhrC",
+          "chf_price": 3,
+          "already_billed": 0,
+          "product_id": 2,
+          "price": 3,
+          "jpy_stripe_id": "price_1TW0XjCIehNKujQTdI6pSWKj",
+          "duration": 1,
+          "type": "standard",
+          "cad_stripe_id": "price_1TW0XhCIehNKujQT3eVfLdjB",
+          "stripe_id": "price_1TW0XhCIehNKujQT3a2XMaKn",
+          "eur_stripe_id": "price_1TW0XhCIehNKujQT8RshrIat",
+          "aud_price": 5,
+          "jpy_price": 500,
+          "aud_stripe_id": "price_1TW0XiCIehNKujQTsLqQ1UE4",
+          "eur_price": 3,
+          "cad_price": 5,
+          "PK": 1,
+          "status": 1
+        }
+      }
+    ]
+  },
+  "success": true
+}

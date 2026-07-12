@@ -1,0 +1,245 @@
+{
+  "body": {
+    "filters": [
+      {
+        "PK": "ads",
+        "name": "Ads & Trackers",
+        "description": "Comprehensive and curated to remove thousands of false positives that plague most community maintained lists.",
+        "additional": "<p><strong>Relaxed Mode</strong></p>Smallest block list, will only block very common ads and trackers. Least prone to false positives. <p><strong>Balanced Mode</strong></p>Medium sized block list, will block a lot more than the Relaxed mode, but still allow common affiliate and email tracking links. <p><strong>Strict Mode</strong></p>Will block the most ads and trackers, but also has the highest chance of false positives.",
+        "sources": [],
+        "levels": [
+          {
+            "title": "Relaxed",
+            "type": "filter",
+            "name": "ads_small",
+            "status": 0
+          },
+          {
+            "title": "Balanced",
+            "type": "filter",
+            "name": "ads_medium",
+            "status": 0
+          },
+          {
+            "title": "Strict",
+            "type": "filter",
+            "name": "ads",
+            "status": 0
+          }
+        ],
+        "status": 0
+      },
+      {
+        "PK": "porn",
+        "name": "Adult Content",
+        "description": "This filter blocks sexually explicit content. Handy on kid-friendly networks and those morally opposed to pornography.",
+        "additional": "<p><strong>Relaxed Mode</strong></p>Filter will block most popular adult themed websites and reduce chances of false positive blocks. This is the recommended setting.<p><strong>Strict Mode</strong></p>This Filter uses a much larger blocklist and will block more niche adult websites at the cost of more false positives.",
+        "sources": [],
+        "levels": [
+          {
+            "title": "Relaxed",
+            "type": "filter",
+            "name": "porn",
+            "status": 0
+          },
+          {
+            "title": "Strict",
+            "type": "filter",
+            "name": "porn_strict",
+            "status": 0
+          }
+        ],
+        "status": 0
+      },
+      {
+        "PK": "noai",
+        "name": "Artificial Intelligence",
+        "description": "This filter blocks domains that are used for generating and hosting AI generated content, reducing exposure to synthetic media sources.",
+        "sources": [],
+        "status": 0
+      },
+      {
+        "PK": "fakenews",
+        "name": "Clickbait",
+        "description": "Sites that intentionally, but not necessarily exclusively, publish hoaxes and disinformation for purposes other than satire.",
+        "sources": [],
+        "action": {
+          "do": 0,
+          "status": 1
+        },
+        "status": 1
+      },
+      {
+        "PK": "cryptominers",
+        "name": "Crypto",
+        "description": "This filter blocks all cryptocurrency exchanges, crypto news sites and cryptomining services that mine cryptocurrency in your browser.",
+        "sources": [],
+        "status": 0
+      },
+      {
+        "PK": "dating",
+        "name": "Dating",
+        "description": "Not looking to meet local singles/bots in your area? This filter will help you achieve this goal.",
+        "sources": [],
+        "status": 0
+      },
+      {
+        "PK": "drugs",
+        "name": "Drugs",
+        "description": "This filter contains sites that legally and illegally sell drugs, alcohol, tobacco and vape products.",
+        "sources": [],
+        "status": 0
+      },
+      {
+        "PK": "ddns",
+        "name": "Dynamic DNS",
+        "description": "This filter contains dynamic DNS service hostnames which can sometimes be used to distribute malware and other malicious content.",
+        "sources": [],
+        "action": {
+          "do": 0,
+          "status": 1
+        },
+        "status": 1
+      },
+      {
+        "PK": "filehost",
+        "name": "File Hosting",
+        "description": "This filter contains file hosting websites, cyberlockers and other file sharing websites that can be used to distribute malware and other malicious content.",
+        "sources": [],
+        "status": 0
+      },
+      {
+        "PK": "gambling",
+        "name": "Gambling",
+        "description": "Blocks gambling sites. Prevent yourself, your employees or family members from gambling away their life savings.",
+        "sources": [],
+        "status": 0
+      },
+      {
+        "PK": "games",
+        "name": "Games",
+        "description": "This filter blocks domains associated with video games, including gaming platforms, online game servers, update services, and related CDNs.",
+        "sources": [],
+        "status": 0
+      },
+      {
+        "PK": "gov",
+        "name": "Government Sites",
+        "description": "This filter contains all government TLDs and websites in most countries. Will not prevent you from paying taxes.",
+        "sources": [],
+        "status": 0
+      },
+      {
+        "PK": "iot",
+        "name": "IoT Telemetry",
+        "description": "This filter prevents smart devices from sending tracking and telemetry to manufacturers, which may break some poorly made devices.",
+        "sources": [],
+        "action": {
+          "do": 0,
+          "status": 1
+        },
+        "status": 1
+      },
+      {
+        "PK": "malware",
+        "name": "Malware",
+        "description": "Sites that are known to distribute malware or botnet command-and-control servers. There is almost no reason to disable this.",
+        "additional": "<p><strong>Relaxed Mode</strong></p>Will block only malicious domains. <p><strong>Balanced Mode</strong></p>Will block malicious domains and domains that resolve to malicious IP addresses. <p><strong>Strict Mode</strong></p>Just like Balanced, but will also block malicious domains using machine learning. There are 3 separate levels of strictness available.",
+        "sources": [],
+        "levels": [
+          {
+            "title": "Relaxed",
+            "type": "filter",
+            "name": "malware",
+            "status": 1
+          },
+          {
+            "title": "Balanced",
+            "type": "ipfilter",
+            "name": "ip_malware",
+            "status": 1
+          },
+          {
+            "title": "Strict",
+            "type": "option",
+            "name": "ai_malware",
+            "status": 0,
+            "opt": []
+          }
+        ],
+        "action": {
+          "do": 0,
+          "status": 1
+        },
+        "status": 1
+      },
+      {
+        "PK": "nrd",
+        "name": "New Domains",
+        "description": "Blocks brand new domains commonly abused for malware distribution and control, with possible collateral blocking of legitimate new sites.",
+        "additional": "<p><strong>Last Week</strong></p>Blocks domains that were registered in the last week.<p><strong>Last Month</strong></p>Blocks domains that were registered in the last month.",
+        "sources": [],
+        "levels": [
+          {
+            "title": "Last Week",
+            "type": "filter",
+            "name": "nrd_small",
+            "status": 0
+          },
+          {
+            "title": "Last Month",
+            "type": "filter",
+            "name": "nrd",
+            "status": 1
+          }
+        ],
+        "action": {
+          "do": 0,
+          "status": 1,
+          "lvl": "nrd"
+        },
+        "status": 1
+      },
+      {
+        "PK": "typo",
+        "name": "Phishing",
+        "description": "This list blocks phishing domains as well as domains that are similar to common websites you may be visiting.",
+        "sources": [],
+        "action": {
+          "do": 0,
+          "status": 1
+        },
+        "status": 1
+      },
+      {
+        "PK": "social",
+        "name": "Social",
+        "description": "Social networks of the most pervasive privacy violators out there. This filter will block them and their associated trackers.",
+        "sources": [],
+        "status": 0
+      },
+      {
+        "PK": "torrents",
+        "name": "Torrents & Piracy",
+        "description": "Blocks common torrent trackers, index sites, and piracy streaming services. It won\u2019t stop torrents, only access to those sites and peer-discovery trackers.",
+        "sources": [],
+        "status": 0
+      },
+      {
+        "PK": "urlshort",
+        "name": "URL Shorteners",
+        "description": "Blocks common URL shorteners that hide link destinations. Often used to mask malicious links or track clicks and browsing behavior.",
+        "sources": [],
+        "status": 0
+      },
+      {
+        "PK": "dnsvpn",
+        "name": "VPN & DNS",
+        "description": "Blocks common VPN and DNS-over-HTTPS providers (except Control D). Useful for stopping DoH-based malware bypasses or restricting VPN use.",
+        "sources": [],
+        "status": 0
+      }
+    ]
+  },
+  "success": true
+}

@@ -1,0 +1,125 @@
+{
+  "body": {
+    "options": [
+      {
+        "PK": "ai_malware",
+        "title": "AI Malware Filter",
+        "description": "EXPERIMENTAL: Blocks malicious domains using machine learning.",
+        "type": "dropdown",
+        "default_value": {
+          "0.9": "Minimal",
+          "0.7": "Standard",
+          "0.5": "Aggressive"
+        },
+        "info_url": "https://docs.controld.com/docs/ai-malware-filter"
+      },
+      {
+        "PK": "safesearch",
+        "title": "Safe Search",
+        "description": "Prevent search engines from showing mature content.",
+        "type": "toggle",
+        "default_value": 0,
+        "info_url": "https://docs.controld.com/docs/safe-search"
+      },
+      {
+        "PK": "safeyoutube",
+        "title": "Restricted Youtube",
+        "description": "Prevent Youtube from showing mature content and disable comments.",
+        "type": "toggle",
+        "default_value": 0,
+        "info_url": "https://docs.controld.com/docs/restricted-youtube"
+      },
+      {
+        "PK": "block_rfc1918",
+        "title": "DNS Rebind Protection",
+        "description": "Blocks domains that point to RFC1918 addresses.",
+        "type": "toggle",
+        "default_value": 0,
+        "info_url": "https://docs.controld.com/docs/dns-rebind-option"
+      },
+      {
+        "PK": "no_dnssec",
+        "title": "Disable DNSSEC",
+        "description": "Turn off DNSSEC validation and ECS support for compatibility.",
+        "type": "toggle",
+        "default_value": 0,
+        "info_url": "https://docs.controld.com/docs/disable-dnssec-option"
+      },
+      {
+        "PK": "ttl_blck",
+        "title": "Block TTL",
+        "description": "DNS record TTL (in seconds) when blocking.",
+        "type": "field",
+        "default_value": 10,
+        "info_url": "https://docs.controld.com/docs/ttl-overrides"
+      },
+      {
+        "PK": "ttl_spff",
+        "title": "Redirect TTL",
+        "description": "DNS record TTL (in seconds) when redirecting.",
+        "type": "field",
+        "default_value": 20,
+        "info_url": "https://docs.controld.com/docs/ttl-overrides"
+      },
+      {
+        "PK": "ttl_pass",
+        "title": "Bypass TTL",
+        "description": "DNS record TTL (in seconds) when bypassing.",
+        "type": "field",
+        "default_value": 60,
+        "info_url": "https://docs.controld.com/docs/ttl-overrides"
+      },
+      {
+        "PK": "b_resp",
+        "title": "Block Response",
+        "description": "Choose how to respond to blocked queries.",
+        "type": "dropdown",
+        "default_value": {
+          "0": "0.0.0.0 / ::",
+          "3": "NXDOMAIN",
+          "5": "REFUSED",
+          "7": "Custom",
+          "9": "Branded"
+        },
+        "info_url": "https://docs.controld.com/docs/blocked-query-response"
+      },
+      {
+        "PK": "ecs_subnet",
+        "title": "EDNS Client Subnet",
+        "description": "Override the EDNS Client Subnet for this profile.",
+        "type": "dropdown",
+        "default_value": [
+          "No ECS",
+          "Auto",
+          "Custom"
+        ],
+        "info_url": "https://docs.controld.com/docs/ecs-custom-subnet"
+      },
+      {
+        "PK": "spoof_ipv6",
+        "title": "Compatibility Mode",
+        "description": "Cross-stack compatibility mode for IPv6 enabled networks. Don't blindly enable this.",
+        "type": "toggle",
+        "default_value": 0,
+        "info_url": "https://docs.controld.com/docs/ipv6-compatibility-mode"
+      },
+      {
+        "PK": "dns64",
+        "title": "Enable DNS64",
+        "description": "Enables DNS64 on NAT64 supporting IPv6-only networks. Don't blindly enable this.",
+        "type": "toggle",
+        "default_value": 0,
+        "info_url": "https://docs.controld.com/docs/dns64"
+      },
+      {
+        "PK": "cflat",
+        "title": "CNAME Flattening",
+        "description": "Flatten CNAME records to their target IP addresses.",
+        "type": "toggle",
+        "default_value": 0,
+        "info_url": "https://docs.controld.com/docs/cname-flattening"
+      }
+    ]
+  },
+  "success": true
+}

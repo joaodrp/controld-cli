@@ -1,0 +1,9 @@
+{
+  "body": [],
+  "success": false,
+  "error": {
+    "date": "Sat, 11 Jul 2026 06:38:28 -0400",
+    "message": "You have no organizations associated with your account",
+    "code": 40401
+  }
+}

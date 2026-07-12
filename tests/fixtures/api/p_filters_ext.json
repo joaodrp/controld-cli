@@ -1,0 +1,295 @@
+{
+  "body": {
+    "filters": [
+      {
+        "PK": "x-1hosts-lite",
+        "name": "1Hosts - Lite",
+        "description": "Blocks ads, trackers, and malware, prioritizing functionality.",
+        "additional": "<p><strong>Warning</strong></p>This is a community list and is not maintained by Control D. Any false positives/negatives should be reported to the list maintainer.",
+        "sources": [
+          "https://github.com/badmojr/1Hosts"
+        ],
+        "resolvers": {
+          "v4": [
+            "192.0.2.10",
+            "192.0.2.10"
+          ],
+          "v6": [
+            "2606:1a40::38",
+            "2606:1a40:1::38"
+          ]
+        },
+        "status": 0
+      },
+      {
+        "PK": "x-1hosts-xtra",
+        "name": "1Hosts - Xtra",
+        "description": "Blocks ads, trackers, and malware, prioritizing privacy.",
+        "additional": "<p><strong>Warning</strong></p>This is a community list and is not maintained by Control D. Any false positives/negatives should be sent to the list maintainer.",
+        "sources": [
+          "https://github.com/badmojr/1Hosts"
+        ],
+        "resolvers": {
+          "v4": [
+            "192.0.2.10",
+            "192.0.2.10"
+          ],
+          "v6": [
+            "2606:1a40::48",
+            "2606:1a40:1::48"
+          ]
+        },
+        "status": 0
+      },
+      {
+        "PK": "x-adguard",
+        "name": "AdGuard Filter",
+        "description": "AdGuard Simplified Domain names filter.",
+        "additional": "<p><strong>Warning</strong></p>This is a community list and is not maintained by Control D. Any false positives/negatives should be sent to the list maintainer.",
+        "sources": [
+          "https://github.com/AdguardTeam/AdGuardSDNSFilter"
+        ],
+        "resolvers": {
+          "v4": [
+            "192.0.2.10",
+            "192.0.2.10"
+          ],
+          "v6": [
+            "2606:1a40::44",
+            "2606:1a40:1::44"
+          ]
+        },
+        "status": 0
+      },
+      {
+        "PK": "x-goodbyeads",
+        "name": "GoodbyeAds",
+        "description": "Small blocklist blocking 99% of ads on mobile, PC, and Smart TV.",
+        "additional": "<p><strong>Warning</strong></p>This is a community list and is not maintained by Control D. Any false positives/negatives should be sent to the list maintainer.",
+        "sources": [
+          "https://github.com/jerryn70/GoodbyeAds"
+        ],
+        "resolvers": {
+          "v4": [
+            "192.0.2.10",
+            "192.0.2.10"
+          ],
+          "v6": [
+            "2606:1a40::43",
+            "2606:1a40:1::43"
+          ]
+        },
+        "status": 0
+      },
+      {
+        "PK": "x-hagezi-light",
+        "name": "Hagezi's DNS - Light",
+        "description": "Light protection for a cleaner internet, prioritizing functionality.",
+        "additional": "<p><strong>Warning</strong></p>This is a community list and is not maintained by Control D. Any false positives/negatives should be sent to the list maintainer.",
+        "sources": [
+          "https://github.com/hagezi/dns-blocklists"
+        ],
+        "resolvers": {
+          "v4": [
+            "192.0.2.10",
+            "192.0.2.10"
+          ],
+          "v6": [
+            "2606:1a40::37",
+            "2606:1a40:1::37"
+          ]
+        },
+        "status": 0
+      },
+      {
+        "PK": "x-hagezi-normal",
+        "name": "Hagezi's DNS - Normal",
+        "description": "All-round protection for a cleaner internet.",
+        "additional": "<p><strong>Warning</strong></p>This is a community list and is not maintained by Control D. Any false positives/negatives should be sent to the list maintainer.",
+        "sources": [
+          "https://github.com/hagezi/dns-blocklists"
+        ],
+        "resolvers": {
+          "v4": [
+            "192.0.2.10",
+            "192.0.2.10"
+          ],
+          "v6": [
+            "2606:1a40::40",
+            "2606:1a40:1::40"
+          ]
+        },
+        "status": 0
+      },
+      {
+        "PK": "x-hagezi-pro",
+        "name": "Hagezi's DNS - Pro",
+        "description": "Extended protection for a cleaner internet.",
+        "additional": "<p><strong>Warning</strong></p>This is a community list and is not maintained by Control D. Any false positives/negatives should be sent to the list maintainer.",
+        "sources": [
+          "https://github.com/hagezi/dns-blocklists"
+        ],
+        "resolvers": {
+          "v4": [
+            "192.0.2.10",
+            "192.0.2.10"
+          ],
+          "v6": [
+            "2606:1a40::41",
+            "2606:1a40:1::41"
+          ]
+        },
+        "status": 0
+      },
+      {
+        "PK": "x-hagezi-proplus",
+        "name": "Hagezi's DNS - Pro Plus",
+        "description": "Maximum protection with more aggressive blocking.",
+        "additional": "<p><strong>Warning</strong></p>This is a community list and is not maintained by Control D. Any false positives/negatives should be sent to the list maintainer.",
+        "sources": [
+          "https://github.com/hagezi/dns-blocklists"
+        ],
+        "resolvers": {
+          "v4": [
+            "192.0.2.10",
+            "192.0.2.10"
+          ],
+          "v6": [
+            "2606:1a40::42",
+            "2606:1a40:1::42"
+          ]
+        },
+        "action": {
+          "do": 0,
+          "status": 1
+        },
+        "status": 1
+      },
+      {
+        "PK": "x-hagezi-tif",
+        "name": "Hagezi's DNS - TIF",
+        "description": "Blocks malware, cryptojacking, scams, spam, phishing, and command-and-control servers.",
+        "additional": "<p><strong>Warning</strong></p>This is a community list and is not maintained by Control D. Any false positives/negatives should be sent to the list maintainer.",
+        "sources": [
+          "https://github.com/hagezi/dns-blocklists"
+        ],
+        "resolvers": {
+          "v4": [
+            "192.0.2.10",
+            "192.0.2.10"
+          ],
+          "v6": [
+            "2606:1a40::46",
+            "2606:1a40:1::46"
+          ]
+        },
+        "action": {
+          "do": 0,
+          "status": 1
+        },
+        "status": 1
+      },
+      {
+        "PK": "x-hagezi-ultimate",
+        "name": "Hagezi's DNS - Ultimate",
+        "description": "Strictest protection. May contain false positives that limit functionality.",
+        "additional": "<p><strong>Warning</strong></p>This is a community list and is not maintained by Control D. Any false positives/negatives should be sent to the list maintainer.",
+        "sources": [
+          "https://github.com/hagezi/dns-blocklists"
+        ],
+        "resolvers": {
+          "v4": [
+            "192.0.2.10",
+            "192.0.2.10"
+          ],
+          "v6": [
+            "2606:1a40::45",
+            "2606:1a40:1::45"
+          ]
+        },
+        "status": 0
+      },
+      {
+        "PK": "x-oisd-basic",
+        "name": "OISD - Basic",
+        "description": "Smaller variant focusing on ads and mobile app ads.",
+        "additional": "<p><strong>Warning</strong></p>This is a community list and is not maintained by Control D. Any false positives/negatives should be reported to the list maintainer.",
+        "sources": [
+          "https://oisd.nl/downloads"
+        ],
+        "resolvers": {
+          "v4": [
+            "192.0.2.10",
+            "192.0.2.10"
+          ],
+          "v6": [
+            "2606:1a40::33",
+            "2606:1a40:1::33"
+          ]
+        },
+        "status": 0
+      },
+      {
+        "PK": "x-oisd",
+        "name": "OISD - Full",
+        "description": "Blocks ads, malware, phishing, tracking. Prioritizes functionality over blocking.",
+        "additional": "<p><strong>Warning</strong></p>This is a community list and is not maintained by Control D. Any false positives/negatives should be reported to the list maintainer.",
+        "sources": [
+          "https://oisd.nl/downloads"
+        ],
+        "resolvers": {
+          "v4": [
+            "192.0.2.10",
+            "192.0.2.10"
+          ],
+          "v6": [
+            "2606:1a40::32",
+            "2606:1a40:1::32"
+          ]
+        },
+        "status": 0
+      },
+      {
+        "PK": "x-stevenblack",
+        "name": "StevenBlack Unified",
+        "description": "Unified hosts from curated sources. Blocks adware and malware.",
+        "additional": "<p><strong>Warning</strong></p>This is a community list and is not maintained by Control D. Any false positives/negatives should be reported to the list maintainer.",
+        "sources": [
+          "https://github.com/StevenBlack/hosts"
+        ],
+        "resolvers": {
+          "v4": [
+            "192.0.2.10",
+            "192.0.2.10"
+          ],
+          "v6": [
+            "2606:1a40::35",
+            "2606:1a40:1::35"
+          ]
+        },
+        "status": 0
+      },
+      {
+        "PK": "x-hblock",
+        "name": "hBlock",
+        "description": "Blocks ads, tracking, and malware domains.",
+        "additional": "<p><strong>Warning</strong></p>This is a community list and is not maintained by Control D. Any false positives/negatives should be sent to the list maintainer.",
+        "sources": [
+          "https://github.com/hectorm/hblock"
+        ],
+        "resolvers": {
+          "v4": [
+            "192.0.2.10",
+            "192.0.2.10"
+          ],
+          "v6": [
+            "2606:1a40::47",
+            "2606:1a40:1::47"
+          ]
+        },
+        "status": 0
+      }
+    ]
+  },
+  "success": true
+}
