@@ -253,6 +253,15 @@ impl Client {
             .base_url
             .join(path)
             .map_err(|e| Error::usage(format!("invalid request path {path:?}: {e}")))?;
+        // D9: a join must never escape the pinned origin. WHATWG parsing
+        // treats `\` like `/` and lets absolute or scheme-relative input
+        // replace the host — so the joined result is checked, not the input.
+        if url.origin() != self.base_url.origin() {
+            return Err(Error::usage(format!(
+                "request path {path:?} resolves outside the API origin ({base})",
+                base = self.base_url.origin().ascii_serialization()
+            )));
+        }
 
         if self.debug {
             // The Authorization header is never traced (token redaction, D6).
@@ -794,6 +803,36 @@ mod tests {
         let error = client.get("/profiles", "profile").await.expect_err("404");
         assert_eq!(error.code, "profile.not_found");
         assert_eq!(error.exit(), Exit::NotFound);
+    }
+
+    /// D9: no path may steer a request off the base origin — absolute URLs,
+    /// scheme-relative forms, and the WHATWG `\`-as-`/` trick all resolve to
+    /// a foreign origin after the join, and the joined URL is what's checked.
+    #[tokio::test]
+    async fn paths_cannot_escape_the_pinned_origin() {
+        let server = MockServer::start().await;
+        // The mock proves no request leaves the process at all.
+        Mock::given(wiremock::matchers::any())
+            .respond_with(ResponseTemplate::new(200).set_body_json(success_body()))
+            .expect(0)
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server.uri(), fast_retry());
+        for path in [
+            "https://evil.example/x",
+            "//evil.example/x",
+            "/\\evil.example/x",
+            "\\\\evil.example/x",
+            "https://user:pw@evil.example/x",
+        ] {
+            let error = client.get(path, "resource").await.expect_err("escapes");
+            assert_eq!(error.exit(), Exit::Usage, "path {path:?} must be rejected");
+            assert!(
+                error.upstream.is_none(),
+                "rejected before any request: {path:?}"
+            );
+        }
     }
 
     /// A token must never ride to a non-default origin unless explicitly
