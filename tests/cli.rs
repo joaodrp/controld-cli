@@ -954,18 +954,13 @@ async fn api_delete_carries_its_body() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn api_writes_are_never_retried_and_errors_classify() {
+async fn api_writes_are_never_retried() {
     let server = MockServer::start().await;
     // .expect(1): a second request panics — no --no-retry is passed here.
     Mock::given(method("POST"))
         .and(path("/profiles"))
         .respond_with(ResponseTemplate::new(500))
         .expect(1)
-        .mount(&server)
-        .await;
-    Mock::given(method("GET"))
-        .and(path("/nope"))
-        .respond_with(error_envelope(404, 40401, "No such thing"))
         .mount(&server)
         .await;
 
@@ -977,14 +972,80 @@ async fn api_writes_are_never_retried_and_errors_classify() {
             .assert()
             .code(8)
             .stdout(predicates::str::is_empty());
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn api_errors_classify_to_standard_exit_codes() {
+    let server = MockServer::start().await;
+    // .expect(1) also proves the terminal 404 is not retried.
+    Mock::given(method("GET"))
+        .and(path("/nope"))
+        .respond_with(error_envelope(404, 40401, "No such thing"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
         cdctl_against(&uri, dir.path())
-            .args(["api", "/nope", "--no-retry"])
+            .args(["api", "/nope"])
             .assert()
             .code(3)
             .stdout(predicates::str::is_empty());
     })
     .await
-    .expect("commands run");
+    .expect("command runs");
+}
+
+/// The confirmation gate runs before auth: a non-GET without `--yes` exits
+/// 7 even with no token configured — a request that will not be sent does
+/// not demand credentials first.
+#[test]
+fn api_confirmation_gate_fires_before_auth() {
+    let dir = tempdir();
+    // No token anywhere in the environment.
+    cdctl(dir.path())
+        .args(["api", "/profiles", "-X", "POST", "-F", "name=x"])
+        .assert()
+        .code(7)
+        .stdout(predicates::str::is_empty());
+}
+
+/// The full binary path must keep non-UTF8 bytes intact — a regression
+/// routing api output through a `String` would corrupt /mobileconfig
+/// downloads while every text-based test still passed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn api_passes_binary_bodies_through_unscathed() {
+    let binary: &[u8] = &[0x3c, 0x3f, 0x78, 0x6d, 0x6c, 0x00, 0xff, 0xfe, 0x0a, 0x80];
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/mobileconfig/abc"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(binary, "application/x-apple-aspen-config"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["api", "/mobileconfig/abc"])
+            .assert()
+            .success();
+        assert_eq!(
+            assert.get_output().stdout,
+            binary,
+            "stdout must carry the exact bytes"
+        );
+    })
+    .await
+    .expect("command runs");
 }
 
 /// Production envelope parsing accepts unknown fields, so a non-envelope
