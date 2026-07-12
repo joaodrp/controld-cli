@@ -243,7 +243,8 @@ Agents hallucinate inputs humans never type — embedded query fragments in ids,
 strings, invisible characters. Reject the known shapes with exit `2` **before any request is
 built**:
 
-- **ASCII control characters** (below `0x20`, plus `0x7F`) in any argument value.
+- **ASCII control characters** (below `0x20`, plus `0x7F`) in any argument value, plus the C1
+  controls (`U+0080`-`U+009F`), matching the output-escaping stance.
 - In values placed into **URL path segments** (hostnames on `rule delete`, service names, filter
   level names, option names, resolved folder/profile/device ids): additionally reject `?`, `#`,
   and `%` — embedded query fragments and pre-encoded input (a passed-in `%2A` would
@@ -663,7 +664,8 @@ One exact encoding per input form — nothing is sniffed ([D16](decisions.md)):
 `--profile`, `--folder`, `--device`, and positional ids all accept **a name or an id**.
 
 1. Exact id match wins.
-2. Else exact (case-insensitive) name match.
+2. Else exact (case-insensitive) name match (ASCII case folding — non-ASCII characters must
+   match exactly).
 3. **Multiple matches -> error, exit `2`.** Never guess. Folder names in particular are not unique.
 4. No match -> exit `3`.
 

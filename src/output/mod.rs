@@ -1,6 +1,8 @@
 //! Output contract (D2, D3, D4): stdout carries only data; JSON is always
 //! pretty-printed, 2-space indent, trailing newline, identical piped or not.
 
+pub mod time;
+
 use std::borrow::Cow;
 
 use serde::Serialize;
@@ -101,7 +103,6 @@ pub fn print_key_values(pairs: &[(&str, String)]) {
 
 /// Default human view. `plain` drops borders for `awk`/`cut` (D3: piping
 /// never changes representation; `--plain` is an explicit rendering choice).
-#[allow(dead_code, reason = "first caller is Phase 3 (`profile list`)")]
 pub fn render_table(headers: &[&str], rows: Vec<Vec<String>>, plain: bool) -> comfy_table::Table {
     use comfy_table::presets;
     let mut table = comfy_table::Table::new();

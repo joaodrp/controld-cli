@@ -1,0 +1,45 @@
+{
+  "body": {
+    "profiles": [
+      {
+        "PK": "pkbadc0ffe",
+        "user": "pk14ba0f1c",
+        "org": null,
+        "name": "Evil\u001b[31mRed",
+        "featured": null,
+        "updated": 1782927148,
+        "disable": null,
+        "lock": null,
+        "profile": {
+          "flt": {
+            "count": 1
+          },
+          "cflt": {
+            "count": 0
+          },
+          "ipflt": {
+            "count": 0
+          },
+          "rule": {
+            "count": 2
+          },
+          "svc": {
+            "count": 0
+          },
+          "grp": {
+            "count": 0
+          },
+          "opt": {
+            "count": 0,
+            "data": []
+          },
+          "da": {
+            "do": 1,
+            "status": 1
+          }
+        }
+      }
+    ]
+  },
+  "success": true
+}

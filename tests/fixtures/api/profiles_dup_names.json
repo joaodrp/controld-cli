@@ -1,0 +1,156 @@
+{
+  "body": {
+    "profiles": [
+      {
+        "PK": "pk11aa22bb",
+        "user": "pk14ba0f1c",
+        "org": null,
+        "name": "Home",
+        "featured": null,
+        "updated": 1782927148,
+        "disable": null,
+        "lock": null,
+        "profile": {
+          "flt": {
+            "count": 3
+          },
+          "cflt": {
+            "count": 0
+          },
+          "ipflt": {
+            "count": 0
+          },
+          "rule": {
+            "count": 5
+          },
+          "svc": {
+            "count": 1
+          },
+          "grp": {
+            "count": 2
+          },
+          "opt": {
+            "count": 0,
+            "data": []
+          },
+          "da": {
+            "do": 1,
+            "status": 1
+          }
+        }
+      },
+      {
+        "PK": "pk33cc44dd",
+        "user": "pk14ba0f1c",
+        "org": null,
+        "name": "home",
+        "featured": null,
+        "updated": 1783173588,
+        "disable": null,
+        "lock": null,
+        "profile": {
+          "flt": {
+            "count": 1
+          },
+          "cflt": {
+            "count": 0
+          },
+          "ipflt": {
+            "count": 0
+          },
+          "rule": {
+            "count": 0
+          },
+          "svc": {
+            "count": 0
+          },
+          "grp": {
+            "count": 0
+          },
+          "opt": {
+            "count": 0,
+            "data": []
+          },
+          "da": {
+            "do": 1,
+            "status": 1
+          }
+        }
+      },
+      {
+        "PK": "pk55ee66ff",
+        "user": "pk14ba0f1c",
+        "org": null,
+        "name": "Paused",
+        "featured": null,
+        "updated": 1741693261,
+        "disable_ttl": 1784102400,
+        "lock": null,
+        "profile": {
+          "flt": {
+            "count": 2
+          },
+          "cflt": {
+            "count": 0
+          },
+          "ipflt": {
+            "count": 0
+          },
+          "rule": {
+            "count": 4
+          },
+          "svc": {
+            "count": 0
+          },
+          "grp": {
+            "count": 1
+          },
+          "opt": {
+            "count": 0,
+            "data": []
+          },
+          "da": {
+            "do": 0,
+            "status": 1
+          }
+        }
+      },
+      {
+        "PK": "pk77001199",
+        "user": "pk14ba0f1c",
+        "org": null,
+        "name": "Fresh",
+        "featured": null,
+        "updated": 1741693217,
+        "disable": null,
+        "lock": null,
+        "profile": {
+          "flt": {
+            "count": 0
+          },
+          "cflt": {
+            "count": 0
+          },
+          "ipflt": {
+            "count": 0
+          },
+          "rule": {
+            "count": 0
+          },
+          "svc": {
+            "count": 0
+          },
+          "grp": {
+            "count": 0
+          },
+          "opt": {
+            "count": 0,
+            "data": []
+          },
+          "da": []
+        }
+      }
+    ]
+  },
+  "success": true
+}

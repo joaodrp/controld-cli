@@ -267,13 +267,15 @@ impl Error {
             return;
         }
         eprintln!("error: {}", collapse_to_single_line(&self.message));
-        if debug
-            && let Some(upstream_message) = self.upstream.as_ref().and_then(|u| u.message.as_ref())
-        {
-            // JSON-escaping keeps it verbatim yet never executable.
-            let escaped = serde_json::to_string(upstream_message)
-                .expect("strings are always JSON-serializable");
-            eprintln!("debug: upstream.message = {escaped}");
+        // Nested (not a let-chain): let-chains stabilized after the 1.85 MSRV.
+        if debug {
+            if let Some(upstream_message) = self.upstream.as_ref().and_then(|u| u.message.as_ref())
+            {
+                // JSON-escaping keeps it verbatim yet never executable.
+                let escaped = serde_json::to_string(upstream_message)
+                    .expect("strings are always JSON-serializable");
+                eprintln!("debug: upstream.message = {escaped}");
+            }
         }
         if let Some(hint) = &self.hint {
             eprintln!("hint: {}", collapse_to_single_line(hint));
@@ -356,6 +358,16 @@ pub fn classify_unparseable(http_status: u16, resource: &str, retry_after: Optio
         classify_effective(http_status, None, None, resource)
     };
     error.with_upstream(upstream).with_retry_after(retry_after)
+}
+
+/// A response whose shape defies what an operation verified: success cannot
+/// be confirmed, so it is always exit 8 (error-codes.md, defensive parsing).
+pub(crate) fn upstream_shape(detail: impl std::fmt::Display) -> Error {
+    Error::new(
+        "upstream.error",
+        format!("unexpected API response shape: {detail}; success cannot be confirmed"),
+        Exit::Retryable,
+    )
 }
 
 /// A `success: true` body riding a non-2xx status (a middlebox replaying a
