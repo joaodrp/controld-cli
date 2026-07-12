@@ -45,6 +45,21 @@ impl Default for RetryPolicy {
     }
 }
 
+/// A request body in one of the D9b encodings — form pairs with literal
+/// keys. Nothing is ever sniffed (D16).
+#[derive(Debug)]
+pub enum RawBody {
+    Form(Vec<(String, String)>),
+}
+
+/// The transport-level response parts, before any interpretation.
+#[derive(Debug)]
+struct WireResponse {
+    status: StatusCode,
+    retry_after: RetryAfter,
+    body: Vec<u8>,
+}
+
 #[derive(Debug)]
 pub struct ClientConfig {
     pub base_url: Url,
@@ -141,11 +156,32 @@ impl Client {
     /// honored, capped attempts and elapsed time, every retry logged (a
     /// silent backoff is indistinguishable from a hang).
     pub async fn get(&self, path: &str, resource: &'static str) -> Result<Envelope, Error> {
+        self.get_with(path, |wire| {
+            interpret_response(
+                wire.status,
+                wire.retry_after.seconds(),
+                &wire.body,
+                resource,
+            )
+        })
+        .await
+    }
+
+    /// The retry loop itself, shared by every GET interpretation.
+    async fn get_with<T>(
+        &self,
+        path: &str,
+        interpret: impl Fn(&WireResponse) -> Result<T, Error>,
+    ) -> Result<T, Error> {
         let started = Instant::now();
         let mut attempt: u32 = 1;
         loop {
-            let error = match self.execute(Method::GET, path, None, resource).await {
-                Ok(envelope) => return Ok(envelope),
+            let attempt_result = self
+                .send(Method::GET, path, None)
+                .await
+                .and_then(|wire| interpret(&wire));
+            let error = match attempt_result {
+                Ok(value) => return Ok(value),
                 Err(error) => error,
             };
             if !self.retry.enabled || !error.retryable() || attempt >= self.retry.max_attempts {
@@ -185,26 +221,34 @@ impl Client {
             Method::GET,
             "writes go through write(), GETs through get()"
         );
-        self.execute(method, path, Some(form), resource)
+        let body = (!form.is_empty()).then(|| {
+            RawBody::Form(
+                form.iter()
+                    .map(|(key, value)| ((*key).to_owned(), value.clone()))
+                    .collect(),
+            )
+        });
+        self.send(method, path, body.as_ref())
             .await
-            .map_err(|error| {
-                if error.retryable() {
-                    error.with_hint(
-                        "this write was not retried and may still have landed; re-fetch state before retrying",
-                    )
-                } else {
-                    error
-                }
+            .and_then(|wire| {
+                interpret_response(
+                    wire.status,
+                    wire.retry_after.seconds(),
+                    &wire.body,
+                    resource,
+                )
             })
+            .map_err(warn_write_may_have_landed)
     }
 
-    async fn execute(
+    /// One request over the wire: join the path, attach the bearer token and
+    /// body, send, collect the response parts. No interpretation.
+    async fn send(
         &self,
         method: Method,
         path: &str,
-        form: Option<&[(&str, String)]>,
-        resource: &'static str,
-    ) -> Result<Envelope, Error> {
+        body: Option<&RawBody>,
+    ) -> Result<WireResponse, Error> {
         let url = self
             .base_url
             .join(path)
@@ -218,10 +262,9 @@ impl Client {
         if let Some(token) = &self.token {
             request = request.bearer_auth(token.expose_secret());
         }
-        if let Some(form) = form
-            && !form.is_empty()
-        {
-            request = request.form(form);
+        match body {
+            Some(RawBody::Form(pairs)) => request = request.form(pairs),
+            None => {}
         }
 
         let response = request.send().await.map_err(|e| classify_transport(&e))?;
@@ -237,7 +280,11 @@ impl Client {
         }
         let body = response.bytes().await.map_err(|e| classify_transport(&e))?;
 
-        interpret_response(status, retry_after.seconds(), &body, resource)
+        Ok(WireResponse {
+            status,
+            retry_after,
+            body: body.to_vec(),
+        })
     }
 
     fn backoff_delay(&self, attempt: u32, retry_after: Option<u64>) -> Duration {
@@ -251,6 +298,18 @@ impl Client {
             .saturating_mul(2u32.saturating_pow(attempt));
         let cap_ms = u64::try_from(cap.as_millis()).unwrap_or(u64::MAX);
         Duration::from_millis(fastrand::u64(1..=cap_ms.max(1)))
+    }
+}
+
+/// The D12 write contract's failure hint: a retryable error keeps exit 8 but
+/// the caller must re-fetch state, never blindly replay.
+fn warn_write_may_have_landed(error: Error) -> Error {
+    if error.retryable() {
+        error.with_hint(
+            "this write was not retried and may still have landed; re-fetch state before retrying",
+        )
+    } else {
+        error
     }
 }
 
