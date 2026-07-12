@@ -64,7 +64,7 @@ pub async fn run(args: ApiArgs, globals: &Globals) -> Result<(), Error> {
         ));
     }
 
-    let (client, _source) = super::client_with_optional_token(globals)?;
+    let (client, _source, _config) = super::client_with_optional_token(globals)?;
     let bytes = if args.method == Method::GET {
         client.get_raw(&args.path, "resource").await?
     } else {

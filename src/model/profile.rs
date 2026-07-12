@@ -222,20 +222,7 @@ impl Profile {
 /// captured fixture (this module and `commands::scope`).
 #[cfg(test)]
 pub(crate) fn profiles_fixture(name: &str) -> Vec<ApiProfile> {
-    let raw = std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures/api")
-            .join(name),
-    )
-    .expect("fixture exists");
-    let envelope: crate::api::envelope::Envelope =
-        serde_json::from_str(&raw).expect("fixture is an envelope");
-    serde_json::from_value(
-        envelope
-            .keyed("profiles")
-            .expect("fixture body holds profiles"),
-    )
-    .expect("profiles deserialize strictly")
+    super::fixture_list(name, "profiles")
 }
 
 #[cfg(test)]

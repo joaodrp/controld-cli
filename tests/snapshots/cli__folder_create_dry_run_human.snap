@@ -1,0 +1,9 @@
+---
+source: tests/cli.rs
+expression: human
+---
+would send: POST /profiles/pk4cada1c5/groups
+name     Games
+action   redirect
+via      LHR
+enabled  true

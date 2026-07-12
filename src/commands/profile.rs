@@ -28,7 +28,7 @@ pub async fn run(command: ProfileCommand, globals: &Globals) -> Result<(), Error
 }
 
 async fn list(globals: &Globals) -> Result<(), Error> {
-    let (client, _source) = super::authenticated_client(globals)?;
+    let (client, _source, _config) = super::authenticated_client(globals)?;
     let api_profiles = super::scope::fetch_profiles(&client).await?;
     let profiles = api_profiles
         .iter()
@@ -58,7 +58,7 @@ async fn list(globals: &Globals) -> Result<(), Error> {
 
 async fn get(selector: &str, globals: &Globals) -> Result<(), Error> {
     super::validate::reject_control_chars(selector, "the profile selector")?;
-    let (client, _source) = super::authenticated_client(globals)?;
+    let (client, _source, _config) = super::authenticated_client(globals)?;
     let api_profiles = super::scope::fetch_profiles(&client).await?;
     let profile = Profile::from_api(super::scope::find_profile(&api_profiles, selector)?)?;
 

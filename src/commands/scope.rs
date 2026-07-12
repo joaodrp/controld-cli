@@ -1,15 +1,17 @@
-//! Name-or-id resolution (commands.md#name-resolution): exact id match wins,
-//! else exact case-insensitive name; multiple matches are an error (never
-//! guess — exit 2), no match is exit 3.
+//! Name-or-id resolution (commands.md#name-resolution) for both profiles and
+//! folders: exact id match wins, else exact case-insensitive name; multiple
+//! matches are an error (never guess — exit 2), no match is exit 3.
 
 use crate::api::client::Client;
+use crate::cli::Globals;
 use crate::error::{Error, Exit};
+use crate::model::folder::ApiFolder;
 use crate::model::profile::ApiProfile;
+use crate::output::escape_controls;
 
-/// One `GET /profiles` for both `profile` verbs — there is no
-/// `GET /profiles/{id}`; `profile get` filters client-side (commands.md).
-/// Lives beside resolution since every caller that resolves a profile pays
-/// this extra GET.
+/// One `GET /profiles` for every caller — there is no `GET /profiles/{id}`;
+/// `profile get` filters client-side (commands.md). Lives beside resolution
+/// since every caller that resolves a profile pays this extra GET.
 pub(crate) async fn fetch_profiles(client: &Client) -> Result<Vec<ApiProfile>, Error> {
     client
         .get("/profiles", "profile")
@@ -47,9 +49,130 @@ pub(crate) fn find_profile<'a>(
     }
 }
 
+/// The resolved profile target for a command, plus whether it was named
+/// explicitly (`--profile`/`CONTROLD_PROFILE`) or fell back to the config
+/// file's `default_profile` (D8: only the latter makes `--yes` ignorable).
+pub(crate) struct ProfileScope {
+    pub id: String,
+    pub name: String,
+    pub explicit: bool,
+}
+
+/// Resolve the profile a command should operate on: `--profile`/
+/// `CONTROLD_PROFILE` (clap merges the env into `globals.profile`) wins as
+/// **explicit**; otherwise `config_default` (the config file's
+/// `default_profile`, loaded once by the caller) is **implicit** (D8);
+/// neither is exit 2, `usage.no_profile`.
+pub(crate) async fn resolve_profile(
+    client: &Client,
+    globals: &Globals,
+    config_default: Option<&str>,
+) -> Result<ProfileScope, Error> {
+    let (selector, explicit) = if let Some(selector) = &globals.profile {
+        (selector.clone(), true)
+    } else {
+        let Some(default) = config_default else {
+            return Err(Error::new(
+                "usage.no_profile",
+                "no profile given: pass --profile <id|name>, set CONTROLD_PROFILE, \
+                 or run `cdctl config set default_profile <id|name>`",
+                Exit::Usage,
+            ));
+        };
+        (default.to_owned(), false)
+    };
+    super::validate::reject_control_chars(&selector, "the profile selector")
+        .map_err(|e| hint_implicit_selector(e, explicit))?;
+
+    let profiles = fetch_profiles(client).await?;
+    let profile =
+        find_profile(&profiles, &selector).map_err(|e| hint_implicit_selector(e, explicit))?;
+    let scope = ProfileScope {
+        id: profile.pk.clone(),
+        name: profile.name.clone(),
+        explicit,
+    };
+    if !explicit {
+        // The caller may have forgotten the ambient default is in play
+        // (D8's rationale for treating it as a lesser trust level).
+        eprintln!(
+            "info: using default profile \"{}\" ({}) from config",
+            escape_controls(&scope.name),
+            escape_controls(&scope.id)
+        );
+    }
+    // The resolved id enters URL paths (profile-scoped commands build
+    // `/profiles/{id}/...` paths); every caller pays this check once, here.
+    super::validate::validate_path_bound(&scope.id, "the profile id")?;
+    Ok(scope)
+}
+
+/// When the profile came from the config's `default_profile` (implicit), a
+/// failure resolving it should say so — the caller may not know the
+/// selector wasn't theirs. Never clobbers a hint the error already carries.
+fn hint_implicit_selector(error: Error, explicit: bool) -> Error {
+    if explicit || error.hint.is_some() {
+        return error;
+    }
+    error.with_hint(
+        "this selector came from the config file's default_profile; change it with \
+         `cdctl config set default_profile <id|name>` or pass --profile",
+    )
+}
+
+/// One `GET /profiles/{id}/groups` for the folder verbs that resolve or
+/// list folders (`list`, `update`, `delete` — `create` never calls it);
+/// resolution costs this extra GET (commands.md#name-resolution). Shared by
+/// `folder` and `rule`, which resolves folders identically.
+pub(crate) async fn fetch_folders(
+    client: &Client,
+    profile_id: &str,
+) -> Result<Vec<ApiFolder>, Error> {
+    client
+        .get(&format!("/profiles/{profile_id}/groups"), "folder")
+        .await?
+        .keyed_as("groups")
+}
+
+/// Exact id match wins (only when the selector parses *and* matches a PK);
+/// else a unique case-insensitive name; ambiguous names name the candidate
+/// ids (folder names are not unique, so no coin-flip); no match is exit 3.
+pub(crate) fn find_folder<'a>(
+    folders: &'a [ApiFolder],
+    selector: &str,
+) -> Result<&'a ApiFolder, Error> {
+    if let Ok(id) = selector.parse::<i64>() {
+        if let Some(folder) = folders.iter().find(|f| f.pk == id) {
+            return Ok(folder);
+        }
+    }
+    let named: Vec<&ApiFolder> = folders
+        .iter()
+        .filter(|f| f.name.eq_ignore_ascii_case(selector))
+        .collect();
+    match named.as_slice() {
+        [folder] => Ok(folder),
+        [] => Err(Error::new(
+            "folder.not_found",
+            format!("no folder matches {selector:?}"),
+            Exit::NotFound,
+        )),
+        matches => Err(Error::usage(format!(
+            "{selector:?} matches {} folders (ids {}); use the id",
+            matches.len(),
+            matches
+                .iter()
+                .map(|f| f.pk.to_string())
+                .collect::<Vec<_>>()
+                .join(", "),
+        ))),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::folder::folders_fixture;
     use crate::model::profile::profiles_fixture;
 
     #[test]
@@ -79,5 +202,36 @@ mod tests {
         let error = find_profile(&list, "nope").expect_err("missing");
         assert_eq!(error.exit(), Exit::NotFound);
         assert_eq!(error.code, "profile.not_found");
+    }
+
+    #[test]
+    fn exact_id_wins_over_a_name_that_looks_like_the_id() {
+        let folders = folders_fixture("p_groups_full.json");
+        let found = find_folder(&folders, "1").expect("id match");
+        assert_eq!(found.pk, 1);
+    }
+
+    #[test]
+    fn unique_folder_name_matches_case_insensitively() {
+        let folders = folders_fixture("p_groups_full.json");
+        let found = find_folder(&folders, "noaction").expect("name match");
+        assert_eq!(found.pk, 1);
+    }
+
+    #[test]
+    fn ambiguous_ci_duplicate_folder_names_name_the_candidate_ids() {
+        let folders = folders_fixture("p_groups_full.json");
+        let error = find_folder(&folders, "ads").expect_err("ambiguous");
+        assert_eq!(error.exit(), Exit::Usage);
+        assert!(error.message.contains('4'));
+        assert!(error.message.contains('5'));
+    }
+
+    #[test]
+    fn no_folder_match_is_exit_3() {
+        let folders = folders_fixture("p_groups_full.json");
+        let error = find_folder(&folders, "nope").expect_err("missing");
+        assert_eq!(error.exit(), Exit::NotFound);
+        assert_eq!(error.code, "folder.not_found");
     }
 }

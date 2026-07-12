@@ -1,0 +1,17 @@
+---
+source: tests/cli.rs
+expression: json
+---
+{
+  "requests": [
+    {
+      "method": "DELETE",
+      "path": "/profiles/pk4cada1c5/groups/2",
+      "intent": {
+        "id": 2,
+        "name": "Spoofed",
+        "rules": 5
+      }
+    }
+  ]
+}

@@ -50,10 +50,7 @@ fn get(store: &Store, key: Key) -> Result<(), Error> {
         Key::CurrentContext => println!("{}", config.current_context_name()),
         Key::DefaultProfile => {
             // Unset prints nothing: raw values stay pipe-safe.
-            if let Some(profile) = config
-                .active_context()
-                .and_then(|c| c.default_profile.as_deref())
-            {
+            if let Some(profile) = config.default_profile() {
                 println!("{profile}");
             }
         }
@@ -105,9 +102,7 @@ fn list(store: &Store, globals: &Globals) -> Result<(), Error> {
             source: Some("env"),
         }
     } else {
-        let value = config
-            .active_context()
-            .and_then(|c| c.default_profile.clone());
+        let value = config.default_profile().map(str::to_owned);
         Annotated {
             source: value.as_ref().map(|_| "config"),
             value,

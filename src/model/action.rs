@@ -46,6 +46,19 @@ impl Action {
             Self::Redirect => "redirect",
         }
     }
+
+    /// The wire `do` integer, mirror of [`Action::from_do`]. Sole legal
+    /// caller: the form encoding in `commands::action_flags` — the one point
+    /// where names become wire ints (D2/D10 keep them out of output and
+    /// argv).
+    pub fn to_do(self) -> i64 {
+        match self {
+            Self::Block => 0,
+            Self::Bypass => 1,
+            Self::Spoof => 2,
+            Self::Redirect => 3,
+        }
+    }
 }
 
 impl std::fmt::Display for Action {
@@ -100,6 +113,19 @@ mod tests {
     fn each_do_integer_maps_to_its_name() {
         for (value, name) in [(0, "block"), (1, "bypass"), (2, "spoof"), (3, "redirect")] {
             assert_eq!(Action::from_do(value).expect("known value").name(), name);
+        }
+    }
+
+    #[test]
+    fn to_do_round_trips_with_from_do() {
+        for (value, action) in [
+            (0, Action::Block),
+            (1, Action::Bypass),
+            (2, Action::Spoof),
+            (3, Action::Redirect),
+        ] {
+            assert_eq!(action.to_do(), value);
+            assert_eq!(Action::from_do(value).expect("known value"), action);
         }
     }
 

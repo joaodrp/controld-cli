@@ -2,10 +2,14 @@
 //! The per-request ritual (config -> warnings -> token -> client) lives here,
 //! once — handlers receive a ready [`Client`], never re-derive one.
 
+pub mod action_flags;
 pub mod api;
 pub mod auth;
 pub mod completions;
 pub mod config;
+pub mod confirm;
+pub mod folder;
+pub mod plan;
 pub mod profile;
 pub mod reference;
 pub mod scope;
@@ -29,11 +33,14 @@ pub(crate) fn load_config(store: &Store) -> Result<Config, Error> {
     Ok(loaded.config)
 }
 
-/// The stored-or-env token, if any, after config warnings surfaced.
-fn optional_token() -> Result<Option<ResolvedToken>, Error> {
+/// The store discovered, its config loaded (warnings surfaced), and the
+/// stored-or-env token resolved against it — once, so no caller loads the
+/// config twice. Both `Client` constructors below share this.
+fn config_and_token() -> Result<(Config, Option<ResolvedToken>), Error> {
     let store = Store::discover()?;
     let config = load_config(&store)?;
-    Ok(resolve_token(env_var(TOKEN_ENV_VAR)?, &config))
+    let token = resolve_token(env_var(TOKEN_ENV_VAR)?, &config);
+    Ok((config, token))
 }
 
 fn build_client(token: Option<SecretString>, globals: &Globals) -> Result<Client, Error> {
@@ -45,28 +52,33 @@ fn build_client(token: Option<SecretString>, globals: &Globals) -> Result<Client
     )?)
 }
 
-/// A [`Client`] that carries the token when one resolves and none otherwise.
-/// For `cdctl api`: the spec's `security: []` endpoints must stay reachable
-/// tokenless (D7), and only the server knows which paths those are — a
-/// protected endpoint answers 400/`40001`, which classifies to exit 4.
+/// A [`Client`] that carries the token when one resolves and none otherwise,
+/// plus the loaded config. For `cdctl api`: the spec's `security: []`
+/// endpoints must stay reachable tokenless (D7), and only the server knows
+/// which paths those are — a protected endpoint answers 400/`40001`, which
+/// classifies to exit 4.
 pub(crate) fn client_with_optional_token(
     globals: &Globals,
-) -> Result<(Client, Option<TokenSource>), Error> {
-    let (token, source) = match optional_token()? {
+) -> Result<(Client, Option<TokenSource>, Config), Error> {
+    let (config, resolved) = config_and_token()?;
+    let (token, source) = match resolved {
         Some(ResolvedToken { token, source }) => (Some(token), Some(source)),
         None => (None, None),
     };
-    Ok((build_client(token, globals)?, source))
+    Ok((build_client(token, globals)?, source, config))
 }
 
-/// An authenticated [`Client`] for the current invocation, plus where the
-/// token came from. Missing token is `auth.missing_token` (lazy auth, D7),
-/// raised **before** the client builds — request-only environment problems
-/// (a malformed `CONTROLD_API_URL`) must not outrank the documented exit 4.
-pub(crate) fn authenticated_client(globals: &Globals) -> Result<(Client, TokenSource), Error> {
-    let ResolvedToken { token, source } =
-        optional_token()?.ok_or_else(Error::auth_missing_token)?;
-    Ok((build_client(Some(token), globals)?, source))
+/// An authenticated [`Client`] for the current invocation, where the token
+/// came from, and the loaded config. Missing token is `auth.missing_token`
+/// (lazy auth, D7), raised **before** the client builds — request-only
+/// environment problems (a malformed `CONTROLD_API_URL`) must not outrank
+/// the documented exit 4.
+pub(crate) fn authenticated_client(
+    globals: &Globals,
+) -> Result<(Client, TokenSource, Config), Error> {
+    let (config, resolved) = config_and_token()?;
+    let ResolvedToken { token, source } = resolved.ok_or_else(Error::auth_missing_token)?;
+    Ok((build_client(Some(token), globals)?, source, config))
 }
 
 /// Commands whose stdout is never JSON (`completions`, `reference`, `api`):

@@ -1,0 +1,18 @@
+---
+source: tests/cli.rs
+expression: json
+---
+{
+  "requests": [
+    {
+      "method": "PUT",
+      "path": "/profiles/pk4cada1c5/groups/2",
+      "intent": {
+        "changes": {
+          "name": "Renamed",
+          "action": "block"
+        }
+      }
+    }
+  ]
+}

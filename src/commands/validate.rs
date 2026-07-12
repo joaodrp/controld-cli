@@ -19,10 +19,6 @@ pub fn reject_control_chars(value: &str, what: &str) -> Result<(), Error> {
 /// an embedded query or fragment start, or pre-encoded input; values are
 /// taken literally, never pre-encoded. `*` stays legal (rule grammar; it is
 /// percent-encoded at the HTTP layer).
-#[allow(
-    dead_code,
-    reason = "first caller is the folder/rule commands (next PR)"
-)]
 pub fn validate_path_bound(value: &str, what: &str) -> Result<(), Error> {
     reject_control_chars(value, what)?;
     if let Some(offender) = value.chars().find(|c| matches!(c, '?' | '#' | '%')) {

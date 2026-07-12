@@ -1,0 +1,10 @@
+---
+source: tests/cli.rs
+expression: stdout
+---
+id       7
+name     Games
+action   spoof
+via      192.0.2.53
+enabled  true
+rules    0
