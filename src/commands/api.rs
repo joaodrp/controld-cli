@@ -4,7 +4,7 @@
 //! (D9b). Path and `-F` pairs are forwarded raw by design — the escape hatch
 //! must not reshape what it carries.
 
-use std::io::{Read, Write};
+use std::io::{IsTerminal, Read, Write};
 
 use clap::Args;
 use reqwest::{Method, Url};
@@ -67,7 +67,10 @@ pub async fn run(args: ApiArgs, globals: &Globals) -> Result<(), Error> {
     let bytes = if args.method == Method::GET {
         client.get_raw(&args.path, "resource").await?
     } else {
-        let body = body.map(read_body).transpose()?;
+        let body = match body {
+            Some(pending) => Some(read_body(pending).await?),
+            None => None,
+        };
         client
             .write_raw(args.method, &args.path, body, "resource")
             .await?
@@ -89,17 +92,25 @@ enum PendingBody {
     Stdin,
 }
 
-fn read_body(body: PendingBody) -> Result<RawBody, Error> {
+async fn read_body(body: PendingBody) -> Result<RawBody, Error> {
     match body {
         PendingBody::Ready(body) => Ok(body),
         PendingBody::Stdin => {
-            let mut raw = Vec::new();
-            // An I/O failure here is environmental, not a malformed
-            // invocation — exit 1, not the usage code scripts treat as
-            // "fix your argv".
-            std::io::stdin()
-                .read_to_end(&mut raw)
-                .map_err(|e| Error::generic(format!("could not read the body from stdin: {e}")))?;
+            if std::io::stdin().is_terminal() {
+                eprintln!("info: reading the JSON body from stdin; end with Ctrl-D");
+            }
+            // Off the runtime thread: a blocking read here would starve
+            // main's select of its SIGINT branch and make Ctrl-C appear
+            // dead for the whole read. An I/O failure is environmental,
+            // not a malformed invocation — exit 1, not the usage code
+            // scripts treat as "fix your argv".
+            let raw = tokio::task::spawn_blocking(|| {
+                let mut raw = Vec::new();
+                std::io::stdin().read_to_end(&mut raw).map(|_| raw)
+            })
+            .await
+            .map_err(|e| Error::generic(format!("the stdin reader task failed: {e}")))?
+            .map_err(|e| Error::generic(format!("could not read the body from stdin: {e}")))?;
             // Emptiness is the absence of a body, not a body to forward
             // verbatim (D9b) — the classic cause is a failed upstream
             // pipeline stage, and firing the mutation anyway could exit 0
