@@ -5,7 +5,7 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use assert_cmd::Command;
-use wiremock::matchers::{method, path};
+use wiremock::matchers::{body_string, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 /// A hermetic `cdctl`: empty environment, config under a private tempdir.
@@ -146,7 +146,7 @@ fn auth_status_without_token_is_exit_4() {
 
 /// The missing token outranks request-only environment problems: resolving
 /// auth is an authenticated command's first concern, so a malformed
-/// CONTROLD_API_URL must not demote the documented exit 4 to a usage error.
+/// `CONTROLD_API_URL` must not demote the documented exit 4 to a usage error.
 #[test]
 fn missing_token_outranks_a_malformed_base_url() {
     let dir = tempdir();
@@ -203,7 +203,7 @@ async fn snapshot_three_modes(name: &str, body: ResponseTemplate) {
     assert!(!debug.contains('\u{1b}'), "debug never emits raw escapes");
     serde_json::from_str::<serde_json::Value>(&json).expect("JSON mode is one valid document");
 
-    insta::with_settings!({filters => vec![(r"127\.0\.0\.1:\d+", "127.0.0.1:[port]")]}, {
+    insta::with_settings!({filters => port_filters()}, {
         insta::assert_snapshot!(format!("{name}_human"), human);
         insta::assert_snapshot!(format!("{name}_json"), json);
         insta::assert_snapshot!(format!("{name}_debug"), debug);
@@ -1260,13 +1260,23 @@ fn api_rejects_explicit_json_flags() {
 
 // --- profile list/get: human/plain/json rendering, name resolution, hazards ---
 
-/// The insta filter shared by every profile snapshot: the mock server's
-/// ephemeral port — precautionary, since stdout never embeds the URI today.
-/// The `UPDATED` column's relative-time phrase needs no filter —
-/// `CONTROLD_UNIX_NOW` freezes `now()`, so it renders a stable phrase on
-/// its own.
-fn profile_snapshot_filters() -> Vec<(&'static str, &'static str)> {
+/// The insta filter shared by every profile/folder snapshot (and the hostile
+/// stderr snapshots): the mock server's ephemeral port — precautionary, since
+/// stdout never embeds the URI today. The `UPDATED` column's relative-time
+/// phrase needs no filter — `CONTROLD_UNIX_NOW` freezes `now()`, so it
+/// renders a stable phrase on its own.
+fn port_filters() -> Vec<(&'static str, &'static str)> {
     vec![(r"127\.0\.0\.1:\d+", "127.0.0.1:[port]")]
+}
+
+/// A mock that proves the command never built a single request — local
+/// validation must fail before any GET/POST/PUT/DELETE leaves the process.
+async fn mount_no_requests(server: &MockServer) {
+    Mock::given(wiremock::matchers::any())
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(server)
+        .await;
 }
 
 /// A `MockServer` with `GET /profiles` mounted, serving `fixture_name` as the
@@ -1336,7 +1346,7 @@ async fn profile_list_renders_all_three_modes() {
             ]
         );
 
-        insta::with_settings!({filters => profile_snapshot_filters()}, {
+        insta::with_settings!({filters => port_filters()}, {
             insta::assert_snapshot!("profile_list_human", human);
             insta::assert_snapshot!("profile_list_plain", plain);
             insta::assert_snapshot!("profile_list_json", json);
@@ -1424,7 +1434,7 @@ async fn profile_get_human_renders_key_values() {
             .assert()
             .success();
         let stdout = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
-        insta::with_settings!({filters => profile_snapshot_filters()}, {
+        insta::with_settings!({filters => port_filters()}, {
             insta::assert_snapshot!("profile_get_human", stdout);
         });
     })
@@ -1482,11 +1492,7 @@ async fn profile_get_unknown_selector_exits_3() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn profile_selector_control_chars_exit_2_before_any_request() {
     let server = MockServer::start().await;
-    Mock::given(wiremock::matchers::any())
-        .respond_with(ResponseTemplate::new(200))
-        .expect(0)
-        .mount(&server)
-        .await;
+    mount_no_requests(&server).await;
 
     let uri = server.uri();
     let dir = tempdir();
@@ -1524,7 +1530,7 @@ async fn profile_tables_escape_hostile_names() {
             "the escape is caret-rendered: {stdout}"
         );
 
-        insta::with_settings!({filters => profile_snapshot_filters()}, {
+        insta::with_settings!({filters => port_filters()}, {
             insta::assert_snapshot!("profile_list_hostile_human", stdout);
         });
     })
@@ -1707,4 +1713,890 @@ fn a_closed_pipe_kills_quietly_with_sigpipe() {
         Some(libc::SIGPIPE),
         "SIGPIPE default disposition: the shell reports 141, no panic, no exit 101"
     );
+}
+
+// --- folder: list/create/update/delete, action-flag validation, dry-run,
+// D8 confirmation ---
+
+const AGGRESSIVE_PK: &str = "pk4cada1c5";
+const AGGRESSIVE_NAME: &str = "Aggressive";
+
+async fn mount_profiles(server: &MockServer, expect: u64) {
+    Mock::given(method("GET"))
+        .and(path("/profiles"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(fixture("profiles.json"), "application/json"),
+        )
+        .expect(expect)
+        .mount(server)
+        .await;
+}
+
+async fn mount_groups(server: &MockServer, expect: u64) {
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/groups")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("p_groups_full.json"), "application/json"),
+        )
+        .expect(expect)
+        .mount(server)
+        .await;
+}
+
+async fn mount_proxies(server: &MockServer, expect: u64) {
+    Mock::given(method("GET"))
+        .and(path("/proxies"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(fixture("proxies.json"), "application/json"),
+        )
+        .expect(expect)
+        .mount(server)
+        .await;
+}
+
+/// Mounted with `.expect(0)` in tests that must prove no mutation was
+/// attempted, whatever it would have been.
+async fn mount_no_writes(server: &MockServer) {
+    for verb in ["POST", "PUT", "DELETE"] {
+        Mock::given(method(verb))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(server)
+            .await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_list_renders_all_three_modes_plus_fields() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 4).await;
+    mount_groups(&server, 4).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let human_assert = cdctl_against(&uri, dir.path())
+            .args(["folder", "list", "--profile", AGGRESSIVE_PK])
+            .assert()
+            .success();
+        let human = String::from_utf8_lossy(&human_assert.get_output().stdout).into_owned();
+
+        let plain_assert = cdctl_against(&uri, dir.path())
+            .args(["folder", "list", "--profile", AGGRESSIVE_PK, "--plain"])
+            .assert()
+            .success();
+        let plain = String::from_utf8_lossy(&plain_assert.get_output().stdout).into_owned();
+        assert!(
+            !plain.contains('│') && !plain.contains('─'),
+            "plain mode drops border glyphs: {plain}"
+        );
+
+        let json_assert = cdctl_against(&uri, dir.path())
+            .args(["folder", "list", "--profile", AGGRESSIVE_PK, "--json"])
+            .assert()
+            .success();
+        let json = String::from_utf8_lossy(&json_assert.get_output().stdout).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        let folders = doc.as_array().expect("array of folders");
+        assert_eq!(folders.len(), 5);
+        assert_eq!(
+            folders[0]
+                .as_object()
+                .expect("object")
+                .keys()
+                .collect::<Vec<_>>(),
+            vec!["id", "name", "action", "via", "enabled", "rules"]
+        );
+
+        let fields_assert = cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "list",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--fields",
+                "id,name",
+            ])
+            .assert()
+            .success();
+        let fields_json = String::from_utf8_lossy(&fields_assert.get_output().stdout).into_owned();
+
+        insta::with_settings!({filters => port_filters()}, {
+            insta::assert_snapshot!("folder_list_human", human);
+            insta::assert_snapshot!("folder_list_plain", plain);
+            insta::assert_snapshot!("folder_list_json", json);
+            insta::assert_snapshot!("folder_list_fields", fields_json);
+        });
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_create_spoof_sends_the_exact_form_and_prints_the_response() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    Mock::given(method("POST"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/groups")))
+        .and(body_string("name=Games&do=2&status=1&via=192.0.2.53"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_folder_create.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "create",
+                "Games",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--action",
+                "spoof",
+                "--via",
+                "192.0.2.53",
+            ])
+            .assert()
+            .success();
+        let stdout = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+        insta::assert_snapshot!("folder_create_spoof_human", stdout);
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_create_action_less_sends_only_name_and_status() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    Mock::given(method("POST"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/groups")))
+        .and(body_string("name=Plain&status=1"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_folder_noaction.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl_against(&uri, dir.path())
+            .args(["folder", "create", "Plain", "--profile", AGGRESSIVE_PK])
+            .assert()
+            .success()
+            .stdout(predicates::str::contains("noaction"));
+    })
+    .await
+    .expect("command runs");
+}
+
+/// A malformed create response (a success envelope with zero folders, so
+/// `single_folder_from` cannot confirm the shape) exits 8 — retryable — but
+/// the write already landed, so retrying `create` would duplicate it; the
+/// error must steer the caller to re-fetch instead.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_create_malformed_response_hints_a_refetch_instead_of_a_retry() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    Mock::given(method("POST"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/groups")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"groups": []},
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "create",
+                "X",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .code(1)
+            .stdout(predicates::str::is_empty());
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "write.unverified");
+        assert_eq!(
+            doc["error"]["retryable"], false,
+            "a landed write must never invite a replay"
+        );
+        assert_eq!(
+            doc["error"]["hint"],
+            "the write itself succeeded; re-fetch with `cdctl folder list` instead of retrying"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_update_rename_only_sends_only_the_name() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups(&server, 1).await;
+    Mock::given(method("PUT"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/groups/1")))
+        .and(body_string("name=New"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_folder_update.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "update",
+                "1",
+                "--name",
+                "New",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .success();
+    })
+    .await
+    .expect("command runs");
+}
+
+/// `--action block` alone must clear a stale `via` client-side — the wire
+/// body carries `do=0` only, never a stale `via` pair (write-verification.md:
+/// the server also clears `via` on this transition, but the CLI must not
+/// *resend* it).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_update_action_change_sends_only_do() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups(&server, 1).await;
+    Mock::given(method("PUT"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/groups/2")))
+        .and(body_string("do=0"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_folder_update.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "update",
+                "2",
+                "--action",
+                "block",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .success();
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_update_disabled_sends_status_zero_only() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups(&server, 1).await;
+    Mock::given(method("PUT"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/groups/2")))
+        .and(body_string("status=0"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_folder_update.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "update",
+                "2",
+                "--disabled",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .success();
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_create_via6_is_rejected() {
+    let server = MockServer::start().await;
+    // Action-flag validation runs before profile resolution: a folder never
+    // accepts --via6, and that's local, so no request is ever built.
+    mount_no_requests(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "create",
+                "X",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--via6",
+                "2001:db8::1",
+            ])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_create_redirect_unknown_proxy_hints_nearest_matches() {
+    let server = MockServer::start().await;
+    // Action-flag validation (including the redirect --via proxy check)
+    // runs before profile resolution, so /profiles is never called here.
+    mount_proxies(&server, 1).await;
+    mount_no_writes(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "create",
+                "X",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--action",
+                "redirect",
+                "--via",
+                "LON",
+            ])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(stderr.contains("LHR"), "got: {stderr}");
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_create_via_without_action_is_rejected() {
+    let server = MockServer::start().await;
+    // Action-flag validation runs before profile resolution: --via with no
+    // --action is rejected locally, so no request is ever built.
+    mount_no_requests(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "create",
+                "X",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--via",
+                "192.0.2.1",
+            ])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_update_with_no_flags_is_a_usage_error_before_any_request() {
+    let server = MockServer::start().await;
+    mount_no_requests(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl_against(&uri, dir.path())
+            .args(["folder", "update", "1", "--profile", AGGRESSIVE_PK])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_create_dry_run_prints_the_plan_and_validation_gets_still_run() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 2).await;
+    mount_proxies(&server, 2).await;
+    mount_no_writes(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let human_assert = cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "create",
+                "Games",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--action",
+                "redirect",
+                "--via",
+                "LHR",
+                "--dry-run",
+            ])
+            .assert()
+            .success();
+        let human = String::from_utf8_lossy(&human_assert.get_output().stdout).into_owned();
+
+        let json_assert = cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "create",
+                "Games",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--action",
+                "redirect",
+                "--via",
+                "LHR",
+                "--dry-run",
+                "--json",
+            ])
+            .assert()
+            .success();
+        let json = String::from_utf8_lossy(&json_assert.get_output().stdout).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(doc["requests"][0]["method"], "POST");
+        assert_eq!(doc["requests"][0]["intent"]["name"], "Games");
+        assert_eq!(doc["requests"][0]["intent"]["action"], "redirect");
+        assert_eq!(doc["requests"][0]["intent"]["via"], "LHR");
+        assert_eq!(doc["requests"][0]["intent"]["enabled"], true);
+
+        insta::assert_snapshot!("folder_create_dry_run_human", human);
+        insta::assert_snapshot!("folder_create_dry_run_json", json);
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_update_dry_run_prints_a_sparse_changes_patch() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 2).await;
+    mount_groups(&server, 2).await;
+    mount_no_writes(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let human_assert = cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "update",
+                "2",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--name",
+                "Renamed",
+                "--action",
+                "block",
+                "--dry-run",
+            ])
+            .assert()
+            .success();
+        let human = String::from_utf8_lossy(&human_assert.get_output().stdout).into_owned();
+
+        let json_assert = cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "update",
+                "2",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--name",
+                "Renamed",
+                "--action",
+                "block",
+                "--dry-run",
+                "--json",
+            ])
+            .assert()
+            .success();
+        let json = String::from_utf8_lossy(&json_assert.get_output().stdout).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(
+            doc["requests"][0]["intent"]["changes"],
+            serde_json::json!({"name": "Renamed", "action": "block"})
+        );
+
+        insta::assert_snapshot!("folder_update_dry_run_human", human);
+        insta::assert_snapshot!("folder_update_dry_run_json", json);
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_delete_dry_run_prints_the_resolved_target_and_writes_nothing() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 2).await;
+    mount_groups(&server, 2).await;
+    mount_no_writes(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let human_assert = cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "delete",
+                "2",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--dry-run",
+            ])
+            .assert()
+            .success();
+        let human = String::from_utf8_lossy(&human_assert.get_output().stdout).into_owned();
+
+        let json_assert = cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "delete",
+                "2",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--dry-run",
+                "--json",
+            ])
+            .assert()
+            .success();
+        let json = String::from_utf8_lossy(&json_assert.get_output().stdout).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(
+            doc["requests"][0]["intent"],
+            serde_json::json!({"id": 2, "name": "Spoofed", "rules": 5})
+        );
+
+        insta::assert_snapshot!("folder_delete_dry_run_human", human);
+        insta::assert_snapshot!("folder_delete_dry_run_json", json);
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_delete_without_yes_is_exit_7_non_interactively() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups(&server, 1).await;
+    mount_no_writes(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["folder", "delete", "2", "--profile", AGGRESSIVE_PK])
+            .assert()
+            .code(7)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        // Folder id 2 ("Spoofed") carries 5 contained rules in
+        // p_groups_full.json; the cascade count must reach the user before
+        // they confirm.
+        assert!(stderr.contains("5 contained rules"), "got: {stderr}");
+    })
+    .await
+    .expect("command runs");
+}
+
+/// `CONTROLD_PROFILE` (no `--profile` flag) is an **explicit** selector
+/// (D8), just like `--profile` — it must never print the implicit-default
+/// info line, and `--yes` must be honored.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_delete_honors_the_controld_profile_env_as_explicit() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups(&server, 1).await;
+    Mock::given(method("DELETE"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/groups/2")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": [],
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .env("CONTROLD_PROFILE", AGGRESSIVE_PK)
+            .args(["folder", "delete", "2", "--yes"])
+            .assert()
+            .success();
+        assert_eq!(assert.get_output().stdout, b"");
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            !stderr.contains("using default profile"),
+            "CONTROLD_PROFILE is explicit, not implicit: {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_delete_with_yes_and_an_explicit_profile_succeeds() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups(&server, 1).await;
+    Mock::given(method("DELETE"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/groups/2")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": [],
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["folder", "delete", "2", "--profile", AGGRESSIVE_PK, "--yes"])
+            .assert()
+            .success();
+        assert_eq!(assert.get_output().stdout, b"");
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(stderr.contains("deleted folder"), "got: {stderr}");
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_delete_yes_is_ignored_for_an_implicit_default_profile() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups(&server, 1).await;
+    mount_no_writes(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl(dir.path())
+            .args(["config", "set", "default_profile", AGGRESSIVE_PK])
+            .assert()
+            .success();
+
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["folder", "delete", "2", "--yes"])
+            .assert()
+            .code(7)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(stderr.contains("--yes"), "got: {stderr}");
+        assert!(stderr.contains("implicit"), "got: {stderr}");
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_list_with_an_implicit_default_profile_prints_an_info_line() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups(&server, 1).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl(dir.path())
+            .args(["config", "set", "default_profile", AGGRESSIVE_PK])
+            .assert()
+            .success();
+
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["folder", "list"])
+            .assert()
+            .success();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            stderr.contains(&format!(
+                "using default profile \"{AGGRESSIVE_NAME}\" ({AGGRESSIVE_PK}) from config"
+            )),
+            "got: {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_list_without_any_profile_is_a_usage_error() {
+    let server = MockServer::start().await;
+    mount_no_requests(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["folder", "list", "--json"])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "usage.no_profile");
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_update_ambiguous_name_exits_2() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups(&server, 1).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "update",
+                "ads",
+                "--name",
+                "X",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            stderr.contains('4') && stderr.contains('5'),
+            "names the candidate ids: {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_delete_unknown_selector_exits_3() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups(&server, 1).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "delete",
+                "nope",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .code(3)
+            .stdout(predicates::str::is_empty());
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "folder.not_found");
+    })
+    .await
+    .expect("command runs");
+}
+
+/// A name selector never reaches the URL — resolution is strictly
+/// client-side (write-verification.md: the folder name 404s in the path).
+/// "Spoofed" is unique in `p_groups_full.json`, PK 2; the path matcher
+/// proves the resolved integer, not the name, was sent.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_delete_by_name_hits_the_resolved_integer_path() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups(&server, 1).await;
+    Mock::given(method("DELETE"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/groups/2")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": [],
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "delete",
+                "Spoofed",
+                "--yes",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .success();
+    })
+    .await
+    .expect("command runs");
 }

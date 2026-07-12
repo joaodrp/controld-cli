@@ -93,6 +93,12 @@ impl Config {
         let name = self.current_context_name().to_owned();
         self.contexts.entry(name).or_default()
     }
+
+    /// The active context's `default_profile`, or `None` if unset (D8).
+    pub fn default_profile(&self) -> Option<&str> {
+        self.active_context()
+            .and_then(|c| c.default_profile.as_deref())
+    }
 }
 
 /// A loaded config plus non-fatal findings (e.g. lax file permissions) the

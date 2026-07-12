@@ -81,7 +81,7 @@ struct AuthStatus {
 }
 
 async fn status(globals: &Globals) -> Result<(), Error> {
-    let (client, source) = super::authenticated_client(globals)?;
+    let (client, source, _config) = super::authenticated_client(globals)?;
     let user = client.get("/users", "account").await?.flat()?;
 
     let field = |key: &str| user.get(key).and_then(|v| v.as_str()).map(str::to_owned);

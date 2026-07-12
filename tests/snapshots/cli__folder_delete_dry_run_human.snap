@@ -1,0 +1,8 @@
+---
+source: tests/cli.rs
+expression: human
+---
+would send: DELETE /profiles/pk4cada1c5/groups/2
+id     2
+name   Spoofed
+rules  5

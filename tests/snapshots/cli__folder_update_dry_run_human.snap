@@ -1,0 +1,6 @@
+---
+source: tests/cli.rs
+expression: human
+---
+would send: PUT /profiles/pk4cada1c5/groups/2
+changes  name: Renamed, action: block

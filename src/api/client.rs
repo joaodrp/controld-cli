@@ -200,10 +200,6 @@ impl Client {
     /// A mutation: sent exactly once, whatever happens. A retryable failure
     /// keeps exit 8 but the hint says the write may have landed — re-fetching
     /// state is the caller's (or the agent's) job, never a blind replay.
-    #[allow(
-        dead_code,
-        reason = "first caller is Phase 3 (typed writes); the exactly-once contract is tested now"
-    )]
     pub async fn write(
         &self,
         method: Method,

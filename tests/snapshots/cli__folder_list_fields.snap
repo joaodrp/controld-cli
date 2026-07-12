@@ -1,0 +1,26 @@
+---
+source: tests/cli.rs
+expression: fields_json
+---
+[
+  {
+    "id": 1,
+    "name": "Noaction"
+  },
+  {
+    "id": 2,
+    "name": "Spoofed"
+  },
+  {
+    "id": 3,
+    "name": "Blocked"
+  },
+  {
+    "id": 4,
+    "name": "Ads"
+  },
+  {
+    "id": 5,
+    "name": "ads"
+  }
+]

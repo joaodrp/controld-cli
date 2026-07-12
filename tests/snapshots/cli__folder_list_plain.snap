@@ -1,0 +1,10 @@
+---
+source: tests/cli.rs
+expression: plain
+---
+ NAME      ID  RULES  ACTION  ENABLED 
+ Noaction  1   3      -       true    
+ Spoofed   2   5      spoof   true    
+ Blocked   3   2      block   false   
+ Ads       4   1      block   true    
+ ads       5   0      bypass  true

@@ -1,0 +1,1 @@
+{"body":{"groups":[{"PK":1,"group":"Noaction","action":{"status":1},"count":3},{"PK":2,"group":"Spoofed","action":{"status":1,"do":2,"via":"192.0.2.53"},"count":5},{"PK":3,"group":"Blocked","action":{"status":0,"do":0},"count":2},{"PK":4,"group":"Ads","action":{"status":1,"do":0},"count":1},{"PK":5,"group":"ads","action":{"status":1,"do":1},"count":0}]},"success":true}

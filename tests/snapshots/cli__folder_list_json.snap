@@ -1,0 +1,46 @@
+---
+source: tests/cli.rs
+expression: json
+---
+[
+  {
+    "id": 1,
+    "name": "Noaction",
+    "action": null,
+    "via": null,
+    "enabled": true,
+    "rules": 3
+  },
+  {
+    "id": 2,
+    "name": "Spoofed",
+    "action": "spoof",
+    "via": "192.0.2.53",
+    "enabled": true,
+    "rules": 5
+  },
+  {
+    "id": 3,
+    "name": "Blocked",
+    "action": "block",
+    "via": null,
+    "enabled": false,
+    "rules": 2
+  },
+  {
+    "id": 4,
+    "name": "Ads",
+    "action": "block",
+    "via": null,
+    "enabled": true,
+    "rules": 1
+  },
+  {
+    "id": 5,
+    "name": "ads",
+    "action": "bypass",
+    "via": null,
+    "enabled": true,
+    "rules": 0
+  }
+]

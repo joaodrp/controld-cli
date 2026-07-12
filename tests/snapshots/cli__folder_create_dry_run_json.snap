@@ -1,0 +1,18 @@
+---
+source: tests/cli.rs
+expression: json
+---
+{
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/profiles/pk4cada1c5/groups",
+      "intent": {
+        "name": "Games",
+        "action": "redirect",
+        "via": "LHR",
+        "enabled": true
+      }
+    }
+  ]
+}

@@ -112,7 +112,8 @@ Phase-4 write plus `rule import` and `rule restore`. Local-state commands (`auth
   `--force-delete-first` dry run prints the manifest path it *would* write and does not create it.
 - **Output is data on stdout**, schema-stable like every other JSON output (semver-governed,
   [D2](decisions.md)). The plan is **normalized intent, not wire bytes**: action names and
-  booleans per D2/D10 — integers never appear here either. Wire encoding (form ordering, bracket
+  booleans per D2/D10 — encoding integers (`do`, `status`) never appear here either (identity
+  integers like a folder id do). Wire encoding (form ordering, bracket
   keys, scalar-params-first) is [D11](decisions.md)'s contract, proven by Phase-4 request-body
   tests and visible under `--debug` — the plan does not restate it. `requests` lists the
   **withheld mutations**, in send order; validation GETs execute normally and are not listed:
@@ -185,6 +186,29 @@ Phase-4 write plus `rule import` and `rule restore`. Local-state commands (`auth
   | `folder update` | `name, action, via, enabled` |
   | `profile update` | `name, disabled_until` |
   | `device update` | `name, profile_id, analytics, status` |
+
+  Deletes plan the **resolved target** — a DELETE sends no body, so the intent identifies what
+  would be removed (normalized, like read output) plus what the deletion cascades to:
+
+  ```json
+  {
+    "requests": [
+      {
+        "method": "DELETE",
+        "path": "/profiles/pr1/groups/2",
+        "intent": {"id": 2, "name": "Ads", "rules": 4}
+      }
+    ]
+  }
+  ```
+
+  | Delete | Intent keys |
+  | --- | --- |
+  | `rule delete` | `{hostname}` — one request per hostname, one entry each |
+  | `folder delete` | `{id, name, rules}` — `rules` = contained rule count, deleted with the folder |
+  | `profile delete` | `{id, name}` |
+  | `device delete` | `{id, name}` |
+  | `access remove` | `{device_id, ips}` |
 
   `rule import` / `rule restore` print a domain plan instead, discriminated by `operation`:
 
