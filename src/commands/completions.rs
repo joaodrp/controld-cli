@@ -1,3 +1,7 @@
+//! `cdctl completions`: the shell completion script, generated from the
+//! command tree. An artifact command — works with no token (D7), and its
+//! output is the script itself, never JSON.
+
 use std::io;
 
 use crate::cli::Globals;
