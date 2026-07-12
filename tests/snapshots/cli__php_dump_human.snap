@@ -1,0 +1,5 @@
+---
+source: tests/cli.rs
+expression: human
+---
+error: do must be one of Array ( [0] => 0 [1] => 1 [2] => 2 [3] => 3 )

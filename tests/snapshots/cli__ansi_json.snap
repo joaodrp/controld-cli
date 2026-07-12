@@ -1,0 +1,19 @@
+---
+source: tests/cli.rs
+expression: json
+---
+{
+  "error": {
+    "code": "request.invalid",
+    "message": "bad \u001b[31mred\u001b[0m \u0007input",
+    "upstream": {
+      "code": 40003,
+      "http_status": 400,
+      "message": "bad \u001b[31mred\u001b[0m \u0007input"
+    },
+    "retryable": false,
+    "retry_after": null,
+    "details": null,
+    "hint": null
+  }
+}

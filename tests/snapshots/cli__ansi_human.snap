@@ -1,0 +1,5 @@
+---
+source: tests/cli.rs
+expression: human
+---
+error: bad [31mred[0m input

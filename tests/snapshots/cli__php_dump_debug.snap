@@ -1,0 +1,8 @@
+---
+source: tests/cli.rs
+expression: debug
+---
+debug: > GET http://127.0.0.1:[port]/users
+debug: < 400 Bad Request (pop: -, srv: -)
+error: do must be one of Array ( [0] => 0 [1] => 1 [2] => 2 [3] => 3 )
+debug: upstream.message = "do must be one of Array\n(\n    [0] => 0\n    [1] => 1\n    [2] => 2\n    [3] => 3\n)\n "

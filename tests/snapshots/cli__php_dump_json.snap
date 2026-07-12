@@ -1,0 +1,19 @@
+---
+source: tests/cli.rs
+expression: json
+---
+{
+  "error": {
+    "code": "request.invalid",
+    "message": "do must be one of Array\n(\n    [0] => 0\n    [1] => 1\n    [2] => 2\n    [3] => 3\n)\n ",
+    "upstream": {
+      "code": 40003,
+      "http_status": 400,
+      "message": "do must be one of Array\n(\n    [0] => 0\n    [1] => 1\n    [2] => 2\n    [3] => 3\n)\n "
+    },
+    "retryable": false,
+    "retry_after": null,
+    "details": null,
+    "hint": null
+  }
+}

@@ -1,0 +1,8 @@
+---
+source: tests/cli.rs
+expression: debug
+---
+debug: > GET http://127.0.0.1:[port]/users
+debug: < 400 Bad Request (pop: -, srv: -)
+error: bad [31mred[0m input
+debug: upstream.message = "bad \u001b[31mred\u001b[0m \u0007input"

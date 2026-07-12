@@ -1,0 +1,49 @@
+[package]
+name = "controld-cli"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "CLI for the Control D REST API (not the ctrld DNS daemon)"
+repository = "https://github.com/joaodrp/controld-cli"
+license = "MIT OR Apache-2.0"
+keywords = ["controld", "dns", "cli"]
+categories = ["command-line-utilities"]
+
+[[bin]]
+name = "cdctl"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.6.1", features = ["derive", "env", "wrap_help"] }
+clap_complete = "4.6.7"
+comfy-table = "7.2.2"
+etcetera = "0.10.0"
+fastrand = "2.4.1"
+httpdate = "1.0.3"
+reqwest = { version = "0.13.4", default-features = false, features = ["rustls", "http2", "form"] }
+secrecy = { version = "0.10.3", features = ["serde"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { version = "1.0.150", features = ["preserve_order"] }
+tempfile = "3.27.0"
+thiserror = "2.0.18"
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "signal", "time"] }
+toml = "1.1.2"
+
+[dev-dependencies]
+assert_cmd = "2.2.2"
+insta = { version = "1.48.0", features = ["filters", "json"] }
+nix = { version = "0.31.3", features = ["signal"] }
+predicates = "3.1.4"
+wiremock = "0.6.5"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# Slugs and module paths legitimately repeat noun names (rule.conflict in rule.rs).
+module_name_repetitions = "allow"
+# error::Error is the D4 envelope — the CLI's primary domain object. Error paths
+# are cold in a CLI; boxing it everywhere would trade clarity for nothing.
+result_large_err = "allow"
+
+[target."cfg(unix)".dependencies]
+libc = "0.2.186"
