@@ -638,10 +638,10 @@ alias — the boolean cannot say which disable it means.
 
 | Command | stdout |
 | --- | --- |
-| `auth status` | `{authenticated, email, region, token_source}` — `token_source`: `env` \| `config`. Human mode: key/value lines |
+| `auth status` | `{authenticated, email, region, token_source}` — `token_source`: `env` \| `config`. Human mode: key/value lines. No token is the D4 envelope (`auth.missing_token`, exit `4`) — `authenticated: false` is never printed |
 | `auth login` / `auth logout` | nothing — confirmation goes to stderr |
-| `config get <k>` | the raw value; `config list` -> the context object with each value's source annotated (env / config / default); `config path` -> the file path |
-| `completions <shell>` / `reference` | the artifact itself (script / Markdown) — **not JSON**; combining with `--json` is a usage error (exit 2) |
+| `config get <k>` | the raw value (nothing when unset); `config list` -> `{context: {value, source}, token: {set, source}, default_profile: {value, source}}`, `source`: `env` \| `config` \| `default` \| `null` — the token's *value* never prints; `config path` -> the file path |
+| `completions <shell>` / `reference` | the artifact itself (script / Markdown) — **not JSON**; an explicit `--json`/`--fields` is a usage error (exit 2), ambient `CONTROLD_OUTPUT=json` is ignored — an env-configured agent can still install completions |
 | `api ...` | the upstream body **verbatim** — unstable by design ([D9](decisions.md)); errors still classify to standard exit codes |
 
 ### `cdctl api` request encoding

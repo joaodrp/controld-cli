@@ -118,6 +118,8 @@ Behavior:
   outcomes (read-back for creates/updates, one request per target for `rule delete`); partial
   failure per the D4 `details` contract.
 - Percent-encode hostnames into DELETE paths (`*` -> `%2A`).
+- Live probe owed **before the gate**: the percent-encoded bracket write (`hostnames%5B%5D=`,
+  [Open item 9](decisions.md#open)) — or hand-build form bodies with literal keys.
 
 **Gate — global, inherited by every later group's commands:**
 

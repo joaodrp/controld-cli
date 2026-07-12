@@ -274,7 +274,7 @@ $ echo $?
 
 **Exit code 8 is retryable. Everything else is terminal.** The full set: `0` ok, `1` generic,
 `2` usage, `3` not found, `4` auth, `5` forbidden/plan, `6` conflict, `7` confirmation required,
-`8` retryable, `130` SIGINT. Rationale:
+`8` retryable, `130` SIGINT, `141` SIGPIPE (Unix). Rationale:
 [decisions.md](decisions.md#d5--exit-codes-nine-with-exactly-one-retryable).
 
 An empty result is **exit 0**, not an error. A read-scoped token used for a write **fails loudly**

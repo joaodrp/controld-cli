@@ -52,7 +52,7 @@ not 401. Special-case it to `auth.*` (exit 4). Every other `400xx` is genuine va
 | `40201` | **402** | `You need the Full Control plan to perform this action.` | `plan.upgrade_required` | 5 |
 | `40401` | 404 | `No such group exists.` | `folder.not_found` | 3 |
 | `40401` | 404 | `Invalid category` | `category.not_found` | 3 |
-| `40401` | 404 | `You have no organizations associated with your account` | `org.none` | 3 |
+| `40401` | 404 | `You have no organizations associated with your account` | `org.not_found` | 3 |
 
 **Five distinct codes.** `40003` alone carries **every meaning in the table above, and every probe
 session finds more** — exactly why the prefix rule carries the weight. The subcode is a coarse
@@ -70,9 +70,9 @@ do must be one of Array
 )
 ```
 
-**Never assume one line. Never parse it.** Human mode collapses CR/LF to spaces and **strips every
-other C0/DEL control** (ANSI escapes included) — the `error: ...` line stays single-line and upstream
-bytes never rewrite the terminal ([D4](../decisions.md)); JSON `upstream.message` carries the
+**Never assume one line. Never parse it.** Human mode collapses CR/LF/TAB to spaces and **strips
+every other C0/DEL control** (ANSI escapes included) — the `error: ...` line stays single-line and
+upstream bytes never rewrite the terminal ([D4](../decisions.md)); JSON `upstream.message` carries the
 verbatim text, and `--debug` renders it JSON-escaped — visible, never executable.
 
 ## Refining `400` by message — best-effort, by design
@@ -99,6 +99,7 @@ retry. Agents must treat exit 6 as a convenience, never as the only way conflict
 | non-JSON or empty body, non-2xx | synthesize `upstream.error` from the HTTP status (5xx -> exit 8) |
 | **2xx** with unparseable body | `upstream.error`, exit 8 — success cannot be confirmed |
 | `error.code` prefix != HTTP status | trust `error.code` (D4b); surface the mismatch under `--debug` |
+| `error.code` with no plausible status prefix (100-599) | classify on the HTTP status |
 
 ## Empty / non-JSON bodies
 

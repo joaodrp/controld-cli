@@ -68,7 +68,7 @@ human mode renders the same fields as a single `error: ...` line. Exit codes are
       "message": "Invalid session, please login again."
     },
     "retryable": false,
-    "retry_after": null,                // seconds from Retry-After, else null
+    "retry_after": null,                // seconds from Retry-After; null when absent or unparseable
     "details": null,                    // structured payload on aggregate errors
     "hint": "Run `cdctl auth login`."
   }
@@ -76,12 +76,12 @@ human mode renders the same fields as a single `error: ...` line. Exit codes are
 ```
 
 One field, `retryable`, removes a class of agent bugs. Its sibling `retry_after` carries the
-parsed `Retry-After` in seconds (`null` when the response has none) — agents never re-derive
-backoff.
+parsed `Retry-After` in seconds (`null` when the response has none, or the header is
+unparseable — `--debug` says so) — agents never re-derive backoff.
 
-Human mode stays **one line**, whatever upstream leaks: CR/LF collapse to spaces, and every other
-C0/DEL control (ANSI escapes included) is **stripped** — a message never gets to rewrite the
-terminal. The verbatim text survives in JSON `upstream.message`; `--debug` renders it
+Human mode stays **one line**, whatever upstream leaks: CR/LF/TAB collapse to spaces (whitespace
+runs collapse to one — stripping a tab would glue words together), and every other C0/DEL control
+(ANSI escapes included) is **stripped** — a message never gets to rewrite the terminal. The verbatim text survives in JSON `upstream.message`; `--debug` renders it
 **JSON-escaped after token redaction** — verbatim semantically, never raw terminal bytes.
 
 **`upstream` is `null` or `{code, http_status, message}`** — `null` on client-side errors (bad
@@ -212,13 +212,17 @@ Special-case it. Full table: [reference/error-codes.md](reference/error-codes.md
 | --- | --- | --- | --- |
 | `0` success *(incl. empty results)* | `1` generic | `2` usage *(free from clap)* | `3` not found |
 | `4` auth *(matches `gh`)* | `5` forbidden / plan / scope | `6` conflict | `7` confirmation required |
-| `8` **retryable** — rate limit, 5xx, network | `130` SIGINT | | |
+| `8` **retryable** — rate limit, 5xx, network | `130` SIGINT | `141` SIGPIPE *(Unix)* | |
 
 An earlier draft split rate-limit/5xx/network into three codes. That's **diagnostic, not actionable** —
 an agent does the same thing for all three. An exit status is one byte and can't carry a message; the
 reason belongs in the error envelope.
 
 **The contract: exit 8 is retryable; everything else is terminal.** Codes 9-19 reserved; append-only.
+
+`141` is Unix's SIGPIPE death: the default disposition is restored at startup, so
+`cdctl reference | head` dies quietly the traditional way — Rust's default (a write-error panic,
+exit 101) would leak an undocumented code. Sockets are unaffected (`MSG_NOSIGNAL`).
 
 **Scope violations fail loudly** (exit 5) — never silently filter results, as `flyctl` does.
 
@@ -372,10 +376,12 @@ this themselves via read-back).
 
 ## D13 — Rust stack *(compile-verified July 2026)*
 
-`clap`, `reqwest` (**async**, rustls, the `form` feature — no longer a default feature, and every
-write needs it), `tokio`, `serde`/`serde_json`, `thiserror`, `comfy-table`, `anstream` +
-`owo-colors`, `etcetera` (XDG on macOS too), `secrecy`.
-Dev: `wiremock`, `assert_cmd`, `insta`.
+`clap` + `clap_complete`, `reqwest` (**async**, rustls, the `form` feature — no longer a default
+feature, and every write needs it), `tokio`, `serde`/`serde_json`, `thiserror`, `comfy-table`,
+`etcetera` (XDG on macOS too), `secrecy`, `toml`, `httpdate` (`Retry-After` HTTP-dates),
+`fastrand` (backoff jitter), `tempfile` (atomic config writes). `anstream` + `owo-colors` arrive
+with the first colored output.
+Dev: `wiremock`, `assert_cmd`, `insta`, `predicates`, `nix` (the SIGINT test).
 
 Latest stable versions at implementation time; exact pins live in `Cargo.toml`, and the
 edition/MSRV choice in [plan.md](plan.md) Phase 1.
@@ -497,3 +503,7 @@ its integration point.
    e.g. `noai`) — unprobed; verify before Phase 4.
 8. **The `ips[]` form-variable ceiling** (`POST /access`) — unprobed; the 50-IP cap keeps it
    unreachable.
+9. **Percent-encoded bracket keys** — the typed-write client emits `hostnames%5B%5D=` (reqwest's
+   form encoder; PHP decodes keys before array parsing). Live verification used *literal*
+   brackets — probe the encoded form before Phase 3's first array write, or hand-build the bodies.
+   `cdctl api -F` is unaffected: its gate already demands literal keys.
