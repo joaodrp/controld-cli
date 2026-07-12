@@ -2,7 +2,7 @@
 
 use clap::{Args, Parser, Subcommand};
 
-use crate::commands::{auth::AuthCommand, config::ConfigCommand};
+use crate::commands::{api::ApiArgs, auth::AuthCommand, config::ConfigCommand};
 use crate::error::Error;
 use crate::output::Mode;
 
@@ -71,6 +71,8 @@ pub struct GlobalArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    /// Raw request against the API origin (D9 escape hatch; GET by default)
+    Api(ApiArgs),
     /// Authenticate cdctl with an API token
     #[command(subcommand)]
     Auth(AuthCommand),
@@ -89,7 +91,7 @@ pub enum Command {
 #[derive(Debug)]
 #[allow(
     dead_code,
-    reason = "yes is read from Phase 2 (cdctl api); profile/plain from Phase 3 (rules & folders)"
+    reason = "profile and plain are read from Phase 3 (rules & folders)"
 )]
 #[expect(
     clippy::struct_excessive_bools,
