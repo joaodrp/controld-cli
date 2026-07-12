@@ -56,11 +56,7 @@ async fn run() -> ExitCode {
     // A lost buffered tail must never exit 0 — success asserts complete stdout.
     let result = match std::io::stdout().flush() {
         Ok(()) => result,
-        Err(flush_err) => result.and(Err(Error::new(
-            "output.write_failed",
-            format!("could not write to stdout: {flush_err}"),
-            Exit::Generic,
-        ))),
+        Err(flush_err) => result.and(Err(Error::stdout_write_failed(&flush_err))),
     };
 
     match result {

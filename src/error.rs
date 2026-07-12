@@ -180,6 +180,16 @@ impl Error {
         Self::new("config.invalid", message, Exit::Generic)
     }
 
+    /// A failed stdout write or flush: exit 0 must mean the data on stdout
+    /// is complete, so this is fatal wherever it surfaces.
+    pub fn stdout_write_failed(err: &std::io::Error) -> Self {
+        Self::new(
+            "output.write_failed",
+            format!("could not write to stdout: {err}"),
+            Exit::Generic,
+        )
+    }
+
     pub fn auth_missing_token() -> Self {
         Self::new(
             "auth.missing_token",
