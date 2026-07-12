@@ -41,9 +41,10 @@ pub(crate) fn authenticated_client(globals: &Globals) -> Result<(Client, TokenSo
     Ok((client, source))
 }
 
-/// Artifact commands (`completions`, `reference`) have no JSON form: an
-/// explicit `--json`/`--fields` is a usage error; ambient `CONTROLD_OUTPUT`
-/// is ignored.
+/// Commands whose stdout is never JSON (`completions`, `reference`, `api`):
+/// an explicit `--json`/`--fields` is a usage error; ambient
+/// `CONTROLD_OUTPUT` never shapes their stdout (it still shapes error
+/// rendering).
 pub(crate) fn reject_explicit_json(
     globals: &Globals,
     command: &str,

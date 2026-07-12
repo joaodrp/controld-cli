@@ -838,7 +838,7 @@ async fn api_form_keys_reach_the_wire_with_literal_brackets() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn api_stdin_json_reaches_the_wire_verbatim() {
-    // Odd spacing survives: no validation, no reshaping (D9b).
+    // Odd spacing survives: no validation, no reshaping (D9).
     let raw_json = "{\"filters\": [ {\"filter\":\"ads\",\"status\":1} ]}";
     let server = MockServer::start().await;
     Mock::given(method("PUT"))
