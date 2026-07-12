@@ -408,20 +408,26 @@ mod tests {
     }
 
     #[test]
-    fn env_token_beats_config_and_empty_env_is_unset() {
+    fn env_token_beats_config() {
         let config = config_with_token("api.from-config");
-
         let resolved = resolve_token(Some("api.from-env".into()), &config).expect("env wins");
         assert_eq!(resolved.source, TokenSource::Env);
         assert_eq!(resolved.token.expose_secret(), "api.from-env");
+    }
 
+    #[test]
+    fn an_empty_env_token_is_unset_and_falls_back_to_config() {
+        let config = config_with_token("api.from-config");
         let resolved = resolve_token(Some(String::new()), &config).expect("falls back");
         assert_eq!(resolved.source, TokenSource::Config);
         assert_eq!(resolved.token.expose_secret(), "api.from-config");
+    }
 
+    #[test]
+    fn a_missing_token_resolves_to_none_not_an_error() {
         assert!(
             resolve_token(None, &Config::default()).is_none(),
-            "lazy: absence is not an error"
+            "lazy auth (D7): absence surfaces at first use, not at startup"
         );
     }
 
