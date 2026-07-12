@@ -384,6 +384,12 @@ fn interpret_response(wire: &WireResponse, resource: &'static str) -> Result<Env
 /// `success: false`); non-envelope 2xx bodies — the binary `/mobileconfig`
 /// response — pass through verbatim. Non-2xx classifies through the same
 /// rules as typed commands.
+///
+/// Production `Envelope` parsing accepts unknown fields, so on a non-2xx
+/// *any* JSON object parses as an all-`None` envelope. Only an affirmative
+/// `success: true` may claim the unconfirmed-success stance; a marker-less
+/// body classifies on the HTTP status — a plain-JSON 404 from a gateway or
+/// an undocumented endpoint must stay terminal exit 3, never retryable.
 fn interpret_raw(wire: &WireResponse, resource: &'static str) -> Result<Bytes, Error> {
     let retry_after = wire.retry_after.seconds();
     match serde_json::from_slice::<Envelope>(&wire.body) {
@@ -391,10 +397,11 @@ fn interpret_raw(wire: &WireResponse, resource: &'static str) -> Result<Bytes, E
             Err(classify_envelope_error(&envelope, wire, resource))
         }
         Ok(_) | Err(_) if wire.status.is_success() => Ok(wire.body.clone()),
-        Ok(_) => Err(classify_unconfirmed_success(
+        Ok(envelope) if envelope.is_success() => Err(classify_unconfirmed_success(
             wire.status.as_u16(),
             retry_after,
         )),
+        Ok(envelope) => Err(classify_envelope_error(&envelope, wire, resource)),
         Err(parse_err) => Err(
             classify_unparseable(wire.status.as_u16(), resource, retry_after)
                 .with_debug_note(unparseable_body_note(&wire.body, &parse_err)),
@@ -938,6 +945,60 @@ mod tests {
         assert_eq!(error.code, "resource.not_found");
         assert_eq!(error.exit(), Exit::NotFound);
         assert_eq!(error.upstream.expect("verbatim upstream").code, Some(40401));
+    }
+
+    /// A marker-less JSON body on a non-2xx (no `success`, no `error`)
+    /// classifies on the HTTP status — terminal, never "unconfirmed
+    /// success". The `.expect(1)` proves the 404 is not retried.
+    #[tokio::test]
+    async fn get_raw_classifies_marker_less_bodies_on_the_http_status() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/nope"))
+            .respond_with(
+                ResponseTemplate::new(404).set_body_raw(r#"{"body": []}"#, "application/json"),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server.uri(), fast_retry());
+        let error = client
+            .get_raw("/nope", "resource")
+            .await
+            .expect_err("terminal");
+        assert_eq!(error.code, "resource.not_found");
+        assert_eq!(error.exit(), Exit::NotFound);
+    }
+
+    /// A 2xx that affirmatively says `success: false` cannot be data; with
+    /// no error code the classifier falls to the anomalous-response arm.
+    #[tokio::test]
+    async fn get_raw_rejects_a_2xx_that_denies_success() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/odd"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(r#"{"body": [], "success": false}"#, "application/json"),
+            )
+            .expect(1..)
+            .mount(&server)
+            .await;
+
+        let client = test_client(
+            &server.uri(),
+            RetryPolicy {
+                enabled: false,
+                ..fast_retry()
+            },
+        );
+        let error = client
+            .get_raw("/odd", "resource")
+            .await
+            .expect_err("not data");
+        assert_eq!(error.code, "upstream.error");
+        assert_eq!(error.exit(), Exit::Retryable);
     }
 
     /// Raw GETs keep the D12 retry loop.
