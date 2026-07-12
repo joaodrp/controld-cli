@@ -1,8 +1,9 @@
 //! `cdctl api`: the raw passthrough (D9). A distinct verb so sandboxes can
 //! deny `Bash(cdctl api:*)` while allowing `Bash(cdctl:*)`; GET by default;
 //! non-GET gated on `-X` **and** `--yes`; encoding explicit, never sniffed
-//! (D9b). Path and `-F` pairs are forwarded raw by design — the escape hatch
-//! must not reshape what it carries.
+//! (D9), with flags primary and JSON only via stdin (D9b). Path and `-F`
+//! pairs are forwarded raw by design — the escape hatch must not reshape
+//! what it carries.
 
 use std::io::{IsTerminal, Read, Write};
 
@@ -125,10 +126,14 @@ async fn read_body(body: PendingBody) -> Result<RawBody, Error> {
     }
 }
 
-/// D9 parse-time rejection, pre-auth: absolute URLs, scheme-relative forms,
-/// and userinfo all resolve off-origin when joined. Escaping is a property
-/// of the path's shape alone, so probing against a fixed base runs the same
-/// join-and-compare algorithm the client enforces at its choke point.
+/// D9 parse-time rejection, pre-auth: join against a sentinel base and
+/// refuse anything landing off its origin. Absolute URLs, scheme-relative
+/// forms, and userinfo all resolve off *any* base's origin — and an
+/// absolute URL naming the real API origin is off the sentinel's too, so
+/// D9's relative-paths-only rule holds without knowing the real base. The
+/// client's choke point re-runs the same join-and-compare against the
+/// configured base; the two are deliberately not equivalent (this one is
+/// stricter).
 fn validate_path(path: &str) -> Result<(), Error> {
     use crate::api::client::{JoinRejection, join_pinned_to_origin};
     let probe = Url::parse("https://cdctl-path-probe.invalid").expect("the probe base is valid");
@@ -195,9 +200,10 @@ mod tests {
         }
     }
 
-    /// Regression: `-F` and the global `--fields` share a name; without a
-    /// distinct arg id, the global's value lookup captured `-F` values and
-    /// every `cdctl api -F ...` died on the explicit-JSON rejection.
+    /// Regression guard: if this arg's clap id were `fields` (the natural
+    /// field name), the global `--fields` value lookup would capture `-F`
+    /// values and every `cdctl api -F ...` would die on the explicit-JSON
+    /// rejection.
     #[test]
     fn form_fields_do_not_leak_into_the_global_fields_flag() {
         use clap::Parser;

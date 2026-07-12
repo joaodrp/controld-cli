@@ -71,7 +71,7 @@ pub struct GlobalArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Raw request against the API origin (D9 escape hatch; GET by default)
+    /// Raw request against the API origin (escape hatch; GET by default)
     Api(ApiArgs),
     /// Authenticate cdctl with an API token
     #[command(subcommand)]
@@ -86,8 +86,8 @@ pub enum Command {
 }
 
 /// Post-parse global state. `CONTROLD_OUTPUT=json` selects JSON mode but is
-/// ambient — only an explicit `--json`/`--fields` conflicts with artifact
-/// commands like `completions`.
+/// ambient — only an explicit `--json`/`--fields` conflicts with commands
+/// whose stdout is never JSON (`completions`, `reference`, `api`).
 #[derive(Debug)]
 #[expect(
     dead_code,
@@ -165,7 +165,7 @@ mod tests {
 
     /// A subcommand arg whose id matches a global flag's is silently captured
     /// by the global's value lookup — clap's own `debug_assert` does not catch
-    /// it (`cdctl api -F` once fed the global `--fields` this way).
+    /// it (an `api` arg with id `fields` would feed the global `--fields`).
     #[test]
     fn subcommand_args_never_reuse_global_ids() {
         fn walk(command: &clap::Command, global_ids: &[String]) {
