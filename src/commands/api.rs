@@ -93,13 +93,13 @@ pub async fn run(args: ApiArgs, globals: &Globals) -> Result<(), Error> {
 /// rejection ran, so a gated command never half-drains a pipe.
 #[derive(Debug)]
 enum PendingBody {
-    Form(Vec<(String, String)>),
+    Ready(RawBody),
     Stdin,
 }
 
 fn read_body(body: PendingBody) -> Result<RawBody, Error> {
     match body {
-        PendingBody::Form(pairs) => Ok(RawBody::Form(pairs)),
+        PendingBody::Ready(body) => Ok(body),
         PendingBody::Stdin => {
             let mut raw = Vec::new();
             std::io::stdin()
@@ -110,25 +110,20 @@ fn read_body(body: PendingBody) -> Result<RawBody, Error> {
     }
 }
 
-/// D9 parse-time rejections with precise messages. The client re-checks the
-/// joined URL's origin, so anything that slips past here still cannot leave
-/// the pinned origin.
+/// D9 parse-time rejection, pre-auth: absolute URLs, scheme-relative forms,
+/// and userinfo all resolve off-origin when joined. Escaping is a property
+/// of the path's shape alone, so probing against a fixed base runs the same
+/// join-and-compare algorithm the client enforces at its choke point.
 fn validate_path(path: &str) -> Result<(), Error> {
-    // WHATWG parsing treats `\` like `/`; normalize before detecting the
-    // scheme-relative form.
-    if path.replace('\\', "/").starts_with("//") {
-        return Err(Error::usage(format!(
-            "scheme-relative URLs are rejected: {path:?}; pass a path relative to the API origin, e.g. \"/users\""
-        )));
-    }
-    // A path that parses on its own is an absolute URL (any scheme) — and
-    // with it, any userinfo. Relative paths fail this parse.
-    if Url::parse(path).is_ok() {
-        return Err(Error::usage(format!(
-            "absolute URLs are rejected: {path:?}; pass a path relative to the API origin, e.g. \"/users\""
-        )));
-    }
-    Ok(())
+    let probe = Url::parse("https://cdctl-path-probe.invalid").expect("the probe base is valid");
+    crate::api::client::join_pinned_to_origin(&probe, path)
+        .map(drop)
+        .map_err(|_| {
+            Error::usage(format!(
+                "{path:?} is not a relative path; pass one relative to the API origin, \
+                 e.g. \"/users\" (absolute and scheme-relative URLs are rejected)"
+            ))
+        })
 }
 
 /// Both body forms require a non-GET `-X` — no documented GET takes a body.
@@ -161,7 +156,7 @@ fn validate_body(args: &ApiArgs) -> Result<Option<PendingBody>, Error> {
                 .ok_or_else(|| Error::usage(format!("-F expects key=value, got {field:?}")))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(Some(PendingBody::Form(pairs)))
+    Ok(Some(PendingBody::Ready(RawBody::Form(pairs))))
 }
 
 fn parse_method(raw: &str) -> Result<Method, String> {
@@ -232,7 +227,7 @@ mod tests {
         let body = validate_body(&parse(&["/x", "-X", "POST", "-F", "name=a=b", "-F", "k="]))
             .expect("valid")
             .expect("present");
-        let PendingBody::Form(pairs) = body else {
+        let PendingBody::Ready(RawBody::Form(pairs)) = body else {
             panic!("form body expected");
         };
         assert_eq!(
