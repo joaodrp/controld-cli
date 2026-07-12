@@ -642,7 +642,7 @@ alias — the boolean cannot say which disable it means.
 | `auth login` / `auth logout` | nothing — confirmation goes to stderr |
 | `config get <k>` | the raw value (nothing when unset); `config list` -> `{context: {value, source}, token: {set, source}, default_profile: {value, source}}`, `source`: `env` \| `config` \| `default` \| `null` — the token's *value* never prints; `config path` -> the file path |
 | `completions <shell>` / `reference` | the artifact itself (script / Markdown) — **not JSON**; an explicit `--json`/`--fields` is a usage error (exit 2), ambient `CONTROLD_OUTPUT=json` is ignored — an env-configured agent can still install completions |
-| `api ...` | the upstream body **verbatim** — unstable by design ([D9](decisions.md)); errors still classify to standard exit codes |
+| `api ...` | the upstream body **verbatim**, byte-for-byte with no added newline (the binary `/mobileconfig` response survives piping) — unstable by design ([D9](decisions.md)); errors still classify to standard exit codes, with the literal noun `resource` in slugs (`resource.not_found`) — the passthrough cannot know what it touched. An explicit `--json`/`--fields` is a usage error (exit `2`) like the artifact rows — neither can be honored on a verbatim body; ambient `CONTROLD_OUTPUT=json` shapes only error rendering |
 
 ### `cdctl api` request encoding
 
@@ -680,6 +680,7 @@ lifetime; do not cache across runs.
 | `folder delete` (deletes contained rules) | prompt, **state the rule count** | needs `--yes` |
 | `profile delete`, `device delete` | `--confirm=<name>` | `--confirm=<name>` — `--yes` alone is **not** enough |
 | `org update` | `--confirm=<org>` + **"this is billable"** | same |
+| `api` with a non-GET `-X` | needs `--yes`, else exit `7` (`confirmation.required`) — **never prompts**, the escape hatch is gated, not conversational ([D9](decisions.md)) | same |
 
 `--yes` is **ignored when the target is implicit** — the profile came from the config file's
 `default_profile`. `--profile` and `CONTROLD_PROFILE` both count as **explicit** ([D8](decisions.md)),

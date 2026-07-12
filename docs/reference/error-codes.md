@@ -78,7 +78,9 @@ verbatim text, and `--debug` renders it JSON-escaped — visible, never executab
 ## Refining `400` by message — best-effort, by design
 
 The *resource* half of a slug comes from the command that ran (`rule create` failing -> `rule.*`),
-**never** from the message. Only the conflict *classification* rides on a message match:
+**never** from the message. `cdctl api` uses the literal noun `resource` (`resource.not_found`) —
+the passthrough cannot know what it touched. Only the conflict *classification* rides on a
+message match:
 
 | Message contains | Slug | Exit |
 | --- | --- | --- |
