@@ -79,13 +79,9 @@ pub async fn run(args: ApiArgs, globals: &Globals) -> Result<(), Error> {
 
     // The upstream body verbatim — no added newline; piping the binary
     // /mobileconfig response to a file must not corrupt it.
-    std::io::stdout().write_all(&bytes).map_err(|e| {
-        Error::new(
-            "output.write_failed",
-            format!("could not write to stdout: {e}"),
-            Exit::Generic,
-        )
-    })?;
+    std::io::stdout()
+        .write_all(&bytes)
+        .map_err(|e| Error::stdout_write_failed(&e))?;
     Ok(())
 }
 
