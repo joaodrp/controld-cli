@@ -290,7 +290,14 @@ impl Client {
             request = request.bearer_auth(token.expose_secret());
         }
         match body {
-            Some(RawBody::Form(pairs)) => request = request.form(&pairs),
+            Some(RawBody::Form(pairs)) => {
+                request = request
+                    .header(
+                        reqwest::header::CONTENT_TYPE,
+                        "application/x-www-form-urlencoded",
+                    )
+                    .body(encode_form(&pairs));
+            }
             Some(RawBody::Json(bytes)) => {
                 request = request
                     .header(reqwest::header::CONTENT_TYPE, "application/json")
@@ -359,6 +366,41 @@ pub(crate) fn join_pinned_to_origin(base: &Url, path: &str) -> Result<Url, JoinR
     } else {
         Err(JoinRejection::OffOrigin)
     }
+}
+
+/// Form body with **literal keys**: live verification proved bracketed keys
+/// (`hostnames[]=`) against the backend; the percent-encoded `%5B%5D` form a
+/// stock encoder emits was never proven, and this API earns no benefit of the
+/// doubt (Open item 9, resolved). Values still percent-encode — framing
+/// (`&`, `=`) must survive any value; the server decodes them back.
+fn encode_form(pairs: &[(String, String)]) -> String {
+    let mut body = String::new();
+    for (key, value) in pairs {
+        if !body.is_empty() {
+            body.push('&');
+        }
+        body.push_str(key);
+        body.push('=');
+        body.extend(form_urlencoded::byte_serialize(value.as_bytes()));
+    }
+    body
+}
+
+/// One value percent-encoded for a URL path segment: everything but the
+/// RFC 3986 unreserved set, so a wildcard hostname's `*` becomes `%2A` in
+/// `DELETE /profiles/{id}/rules/{hostname}` paths.
+#[allow(
+    dead_code,
+    reason = "first caller is Phase 3 (rule delete builds per-hostname paths)"
+)]
+pub(crate) fn encode_path_segment(raw: &str) -> String {
+    use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
+    const KEEP: &percent_encoding::AsciiSet = &NON_ALPHANUMERIC
+        .remove(b'-')
+        .remove(b'.')
+        .remove(b'_')
+        .remove(b'~');
+    utf8_percent_encode(raw, KEEP).to_string()
 }
 
 /// The D12 write contract's failure hint: a retryable error keeps exit 8 but
@@ -547,6 +589,34 @@ mod tests {
 
     fn success_body() -> serde_json::Value {
         serde_json::json!({"body": {"profiles": []}, "success": true})
+    }
+
+    #[test]
+    fn form_keys_stay_verbatim_while_values_encode() {
+        let body = encode_form(&[
+            ("hostnames[]".into(), "*.example.com".into()),
+            ("name".into(), "a&b=c d".into()),
+            ("note".into(), "café".into()),
+        ]);
+        assert_eq!(
+            body,
+            "hostnames[]=*.example.com&name=a%26b%3Dc+d&note=caf%C3%A9"
+        );
+    }
+
+    #[test]
+    fn empty_form_encodes_to_an_empty_body() {
+        assert_eq!(encode_form(&[]), "");
+    }
+
+    #[test]
+    fn path_segments_encode_everything_but_unreserved() {
+        assert_eq!(encode_path_segment("*.example.com"), "%2A.example.com");
+        assert_eq!(
+            encode_path_segment("plain-host_1.example~"),
+            "plain-host_1.example~"
+        );
+        assert_eq!(encode_path_segment("a/b?c#d%e"), "a%2Fb%3Fc%23d%25e");
     }
 
     #[tokio::test]
@@ -740,7 +810,7 @@ mod tests {
             .and(header("authorization", "Bearer test-token"))
             .and(header("content-type", "application/x-www-form-urlencoded"))
             .and(body_string_contains("do=0"))
-            .and(body_string_contains("hostnames%5B%5D=a.com"))
+            .and(body_string_contains("hostnames[]=a.com"))
             .respond_with(ResponseTemplate::new(200).set_body_json(success_body()))
             .expect(1)
             .mount(&server)

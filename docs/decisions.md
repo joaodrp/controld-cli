@@ -503,7 +503,9 @@ its integration point.
    e.g. `noai`) — unprobed; verify before Phase 4.
 8. **The `ips[]` form-variable ceiling** (`POST /access`) — unprobed; the 50-IP cap keeps it
    unreachable.
-9. **Percent-encoded bracket keys** — the typed-write client emits `hostnames%5B%5D=` (reqwest's
-   form encoder; PHP decodes keys before array parsing). Live verification used *literal*
-   brackets — probe the encoded form before Phase 3's first array write, or hand-build the bodies.
-   `cdctl api -F` is unaffected: its gate already demands literal keys.
+9. **Percent-encoded bracket keys** :white_check_mark: *resolved* — form bodies are hand-built:
+   keys verbatim, values percent-encoded. Every write (typed and `cdctl api -F`) sends the literal
+   `hostnames[]=` form live verification proved, so the probe of the `%5B%5D` form is moot. (The
+   original note claimed `cdctl api -F` already sent literal keys — it did not: reqwest's form
+   encoder emitted `hostnames%5B%5D=` there too, and the Phase 2 wire test had pinned the encoded
+   form under a test name that said otherwise.)

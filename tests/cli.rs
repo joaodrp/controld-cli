@@ -818,10 +818,10 @@ async fn api_form_keys_reach_the_wire_with_literal_brackets() {
         ))
         .and(wiremock::matchers::body_string_contains("do=1"))
         .and(wiremock::matchers::body_string_contains(
-            "hostnames%5B%5D=a.example",
+            "hostnames[]=a.example",
         ))
         .and(wiremock::matchers::body_string_contains(
-            "hostnames%5B%5D=b.example",
+            "hostnames[]=b.example",
         ))
         .respond_with(
             ResponseTemplate::new(200)
@@ -938,9 +938,7 @@ async fn api_delete_carries_its_body() {
     let server = MockServer::start().await;
     Mock::given(method("DELETE"))
         .and(path("/access"))
-        .and(wiremock::matchers::body_string_contains(
-            "ips%5B%5D=1.2.3.4",
-        ))
+        .and(wiremock::matchers::body_string_contains("ips[]=1.2.3.4"))
         .and(wiremock::matchers::body_string_contains("device_id=abc"))
         .respond_with(
             ResponseTemplate::new(200)
