@@ -89,7 +89,7 @@ pub enum Command {
 /// ambient — only an explicit `--json`/`--fields` conflicts with artifact
 /// commands like `completions`.
 #[derive(Debug)]
-#[allow(
+#[expect(
     dead_code,
     reason = "profile and plain are read from Phase 3 (rules & folders)"
 )]
