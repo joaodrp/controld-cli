@@ -45,11 +45,13 @@ impl Default for RetryPolicy {
     }
 }
 
-/// A request body in one of the D9b encodings — form pairs with literal
-/// keys. Nothing is ever sniffed (D16).
+/// A request body in one of the two D9b encodings — form pairs with literal
+/// keys, or bytes sent verbatim as JSON. Nothing is ever sniffed (D16).
 #[derive(Debug)]
 pub enum RawBody {
     Form(Vec<(String, String)>),
+    #[allow(dead_code, reason = "first constructor is the `cdctl api` command")]
+    Json(Vec<u8>),
 }
 
 /// The transport-level response parts, before any interpretation.
@@ -241,6 +243,39 @@ impl Client {
             .map_err(warn_write_may_have_landed)
     }
 
+    /// Raw GET for `cdctl api` (D9): the body bytes verbatim, with the D12
+    /// retry loop. Errors still classify through the standard rules.
+    #[allow(dead_code, reason = "first caller is the `cdctl api` command")]
+    pub async fn get_raw(&self, path: &str, resource: &'static str) -> Result<Vec<u8>, Error> {
+        self.get_with(path, |wire| {
+            interpret_raw(wire.status, wire.retry_after.seconds(), &wire.body, resource)
+        })
+        .await
+    }
+
+    /// Raw mutation for `cdctl api` (D9): sent exactly once, body bytes back
+    /// verbatim. Same never-replay contract as [`Client::write`].
+    #[allow(dead_code, reason = "first caller is the `cdctl api` command")]
+    pub async fn write_raw(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<RawBody>,
+        resource: &'static str,
+    ) -> Result<Vec<u8>, Error> {
+        debug_assert_ne!(
+            method,
+            Method::GET,
+            "raw GETs go through get_raw(), mutations through write_raw()"
+        );
+        self.send(method, path, body.as_ref())
+            .await
+            .and_then(|wire| {
+                interpret_raw(wire.status, wire.retry_after.seconds(), &wire.body, resource)
+            })
+            .map_err(warn_write_may_have_landed)
+    }
+
     /// One request over the wire: join the path, attach the bearer token and
     /// body, send, collect the response parts. No interpretation.
     async fn send(
@@ -273,6 +308,11 @@ impl Client {
         }
         match body {
             Some(RawBody::Form(pairs)) => request = request.form(pairs),
+            Some(RawBody::Json(bytes)) => {
+                request = request
+                    .header(reqwest::header::CONTENT_TYPE, "application/json")
+                    .body(bytes.clone());
+            }
             None => {}
         }
 
@@ -349,6 +389,35 @@ fn interpret_response(
                 retry_after,
             ))
         }
+        Err(parse_err) => Err(classify_unparseable(status.as_u16(), resource, retry_after)
+            .with_debug_note(unparseable_body_note(body, &parse_err))),
+    }
+}
+
+/// The passthrough interpretation (D9): a 2xx body is data unless it
+/// affirmatively carries the error envelope (`error` present or
+/// `success: false`); non-envelope 2xx bodies — the binary `/mobileconfig`
+/// response — pass through verbatim. Non-2xx classifies through the same
+/// rules as typed commands.
+fn interpret_raw(
+    status: StatusCode,
+    retry_after: Option<u64>,
+    body: &[u8],
+    resource: &'static str,
+) -> Result<Vec<u8>, Error> {
+    match serde_json::from_slice::<Envelope>(body) {
+        Ok(envelope) if envelope.error.is_some() || envelope.success == Some(false) => {
+            let upstream = envelope.error.as_ref();
+            Err(classify_response(
+                status.as_u16(),
+                upstream.and_then(|e| e.code),
+                upstream.and_then(|e| e.message.as_deref()),
+                resource,
+                retry_after,
+            ))
+        }
+        Ok(_) | Err(_) if status.is_success() => Ok(body.to_vec()),
+        Ok(_) => Err(classify_unconfirmed_success(status.as_u16(), retry_after)),
         Err(parse_err) => Err(classify_unparseable(status.as_u16(), resource, retry_after)
             .with_debug_note(unparseable_body_note(body, &parse_err))),
     }
@@ -803,6 +872,158 @@ mod tests {
         let error = client.get("/profiles", "profile").await.expect_err("404");
         assert_eq!(error.code, "profile.not_found");
         assert_eq!(error.exit(), Exit::NotFound);
+    }
+
+    /// The raw passthrough returns the body byte-for-byte: no re-encoding,
+    /// no reshaping, trailing whitespace included.
+    #[tokio::test]
+    async fn get_raw_returns_the_body_verbatim() {
+        let raw_body = "{\"body\": {\"profiles\": []},   \"success\": true}\n";
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/profiles"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(raw_body, "application/json"))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server.uri(), fast_retry());
+        let bytes = client
+            .get_raw("/profiles", "resource")
+            .await
+            .expect("2xx success envelope");
+        assert_eq!(bytes, raw_body.as_bytes());
+    }
+
+    /// A 2xx body that is not an envelope (the binary /mobileconfig response)
+    /// is data, never an error — the passthrough must not impose the envelope.
+    #[tokio::test]
+    async fn get_raw_passes_non_envelope_bodies_through() {
+        let binary: &[u8] = &[0x3c, 0x3f, 0x78, 0x6d, 0x6c, 0x00, 0xff, 0xfe];
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/mobileconfig/abc"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_raw(binary, "application/x-apple-aspen-config"),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server.uri(), fast_retry());
+        let bytes = client
+            .get_raw("/mobileconfig/abc", "resource")
+            .await
+            .expect("binary 2xx is data");
+        assert_eq!(bytes, binary);
+    }
+
+    /// Raw errors classify through the standard rules — the escape hatch
+    /// keeps the exit-code contract.
+    #[tokio::test]
+    async fn get_raw_classifies_error_envelopes() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/nope"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "body": [],
+                "success": false,
+                "error": {"code": 40401, "message": "No such thing"}
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server.uri(), fast_retry());
+        let error = client
+            .get_raw("/nope", "resource")
+            .await
+            .expect_err("classified");
+        assert_eq!(error.code, "resource.not_found");
+        assert_eq!(error.exit(), Exit::NotFound);
+        assert_eq!(error.upstream.expect("verbatim upstream").code, Some(40401));
+    }
+
+    /// Raw GETs keep the D12 retry loop.
+    #[tokio::test]
+    async fn get_raw_retries_transient_failures() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/profiles"))
+            .respond_with(ResponseTemplate::new(500))
+            .up_to_n_times(1)
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/profiles"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(success_body()))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server.uri(), fast_retry());
+        client
+            .get_raw("/profiles", "resource")
+            .await
+            .expect("second attempt succeeds");
+    }
+
+    /// Raw mutations keep the exactly-once contract and the landed hint.
+    #[tokio::test]
+    async fn write_raw_sends_exactly_one_request_under_500() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/profiles"))
+            .respond_with(ResponseTemplate::new(500))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server.uri(), fast_retry());
+        let error = client
+            .write_raw(
+                Method::POST,
+                "/profiles",
+                Some(RawBody::Form(vec![("name".into(), "x".into())])),
+                "resource",
+            )
+            .await
+            .expect_err("500 fails, once");
+        assert_eq!(error.exit(), Exit::Retryable);
+        assert!(
+            error
+                .hint
+                .as_deref()
+                .is_some_and(|h| h.contains("may still have landed")),
+        );
+    }
+
+    /// A JSON body reaches the wire verbatim with its content type — no
+    /// validation, no reshaping (D9b).
+    #[tokio::test]
+    async fn write_raw_sends_stdin_json_verbatim() {
+        let raw_json = "{\"filters\": [ {\"filter\":\"ads\",\"status\":1} ]}";
+        let server = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path("/profiles/p1/filters"))
+            .and(header("content-type", "application/json"))
+            .and(wiremock::matchers::body_string(raw_json))
+            .respond_with(ResponseTemplate::new(200).set_body_json(success_body()))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server.uri(), fast_retry());
+        client
+            .write_raw(
+                Method::PUT,
+                "/profiles/p1/filters",
+                Some(RawBody::Json(raw_json.as_bytes().to_vec())),
+                "resource",
+            )
+            .await
+            .expect("matched mock proves the body went verbatim");
     }
 
     /// D9: no path may steer a request off the base origin — absolute URLs,
