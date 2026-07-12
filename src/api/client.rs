@@ -7,6 +7,7 @@
 
 use std::time::{Duration, Instant, SystemTime};
 
+use bytes::Bytes;
 use reqwest::header::{HeaderMap, RETRY_AFTER};
 use reqwest::{Method, StatusCode, Url, redirect};
 use secrecy::{ExposeSecret, SecretString};
@@ -58,7 +59,7 @@ pub enum RawBody {
 struct WireResponse {
     status: StatusCode,
     retry_after: RetryAfter,
-    body: Vec<u8>,
+    body: Bytes,
 }
 
 #[derive(Debug)]
@@ -157,15 +158,8 @@ impl Client {
     /// honored, capped attempts and elapsed time, every retry logged (a
     /// silent backoff is indistinguishable from a hang).
     pub async fn get(&self, path: &str, resource: &'static str) -> Result<Envelope, Error> {
-        self.get_with(path, |wire| {
-            interpret_response(
-                wire.status,
-                wire.retry_after.seconds(),
-                &wire.body,
-                resource,
-            )
-        })
-        .await
+        self.get_with(path, |wire| interpret_response(wire, resource))
+            .await
     }
 
     /// The retry loop itself, shared by every GET interpretation.
@@ -208,7 +202,7 @@ impl Client {
     /// state is the caller's (or the agent's) job, never a blind replay.
     #[allow(
         dead_code,
-        reason = "first caller is Phase 2 (`cdctl api`); the exactly-once contract is tested now"
+        reason = "first caller is Phase 3 (typed writes); the exactly-once contract is tested now"
     )]
     pub async fn write(
         &self,
@@ -217,11 +211,6 @@ impl Client {
         form: &[(&str, String)],
         resource: &'static str,
     ) -> Result<Envelope, Error> {
-        debug_assert_ne!(
-            method,
-            Method::GET,
-            "writes go through write(), GETs through get()"
-        );
         let body = (!form.is_empty()).then(|| {
             RawBody::Form(
                 form.iter()
@@ -229,31 +218,17 @@ impl Client {
                     .collect(),
             )
         });
-        self.send(method, path, body.as_ref())
-            .await
-            .and_then(|wire| {
-                interpret_response(
-                    wire.status,
-                    wire.retry_after.seconds(),
-                    &wire.body,
-                    resource,
-                )
-            })
-            .map_err(warn_write_may_have_landed)
+        self.write_with(method, path, body, |wire| {
+            interpret_response(wire, resource)
+        })
+        .await
     }
 
     /// Raw GET for `cdctl api` (D9): the body bytes verbatim, with the D12
     /// retry loop. Errors still classify through the standard rules.
-    pub async fn get_raw(&self, path: &str, resource: &'static str) -> Result<Vec<u8>, Error> {
-        self.get_with(path, |wire| {
-            interpret_raw(
-                wire.status,
-                wire.retry_after.seconds(),
-                &wire.body,
-                resource,
-            )
-        })
-        .await
+    pub async fn get_raw(&self, path: &str, resource: &'static str) -> Result<Bytes, Error> {
+        self.get_with(path, |wire| interpret_raw(wire, resource))
+            .await
     }
 
     /// Raw mutation for `cdctl api` (D9): sent exactly once, body bytes back
@@ -264,22 +239,28 @@ impl Client {
         path: &str,
         body: Option<RawBody>,
         resource: &'static str,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Bytes, Error> {
+        self.write_with(method, path, body, |wire| interpret_raw(wire, resource))
+            .await
+    }
+
+    /// The mutation pipeline shared by [`Client::write`] and
+    /// [`Client::write_raw`] — the exactly-once contract lives here, once.
+    async fn write_with<T>(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<RawBody>,
+        interpret: impl Fn(&WireResponse) -> Result<T, Error>,
+    ) -> Result<T, Error> {
         debug_assert_ne!(
             method,
             Method::GET,
-            "raw GETs go through get_raw(), mutations through write_raw()"
+            "mutations only; GETs retry via get_with()"
         );
-        self.send(method, path, body.as_ref())
+        self.send(method, path, body)
             .await
-            .and_then(|wire| {
-                interpret_raw(
-                    wire.status,
-                    wire.retry_after.seconds(),
-                    &wire.body,
-                    resource,
-                )
-            })
+            .and_then(|wire| interpret(&wire))
             .map_err(warn_write_may_have_landed)
     }
 
@@ -289,21 +270,9 @@ impl Client {
         &self,
         method: Method,
         path: &str,
-        body: Option<&RawBody>,
+        body: Option<RawBody>,
     ) -> Result<WireResponse, Error> {
-        let url = self
-            .base_url
-            .join(path)
-            .map_err(|e| Error::usage(format!("invalid request path {path:?}: {e}")))?;
-        // D9: a join must never escape the pinned origin. WHATWG parsing
-        // treats `\` like `/` and lets absolute or scheme-relative input
-        // replace the host — so the joined result is checked, not the input.
-        if url.origin() != self.base_url.origin() {
-            return Err(Error::usage(format!(
-                "request path {path:?} resolves outside the API origin ({base})",
-                base = self.base_url.origin().ascii_serialization()
-            )));
-        }
+        let url = join_pinned_to_origin(&self.base_url, path)?;
 
         if self.debug {
             // The Authorization header is never traced (token redaction, D6).
@@ -314,11 +283,11 @@ impl Client {
             request = request.bearer_auth(token.expose_secret());
         }
         match body {
-            Some(RawBody::Form(pairs)) => request = request.form(pairs),
+            Some(RawBody::Form(pairs)) => request = request.form(&pairs),
             Some(RawBody::Json(bytes)) => {
                 request = request
                     .header(reqwest::header::CONTENT_TYPE, "application/json")
-                    .body(bytes.clone());
+                    .body(bytes);
             }
             None => {}
         }
@@ -339,7 +308,7 @@ impl Client {
         Ok(WireResponse {
             status,
             retry_after,
-            body: body.to_vec(),
+            body,
         })
     }
 
@@ -357,6 +326,23 @@ impl Client {
     }
 }
 
+/// Join `path` onto `base`, refusing any result that leaves `base`'s origin
+/// (D9). WHATWG parsing treats `\` like `/` and lets absolute or
+/// scheme-relative input replace the host — so the joined result is checked,
+/// never the input's shape. `cdctl api` runs the same algorithm pre-auth.
+pub(crate) fn join_pinned_to_origin(base: &Url, path: &str) -> Result<Url, Error> {
+    let url = base
+        .join(path)
+        .map_err(|e| Error::usage(format!("invalid request path {path:?}: {e}")))?;
+    if url.origin() != base.origin() {
+        return Err(Error::usage(format!(
+            "request path {path:?} resolves outside the API origin ({origin})",
+            origin = base.origin().ascii_serialization()
+        )));
+    }
+    Ok(url)
+}
+
 /// The D12 write contract's failure hint: a retryable error keeps exit 8 but
 /// the caller must re-fetch state, never blindly replay.
 fn warn_write_may_have_landed(error: Error) -> Error {
@@ -372,32 +358,24 @@ fn warn_write_may_have_landed(error: Error) -> Error {
 /// Defensive parsing per reference/error-codes.md: `success: true` on a 2xx
 /// is the only success; JSON errors classify via D4b; empty/non-JSON bodies
 /// classify on the HTTP status alone.
-fn interpret_response(
-    status: StatusCode,
-    retry_after: Option<u64>,
-    body: &[u8],
-    resource: &'static str,
-) -> Result<Envelope, Error> {
-    match serde_json::from_slice::<Envelope>(body) {
+fn interpret_response(wire: &WireResponse, resource: &'static str) -> Result<Envelope, Error> {
+    let retry_after = wire.retry_after.seconds();
+    match serde_json::from_slice::<Envelope>(&wire.body) {
         Ok(envelope) if envelope.is_success() => {
-            if status.is_success() {
+            if wire.status.is_success() {
                 Ok(envelope)
             } else {
-                Err(classify_unconfirmed_success(status.as_u16(), retry_after))
+                Err(classify_unconfirmed_success(
+                    wire.status.as_u16(),
+                    retry_after,
+                ))
             }
         }
-        Ok(envelope) => {
-            let upstream = envelope.error.as_ref();
-            Err(classify_response(
-                status.as_u16(),
-                upstream.and_then(|e| e.code),
-                upstream.and_then(|e| e.message.as_deref()),
-                resource,
-                retry_after,
-            ))
-        }
-        Err(parse_err) => Err(classify_unparseable(status.as_u16(), resource, retry_after)
-            .with_debug_note(unparseable_body_note(body, &parse_err))),
+        Ok(envelope) => Err(classify_envelope_error(&envelope, wire, resource)),
+        Err(parse_err) => Err(
+            classify_unparseable(wire.status.as_u16(), resource, retry_after)
+                .with_debug_note(unparseable_body_note(&wire.body, &parse_err)),
+        ),
     }
 }
 
@@ -406,28 +384,39 @@ fn interpret_response(
 /// `success: false`); non-envelope 2xx bodies — the binary `/mobileconfig`
 /// response — pass through verbatim. Non-2xx classifies through the same
 /// rules as typed commands.
-fn interpret_raw(
-    status: StatusCode,
-    retry_after: Option<u64>,
-    body: &[u8],
-    resource: &'static str,
-) -> Result<Vec<u8>, Error> {
-    match serde_json::from_slice::<Envelope>(body) {
+fn interpret_raw(wire: &WireResponse, resource: &'static str) -> Result<Bytes, Error> {
+    let retry_after = wire.retry_after.seconds();
+    match serde_json::from_slice::<Envelope>(&wire.body) {
         Ok(envelope) if envelope.error.is_some() || envelope.success == Some(false) => {
-            let upstream = envelope.error.as_ref();
-            Err(classify_response(
-                status.as_u16(),
-                upstream.and_then(|e| e.code),
-                upstream.and_then(|e| e.message.as_deref()),
-                resource,
-                retry_after,
-            ))
+            Err(classify_envelope_error(&envelope, wire, resource))
         }
-        Ok(_) | Err(_) if status.is_success() => Ok(body.to_vec()),
-        Ok(_) => Err(classify_unconfirmed_success(status.as_u16(), retry_after)),
-        Err(parse_err) => Err(classify_unparseable(status.as_u16(), resource, retry_after)
-            .with_debug_note(unparseable_body_note(body, &parse_err))),
+        Ok(_) | Err(_) if wire.status.is_success() => Ok(wire.body.clone()),
+        Ok(_) => Err(classify_unconfirmed_success(
+            wire.status.as_u16(),
+            retry_after,
+        )),
+        Err(parse_err) => Err(
+            classify_unparseable(wire.status.as_u16(), resource, retry_after)
+                .with_debug_note(unparseable_body_note(&wire.body, &parse_err)),
+        ),
     }
+}
+
+/// One envelope-error classification for both interpreters — the exit-code
+/// contract must never fork between typed commands and the passthrough.
+fn classify_envelope_error(
+    envelope: &Envelope,
+    wire: &WireResponse,
+    resource: &'static str,
+) -> Error {
+    let upstream = envelope.error.as_ref();
+    classify_response(
+        wire.status.as_u16(),
+        upstream.and_then(|e| e.code),
+        upstream.and_then(|e| e.message.as_deref()),
+        resource,
+        wire.retry_after.seconds(),
+    )
 }
 
 /// The parse verdict for `Retry-After`, kept three-valued so `--debug` can
