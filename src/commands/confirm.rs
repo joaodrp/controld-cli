@@ -11,7 +11,7 @@ use crate::commands::scope::ProfileScope;
 use crate::error::{Error, Exit};
 
 /// `prompt` is the full question, without the `[y/N]` suffix (added here).
-pub fn confirm(prompt: &str, yes: bool, scope: &ProfileScope) -> Result<(), Error> {
+pub async fn confirm(prompt: &str, yes: bool, scope: &ProfileScope) -> Result<(), Error> {
     if yes && scope.explicit {
         return Ok(());
     }
@@ -31,10 +31,16 @@ pub fn confirm(prompt: &str, yes: bool, scope: &ProfileScope) -> Result<(), Erro
         }
         eprint!("{prompt} [y/N] ");
         let _ = std::io::stderr().flush();
-        let mut line = String::new();
-        std::io::stdin().read_line(&mut line).map_err(|e| {
-            Error::generic(format!("could not read the confirmation from stdin: {e}"))
-        })?;
+        // Off the runtime thread: a blocking read here would starve main's
+        // select of its SIGINT branch and make Ctrl-C at the prompt appear
+        // dead (same treatment as the stdin body read in `api`).
+        let line = tokio::task::spawn_blocking(|| {
+            let mut line = String::new();
+            std::io::stdin().read_line(&mut line).map(|_| line)
+        })
+        .await
+        .map_err(|e| Error::generic(format!("the confirmation reader task failed: {e}")))?
+        .map_err(|e| Error::generic(format!("could not read the confirmation from stdin: {e}")))?;
         return if matches!(line.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
             Ok(())
         } else {
@@ -81,24 +87,28 @@ mod tests {
         }
     }
 
-    #[test]
-    fn yes_with_an_explicit_scope_needs_no_prompt() {
-        confirm("delete it?", true, &scope(true)).expect("explicit --yes is honored");
+    #[tokio::test]
+    async fn yes_with_an_explicit_scope_needs_no_prompt() {
+        confirm("delete it?", true, &scope(true))
+            .await
+            .expect("explicit --yes is honored");
     }
 
-    #[test]
-    fn yes_with_an_implicit_scope_is_ignored() {
-        let error =
-            confirm("delete it?", true, &scope(false)).expect_err("yes ignored, non-interactive");
+    #[tokio::test]
+    async fn yes_with_an_implicit_scope_is_ignored() {
+        let error = confirm("delete it?", true, &scope(false))
+            .await
+            .expect_err("yes ignored, non-interactive");
         assert_eq!(error.exit(), Exit::ConfirmationRequired);
         assert_eq!(error.code, "confirmation.required");
         assert!(error.message.contains("implicit"));
     }
 
-    #[test]
-    fn no_yes_at_all_is_confirmation_required() {
-        let error =
-            confirm("delete it?", false, &scope(true)).expect_err("no --yes, non-interactive");
+    #[tokio::test]
+    async fn no_yes_at_all_is_confirmation_required() {
+        let error = confirm("delete it?", false, &scope(true))
+            .await
+            .expect_err("no --yes, non-interactive");
         assert_eq!(error.exit(), Exit::ConfirmationRequired);
         assert_eq!(error.code, "confirmation.required");
     }
