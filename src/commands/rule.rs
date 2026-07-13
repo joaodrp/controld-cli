@@ -321,30 +321,94 @@ async fn verify_create(
         ..
     } = reconciled;
 
-    // Absent targets never landed, so resending them is safe; a mismatch
-    // already landed, so retrying `create` would duplicate-POST it — the
-    // remedy is `rule update`, named in the hint rather than retry_argv
-    // when both kinds occur together (commands.md#rule).
-    let retry_argv = if absent.is_empty() {
+    // A live `via_v6` the desired spec omits can never be cleared by a
+    // `rule update` retry — `PUT /rules` preserves an omitted `via_v6`
+    // (write-verification.md "via_v6 cannot be cleared") — so a retry built
+    // from `spec` would converge everything else and report the same
+    // mismatch forever. Split those out before building the retry: they
+    // never enter an update-verb `retry_argv`, only the hint below.
+    let (unconvergeable, convergeable): (Vec<MismatchedTarget>, Vec<MismatchedTarget>) = mismatched
+        .into_iter()
+        .partition(|(_, live)| spec.via6.is_none() && live.via6.is_some());
+    let unconvergeable: Vec<String> = unconvergeable.into_iter().map(|(h, _)| h).collect();
+    let convergeable: Vec<String> = convergeable.into_iter().map(|(h, _)| h).collect();
+
+    // Absent targets never landed, so resending them is safe; a convergeable
+    // mismatch already landed, so retrying `create` would duplicate-POST it
+    // — the remedy is `rule update`, named in the hint rather than
+    // retry_argv when both kinds occur together (commands.md#rule). An
+    // all-unconvergeable mismatch with nothing absent leaves no safe
+    // update-verb retry at all — an empty `retry_argv` is correct; the hint
+    // carries the whole remedy.
+    let retry_argv = if !absent.is_empty() {
+        create_retry_argv(&scope.id, spec, folder_id, &absent)
+    } else if convergeable.is_empty() {
+        Vec::new()
+    } else {
         let folder_patch = match folder_id {
             Some(id) => FolderPatch::To(id),
             None => FolderPatch::Root,
         };
         let changes = RuleUpdateChanges::from_spec(spec, Some(folder_patch));
-        update_retry_argv(&scope.id, &changes, &mismatched)
-    } else {
-        create_retry_argv(&scope.id, spec, folder_id, &absent)
+        update_retry_argv(&scope.id, &changes, &convergeable)
     };
 
     let mut error = multi::aggregate("rule", &results, retry_argv);
-    if !absent.is_empty() && !mismatched.is_empty() {
-        error = error.with_hint(format!(
-            "retry_argv covers only the missing hostnames; {} landed with the wrong state \
-             \u{2014} converge with `cdctl rule update`",
-            mismatched.join(", ")
-        ));
+    if let Some(hint) = create_mismatch_hint(&absent, &convergeable, &unconvergeable) {
+        error = error.with_hint(hint);
     }
     Err(error)
+}
+
+/// `verify_create`'s remedy hint once `retry_argv` alone can't carry it:
+/// `convergeable` mismatches already ride `retry_argv` as a `rule update`,
+/// so they're named here only alongside an absent-target `retry_argv`
+/// (create-verb, which says nothing about them). `unconvergeable` mismatches
+/// — an unclearable via6 (write-verification.md) — never ride `retry_argv`
+/// at all, so the hint spells their only real remedy: delete + recreate.
+/// `None` when there's nothing beyond what `retry_argv` already covers (no
+/// absent targets and every mismatch converges).
+fn create_mismatch_hint(
+    absent: &[String],
+    convergeable: &[String],
+    unconvergeable: &[String],
+) -> Option<String> {
+    if convergeable.is_empty() && unconvergeable.is_empty() {
+        return None;
+    }
+    if absent.is_empty() {
+        return if unconvergeable.is_empty() {
+            None
+        } else {
+            Some(format!(
+                "{} landed with a via6 that `rule update` can never clear \u{2014} delete and \
+                 recreate with the desired via6 (the rules are unprotected between the two \
+                 commands)",
+                unconvergeable.join(", ")
+            ))
+        };
+    }
+    Some(match (convergeable.is_empty(), unconvergeable.is_empty()) {
+        (false, true) => format!(
+            "retry_argv covers only the missing hostnames; {} landed with the wrong state \
+             \u{2014} converge with `cdctl rule update`",
+            convergeable.join(", ")
+        ),
+        (true, false) => format!(
+            "retry_argv covers only the missing hostnames; {} landed with a via6 that `rule \
+             update` can never clear \u{2014} delete and recreate with the desired via6 (the \
+             rules are unprotected between the two commands)",
+            unconvergeable.join(", ")
+        ),
+        (false, false) => format!(
+            "retry_argv covers only the missing hostnames; {} landed with the wrong state \
+             (converge with `cdctl rule update`), {} with an unclearable via6 (delete and \
+             recreate instead)",
+            convergeable.join(", "),
+            unconvergeable.join(", ")
+        ),
+        (true, true) => unreachable!("guarded above: at least one bucket is nonempty"),
+    })
 }
 
 fn create_matches(rule: &Rule, spec: &ActionSpec, folder_id: Option<i64>) -> bool {
@@ -766,6 +830,12 @@ fn state_mismatch(hostname: &str, exit: Exit) -> Error {
     )
 }
 
+/// A mismatched target paired with its read-back `Rule`, so `verify_create`
+/// can tell a convergeable mismatch from an unclearable via6
+/// (write-verification.md "`via_v6` cannot be cleared") before building a
+/// retry.
+type MismatchedTarget = (String, Rule);
+
 /// `reconcile`'s verdict on every target, in the original order.
 struct Reconciled {
     results: Vec<(String, TargetResult)>,
@@ -774,7 +844,7 @@ struct Reconciled {
     absent: Vec<String>,
     /// Landed but not in the desired state; `mismatch_exit` set its
     /// [`TargetResult`]'s retryability.
-    mismatched: Vec<String>,
+    mismatched: Vec<MismatchedTarget>,
 }
 
 /// The read-back reconciliation shared by `verify_create` and
@@ -823,7 +893,7 @@ fn reconcile(
                         hostname.clone(),
                         TargetResult::Failed(Box::new(state_mismatch(hostname, mismatch_exit))),
                     ));
-                    mismatched.push(hostname.clone());
+                    mismatched.push((hostname.clone(), rule));
                 }
             }
         }
@@ -993,6 +1063,22 @@ mod tests {
     use super::action_flags::tests::dead_client;
     use super::*;
     use crate::model::action::Action;
+
+    /// A minimal landed rule for tests that only need a `mismatched` entry
+    /// to exist, not its content — `via6` is the one field the via6-clear
+    /// tests vary.
+    fn test_rule(hostname: &str, via6: Option<&str>) -> Rule {
+        Rule {
+            hostname: hostname.to_owned(),
+            action: Action::Block,
+            via: None,
+            via6: via6.map(str::to_owned),
+            enabled: true,
+            folder: None,
+            folder_id: None,
+            order: 1,
+        }
+    }
 
     async fn spoof_spec(via: &str, via6: Option<&str>, enabled: Option<bool>) -> ActionSpec {
         let flags = ActionFlags {
@@ -1205,7 +1291,7 @@ mod tests {
             )],
             landed: vec![],
             absent: vec![],
-            mismatched: vec!["a.example.com".into()],
+            mismatched: vec![("a.example.com".into(), test_rule("a.example.com", None))],
         };
         assert!(
             resolve_ambiguous_write(&mut reconciled, Some(&write_error)).is_none(),
@@ -1251,7 +1337,7 @@ mod tests {
             ],
             landed: vec![landed_rule],
             absent: vec!["b.example.com".into()],
-            mismatched: vec!["c.example.com".into()],
+            mismatched: vec![("c.example.com".into(), test_rule("c.example.com", None))],
         };
 
         assert!(resolve_ambiguous_write(&mut reconciled, Some(&write_error)).is_none());
