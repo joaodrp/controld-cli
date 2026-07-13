@@ -1,0 +1,20 @@
+---
+source: tests/cli.rs
+expression: json
+---
+{
+  "requests": [
+    {
+      "method": "PUT",
+      "path": "/profiles/pk4cada1c5/rules",
+      "intent": {
+        "hostnames": [
+          "x.example.com"
+        ],
+        "changes": {
+          "folder_id": null
+        }
+      }
+    }
+  ]
+}

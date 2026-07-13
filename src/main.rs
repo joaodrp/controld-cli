@@ -93,6 +93,7 @@ async fn dispatch(command: Command, globals: &Globals) -> Result<(), Error> {
         Command::Auth(command) => commands::auth::run(command, globals).await,
         Command::Profile(command) => commands::profile::run(command, globals).await,
         Command::Folder(command) => commands::folder::run(command, globals).await,
+        Command::Rule(command) => commands::rule::run(command, globals).await,
         Command::Config(command) => commands::config::run(command, globals),
         Command::Completions { shell } => commands::completions::run(shell, globals),
         Command::Reference => commands::reference::run(globals),

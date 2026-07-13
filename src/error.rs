@@ -62,10 +62,6 @@ pub struct Upstream {
 /// each variant every key is always present.
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-#[allow(
-    dead_code,
-    reason = "MultiTarget from Phase 3, Collisions/Unconvergeable from Phase 4 (rule import); the schema is frozen here per plan.md Phase 1"
-)]
 pub enum Details {
     MultiTarget {
         targets: Vec<TargetOutcome>,
@@ -73,12 +69,16 @@ pub enum Details {
         /// never names or ambient defaults; deletes carry `--yes`.
         retry_argv: Vec<String>,
     },
-    Collisions {
-        collisions: Vec<Collision>,
-    },
-    Unconvergeable {
-        rules: Vec<UnconvergeableRule>,
-    },
+    #[allow(
+        dead_code,
+        reason = "constructed from Phase 4 (rule import collisions); schema frozen here"
+    )]
+    Collisions { collisions: Vec<Collision> },
+    #[allow(
+        dead_code,
+        reason = "constructed from Phase 4 (rule import unconvergeable states); schema frozen here"
+    )]
+    Unconvergeable { rules: Vec<UnconvergeableRule> },
 }
 
 /// One per-target row. Constructor-only: `Failed` always carries its slug and
@@ -94,7 +94,6 @@ pub struct TargetOutcome {
     upstream: Option<Upstream>,
 }
 
-#[allow(dead_code, reason = "constructed from Phase 3 (multi-target writes)")]
 impl TargetOutcome {
     pub fn landed(target: impl Into<String>) -> Self {
         Self::terminal(target, Outcome::Landed)
@@ -129,7 +128,6 @@ impl TargetOutcome {
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "lowercase")]
-#[allow(dead_code, reason = "constructed from Phase 3; schema frozen here")]
 pub enum Outcome {
     Landed,
     Failed,
@@ -233,6 +231,12 @@ impl Error {
     #[must_use]
     pub fn with_debug_note(mut self, note: impl Into<String>) -> Self {
         self.debug_notes.push(note.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_details(mut self, details: Details) -> Self {
+        self.details = Some(details);
         self
     }
 

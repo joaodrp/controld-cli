@@ -24,9 +24,14 @@ pub struct Envelope {
     pub success: Option<bool>,
     pub body: Option<Value>,
     pub error: Option<ApiError>,
-    /// Success-ack prose ("Profile has been created") — surfaced on stderr,
-    /// never parsed (commands.md).
-    #[allow(dead_code, reason = "read from Phase 3 (write acks)")]
+    /// Success-ack prose ("Profile has been created"). The read-back
+    /// verification is authoritative for every write, so nothing surfaces
+    /// this on stderr; modeled only so the strict fixture tests (deny
+    /// unknown fields) keep parsing write-ack fixtures.
+    #[allow(
+        dead_code,
+        reason = "modeled for strict fixture parsing; never surfaced"
+    )]
     pub message: Option<String>,
 }
 

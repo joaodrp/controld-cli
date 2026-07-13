@@ -12,22 +12,22 @@
         }
       },
       {
-        "PK": "*.host2.example.com",
-        "order": 2,
-        "group": 0,
-        "action": {
-          "do": 2,
-          "status": 0,
-          "via": "192.0.2.10"
-        }
-      },
-      {
         "PK": "*.host3.example.com",
         "order": 3,
         "group": 0,
         "action": {
           "do": 2,
           "status": 1,
+          "via": "192.0.2.10"
+        }
+      },
+      {
+        "PK": "*.host2.example.com",
+        "order": 2,
+        "group": 0,
+        "action": {
+          "do": 2,
+          "status": 0,
           "via": "192.0.2.10"
         }
       },

@@ -1,0 +1,86 @@
+---
+source: tests/cli.rs
+expression: json
+---
+[
+  {
+    "hostname": "host1.example.com",
+    "action": "spoof",
+    "via": "192.0.2.10",
+    "via6": null,
+    "enabled": true,
+    "folder": null,
+    "folder_id": null,
+    "order": 1
+  },
+  {
+    "hostname": "*.host2.example.com",
+    "action": "spoof",
+    "via": "192.0.2.10",
+    "via6": null,
+    "enabled": false,
+    "folder": null,
+    "folder_id": null,
+    "order": 2
+  },
+  {
+    "hostname": "*.host3.example.com",
+    "action": "spoof",
+    "via": "192.0.2.10",
+    "via6": null,
+    "enabled": true,
+    "folder": null,
+    "folder_id": null,
+    "order": 3
+  },
+  {
+    "hostname": "host4.example.com",
+    "action": "bypass",
+    "via": null,
+    "via6": null,
+    "enabled": true,
+    "folder": null,
+    "folder_id": null,
+    "order": 5
+  },
+  {
+    "hostname": "host5.example.com",
+    "action": "bypass",
+    "via": null,
+    "via6": null,
+    "enabled": true,
+    "folder": null,
+    "folder_id": null,
+    "order": 6
+  },
+  {
+    "hostname": "host6.example.com",
+    "action": "bypass",
+    "via": null,
+    "via6": null,
+    "enabled": true,
+    "folder": null,
+    "folder_id": null,
+    "order": 7
+  },
+  {
+    "hostname": "host7.example.com",
+    "action": "bypass",
+    "via": null,
+    "via6": null,
+    "enabled": true,
+    "folder": null,
+    "folder_id": null,
+    "order": 8
+  },
+  {
+    "hostname": "host8.example.com",
+    "action": "bypass",
+    "via": null,
+    "via6": null,
+    "enabled": true,
+    "folder": null,
+    "folder_id": null,
+    "order": 9
+  }
+]

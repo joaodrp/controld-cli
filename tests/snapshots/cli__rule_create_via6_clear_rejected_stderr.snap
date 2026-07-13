@@ -1,0 +1,6 @@
+---
+source: tests/cli.rs
+expression: stderr
+---
+error: --via6= (empty) is not supported: the API cannot clear via_v6 while the spoof action persists
+hint: there is no update that clears via6; delete the rule and recreate it with the desired via6 (or omit --via6 to keep the current value)

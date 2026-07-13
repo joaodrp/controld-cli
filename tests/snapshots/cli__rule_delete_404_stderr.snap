@@ -1,0 +1,39 @@
+---
+source: tests/cli.rs
+expression: stderr
+---
+{
+  "error": {
+    "code": "write.partial_failure",
+    "message": "1 of 1 rules failed (first: a.example.com: No such rule exists.); 0 landed, 0 skipped",
+    "upstream": null,
+    "retryable": false,
+    "retry_after": null,
+    "details": {
+      "kind": "multi_target",
+      "targets": [
+        {
+          "target": "a.example.com",
+          "outcome": "failed",
+          "code": "rule.not_found",
+          "retryable": false,
+          "upstream": {
+            "code": 40401,
+            "http_status": 404,
+            "message": "No such rule exists."
+          }
+        }
+      ],
+      "retry_argv": [
+        "cdctl",
+        "rule",
+        "delete",
+        "--profile",
+        "pk4cada1c5",
+        "--yes",
+        "a.example.com"
+      ]
+    },
+    "hint": "inspect details.targets in the JSON error envelope (--json); the failed targets are not retryable as-is"
+  }
+}

@@ -175,6 +175,11 @@ needs `--force-delete-first` and writes a versioned JSON restore manifest (`rule
 it). One request per deletion (no bulk delete). HaGeZi-scale lists (~100k) **cannot fit** — point
 users at Control D's native filters.
 
+**Parked decision:** import is the third consumer of hostname canonicalization (`rule
+create`/`update`/`delete` argv are the other two), which is when a `CanonicalHostname` newtype
+(distinguishing form-safe vs path-safe validation state) earns its keep — introduce it here rather
+than threading another bare `String` through a third call site.
+
 **Gate — adversarial tests:**
 
 - Out-of-scope rules untouched; mismatched existing rules converged.

@@ -1,0 +1,25 @@
+{
+  "body": {
+    "rules": [
+      {
+        "PK": "host1.example.com",
+        "order": 1,
+        "group": 0,
+        "action": { "do": 1, "status": 1 }
+      },
+      {
+        "PK": "x.example.com",
+        "order": 2,
+        "group": 0,
+        "action": { "do": 2, "status": 0, "via": "192.0.2.10" }
+      },
+      {
+        "PK": "y.example.com",
+        "order": 3,
+        "group": 0,
+        "action": { "do": 0, "status": 1 }
+      }
+    ]
+  },
+  "success": true
+}

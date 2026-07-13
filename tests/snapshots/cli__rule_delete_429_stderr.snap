@@ -1,0 +1,39 @@
+---
+source: tests/cli.rs
+expression: stderr
+---
+{
+  "error": {
+    "code": "write.partial_failure",
+    "message": "1 of 1 rules failed (first: a.example.com: rate limited); 0 landed, 0 skipped",
+    "upstream": null,
+    "retryable": true,
+    "retry_after": 17,
+    "details": {
+      "kind": "multi_target",
+      "targets": [
+        {
+          "target": "a.example.com",
+          "outcome": "failed",
+          "code": "ratelimit.exceeded",
+          "retryable": true,
+          "upstream": {
+            "code": 0,
+            "http_status": 429,
+            "message": "rate limited"
+          }
+        }
+      ],
+      "retry_argv": [
+        "cdctl",
+        "rule",
+        "delete",
+        "--profile",
+        "pk4cada1c5",
+        "--yes",
+        "a.example.com"
+      ]
+    },
+    "hint": "a failed delete may still have landed; re-fetch with `cdctl rule list` before re-running the retry_argv from the JSON error envelope (--json)"
+  }
+}

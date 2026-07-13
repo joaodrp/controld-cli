@@ -1,0 +1,22 @@
+---
+source: tests/cli.rs
+expression: json
+---
+{
+  "requests": [
+    {
+      "method": "DELETE",
+      "path": "/profiles/pk4cada1c5/rules/a.example.com",
+      "intent": {
+        "hostname": "a.example.com"
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/profiles/pk4cada1c5/rules/%2A.wild.example.com",
+      "intent": {
+        "hostname": "*.wild.example.com"
+      }
+    }
+  ]
+}

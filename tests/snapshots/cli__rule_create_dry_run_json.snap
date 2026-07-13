@@ -1,0 +1,23 @@
+---
+source: tests/cli.rs
+expression: json
+---
+{
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/profiles/pk4cada1c5/rules",
+      "intent": {
+        "hostnames": [
+          "a.example.com",
+          "b.example.com"
+        ],
+        "action": "block",
+        "via": null,
+        "via6": null,
+        "enabled": true,
+        "folder_id": null
+      }
+    }
+  ]
+}

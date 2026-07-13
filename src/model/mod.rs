@@ -6,6 +6,7 @@ pub mod action;
 pub mod folder;
 pub mod profile;
 pub mod proxy;
+pub mod rule;
 
 /// Read `tests/fixtures/api/{name}`, unwrap its envelope's `key`, and
 /// deserialize into `Vec<T>` — the read/envelope/keyed/deserialize body

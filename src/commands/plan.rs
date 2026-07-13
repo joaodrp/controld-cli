@@ -7,6 +7,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
+use super::action_flags::ActionSpec;
 use crate::cli::Globals;
 use crate::model::action::Action;
 use crate::output::{emit, print_key_values};
@@ -45,6 +46,31 @@ pub struct FolderCreateIntent {
     pub enabled: bool,
 }
 
+/// `RuleUpdateChanges::folder_id`'s patch value: move to a folder, or back to
+/// root. Its own type so `Some(None)` vs `None` — a transposition that
+/// compiles either way — can't invert `--root` into a no-op or a
+/// yank-everything-to-root; the read-back verification would then confirm
+/// the transposed intent instead of the user's flags.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FolderPatch {
+    Root,
+    To(i64),
+}
+
+impl Serialize for FolderPatch {
+    /// `Root` -> `null`, `To(id)` -> the id — the same present-but-null vs
+    /// present-with-an-id shape the old `Option<Option<i64>>` produced.
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Self::Root => serializer.serialize_none(),
+            Self::To(id) => serializer.serialize_i64(*id),
+        }
+    }
+}
+
 /// A merge-style update's patch: presence is meaningful, omitted fields are
 /// preserved by the server's verified merge (write-verification.md).
 #[derive(Debug, Serialize, Default)]
@@ -71,6 +97,66 @@ pub struct FolderDeleteIntent {
     pub id: i64,
     pub name: String,
     pub rules: u64,
+}
+
+/// `rule create`'s intent: every key always present, `null` meaning "will
+/// not be sent" — `enabled: true` is the CLI-owned default (commands.md#rule).
+#[derive(Debug, Serialize)]
+pub struct RuleCreateIntent {
+    pub hostnames: Vec<String>,
+    pub action: Action,
+    pub via: Option<String>,
+    pub via6: Option<String>,
+    pub enabled: bool,
+    pub folder_id: Option<i64>,
+}
+
+/// `rule update`'s sparse patch — presence is meaningful, omitted fields are
+/// preserved by `PUT /rules`'s verified merge. `folder_id` is `None` when
+/// untouched (the key is skipped) and `Some(`[`FolderPatch`]`)` otherwise —
+/// `via6: null` never appears: only the *clearing* spelling (`--via6=`) is
+/// rejected before a patch is ever built, a concrete `--via6 <value>` still
+/// flows through (commands.md#rule).
+#[derive(Debug, Serialize, Default)]
+pub struct RuleUpdateChanges {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<Action>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub via: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub via6: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub folder_id: Option<FolderPatch>,
+}
+
+impl RuleUpdateChanges {
+    /// Built from a validated [`ActionSpec`] plus the resolved folder
+    /// change — `rule update` and `verify_create`'s converge-with-`update`
+    /// retry both need exactly this patch.
+    pub fn from_spec(spec: &ActionSpec, folder_id: Option<FolderPatch>) -> Self {
+        Self {
+            action: spec.action,
+            via: spec.via.clone(),
+            via6: spec.via6.clone(),
+            enabled: spec.enabled,
+            folder_id,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct RuleUpdateIntent {
+    pub hostnames: Vec<String>,
+    pub changes: RuleUpdateChanges,
+}
+
+/// `rule delete` plans **one request per hostname** (commands.md#rule); each
+/// hostname gets its own [`PlannedRequest`] carrying this intent.
+#[derive(Debug, Serialize)]
+pub struct RuleDeleteIntent {
+    pub hostname: String,
 }
 
 /// Print the plan and let the caller `return Ok(())` — dry runs always
@@ -175,5 +261,81 @@ mod tests {
             value,
             serde_json::json!({"id": 2, "name": "Ads", "rules": 4})
         );
+    }
+
+    #[test]
+    fn rule_create_intent_always_carries_every_key() {
+        let intent = RuleCreateIntent {
+            hostnames: vec!["a.com".into(), "b.com".into()],
+            action: Action::Block,
+            via: None,
+            via6: None,
+            enabled: true,
+            folder_id: None,
+        };
+        let value = serde_json::to_value(&intent).expect("serializes");
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "hostnames": ["a.com", "b.com"],
+                "action": "block",
+                "via": null,
+                "via6": null,
+                "enabled": true,
+                "folder_id": null
+            })
+        );
+    }
+
+    #[test]
+    fn rule_update_changes_are_sparse() {
+        let intent = RuleUpdateIntent {
+            hostnames: vec!["x.com".into()],
+            changes: RuleUpdateChanges {
+                enabled: Some(false),
+                ..Default::default()
+            },
+        };
+        let value = serde_json::to_value(&intent).expect("serializes");
+        assert_eq!(
+            value,
+            serde_json::json!({"hostnames": ["x.com"], "changes": {"enabled": false}})
+        );
+    }
+
+    #[test]
+    fn rule_update_root_encodes_folder_id_as_present_but_null() {
+        let intent = RuleUpdateIntent {
+            hostnames: vec!["x.com".into()],
+            changes: RuleUpdateChanges {
+                folder_id: Some(FolderPatch::Root),
+                ..Default::default()
+            },
+        };
+        let value = serde_json::to_value(&intent).expect("serializes");
+        assert_eq!(
+            value,
+            serde_json::json!({"hostnames": ["x.com"], "changes": {"folder_id": null}})
+        );
+
+        // Untouched: the key disappears entirely, distinct from `--root`'s null.
+        let untouched = RuleUpdateIntent {
+            hostnames: vec!["x.com".into()],
+            changes: RuleUpdateChanges::default(),
+        };
+        let value = serde_json::to_value(&untouched).expect("serializes");
+        assert_eq!(
+            value,
+            serde_json::json!({"hostnames": ["x.com"], "changes": {}})
+        );
+    }
+
+    #[test]
+    fn rule_delete_intent_matches_the_documented_keys() {
+        let intent = RuleDeleteIntent {
+            hostname: "a.com".into(),
+        };
+        let value = serde_json::to_value(&intent).expect("serializes");
+        assert_eq!(value, serde_json::json!({"hostname": "a.com"}));
     }
 }

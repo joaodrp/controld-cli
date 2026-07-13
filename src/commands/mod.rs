@@ -9,9 +9,11 @@ pub mod completions;
 pub mod config;
 pub mod confirm;
 pub mod folder;
+pub mod multi;
 pub mod plan;
 pub mod profile;
 pub mod reference;
+pub mod rule;
 pub mod scope;
 pub mod validate;
 
@@ -20,7 +22,7 @@ use crate::cli::Globals;
 use crate::config::{
     Config, ResolvedToken, Store, TOKEN_ENV_VAR, TokenSource, env_var, resolve_token,
 };
-use crate::error::Error;
+use crate::error::{Error, Exit};
 use secrecy::SecretString;
 
 /// Load a config and surface its warnings — the pair is never split, so the
@@ -96,4 +98,33 @@ pub(crate) fn reject_explicit_json(
         )));
     }
     Ok(())
+}
+
+/// A landed write whose read-back failed: terminal exit 1, never 8 — the
+/// write's success was already confirmed, so the retryable contract would
+/// invite an exit-code-driven agent to replay it (duplicating the
+/// create/update). Remaps only a *retryable* source error: a terminal one
+/// (auth, forbidden, `not_found`...) already carries a better hint (e.g. the
+/// auth login hint) and can't trigger a replay either, so it passes through
+/// unchanged. `noun` names the resource to re-fetch instead (`folder`,
+/// `rule`), rendered as `cdctl {noun} list`.
+pub(crate) fn landed_write_unverified(error: Error, noun: &'static str) -> Error {
+    if !error.retryable() {
+        return error;
+    }
+    let mut remapped = Error::new("write.unverified", error.message, Exit::Generic)
+        .with_retry_after(error.retry_after)
+        .with_hint(format!(
+            // The write itself only *acknowledged* the request — the ack is
+            // a hostname-less summary, so it cannot reveal a dropped
+            // hostname; only a fresh list confirms what landed.
+            "the API acknowledged the write; re-fetch with `cdctl {noun} list` instead of retrying"
+        ));
+    if let Some(upstream) = error.upstream {
+        remapped = remapped.with_upstream(upstream);
+    }
+    for note in error.debug_notes {
+        remapped = remapped.with_debug_note(note);
+    }
+    remapped
 }

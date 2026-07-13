@@ -1,0 +1,43 @@
+---
+source: tests/cli.rs
+expression: stderr
+---
+{
+  "error": {
+    "code": "write.partial_failure",
+    "message": "2 of 2 rules failed (first: a.example.com: \"a.example.com\" did not land in the read-back verification); 0 landed, 0 skipped",
+    "upstream": null,
+    "retryable": false,
+    "retry_after": null,
+    "details": {
+      "kind": "multi_target",
+      "targets": [
+        {
+          "target": "a.example.com",
+          "outcome": "failed",
+          "code": "rule.write_dropped",
+          "retryable": true,
+          "upstream": null
+        },
+        {
+          "target": "b.example.com",
+          "outcome": "failed",
+          "code": "rule.state_mismatch",
+          "retryable": false,
+          "upstream": null
+        }
+      ],
+      "retry_argv": [
+        "cdctl",
+        "rule",
+        "create",
+        "--profile",
+        "pk4cada1c5",
+        "--action",
+        "block",
+        "a.example.com"
+      ]
+    },
+    "hint": "retry_argv covers only the missing hostnames; b.example.com landed with the wrong state — converge with `cdctl rule update`"
+  }
+}
