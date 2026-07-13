@@ -367,6 +367,9 @@ key of its map). :warning: The dropdown write is **unprobed** — verify before 
   shells) — is rejected as an **attempted unsupported clear**: exit `2`, hint carrying the
   delete + recreate remedy, never forwarded upstream (where it 400s anyway — fixture
   `err_via6_clear.json`).
+- **Argv hostnames are canonicalized** (lowercased, one trailing dot stripped) **and
+  deduplicated** before any request — same rule as `rule import`'s file lines, applied to
+  `create`/`update`/`delete` positional hostnames too.
 - **Multi-target cap: 500 hostnames** per `rule create`/`rule update` invocation — the import
   chunk size, safely inside the server's silent ~1001-form-var ceiling ([D11](decisions.md)).
   More is exit `2` with a hint to `rule import` (resumable, quota-aware). Whatever the count,

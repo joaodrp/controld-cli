@@ -78,7 +78,6 @@ pub struct ApiAction {
     #[serde(default)]
     pub via: Option<String>,
     #[serde(default)]
-    #[allow(dead_code, reason = "read from the rule commands (next PR)")]
     pub via_v6: Option<String>,
 }
 

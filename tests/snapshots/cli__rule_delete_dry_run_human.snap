@@ -1,0 +1,8 @@
+---
+source: tests/cli.rs
+expression: human
+---
+would send: DELETE /profiles/pk4cada1c5/rules/a.example.com
+hostname  a.example.com
+would send: DELETE /profiles/pk4cada1c5/rules/%2A.wild.example.com
+hostname  *.wild.example.com

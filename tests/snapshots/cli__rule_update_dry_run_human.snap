@@ -1,0 +1,7 @@
+---
+source: tests/cli.rs
+expression: human
+---
+would send: PUT /profiles/pk4cada1c5/rules
+hostnames  x.example.com
+changes    folder_id: null

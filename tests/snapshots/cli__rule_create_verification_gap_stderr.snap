@@ -1,0 +1,50 @@
+---
+source: tests/cli.rs
+expression: stderr
+---
+{
+  "error": {
+    "code": "write.partial_failure",
+    "message": "1 of 3 rules failed (first: c.example.com: \"c.example.com\" did not land in the read-back verification); 2 landed, 0 skipped",
+    "upstream": null,
+    "retryable": true,
+    "retry_after": null,
+    "details": {
+      "kind": "multi_target",
+      "targets": [
+        {
+          "target": "a.example.com",
+          "outcome": "landed",
+          "code": null,
+          "retryable": null,
+          "upstream": null
+        },
+        {
+          "target": "b.example.com",
+          "outcome": "landed",
+          "code": null,
+          "retryable": null,
+          "upstream": null
+        },
+        {
+          "target": "c.example.com",
+          "outcome": "failed",
+          "code": "rule.write_dropped",
+          "retryable": true,
+          "upstream": null
+        }
+      ],
+      "retry_argv": [
+        "cdctl",
+        "rule",
+        "create",
+        "--profile",
+        "pk4cada1c5",
+        "--action",
+        "block",
+        "c.example.com"
+      ]
+    },
+    "hint": "re-run the retry_argv from the JSON error envelope (--json); it covers the failed targets"
+  }
+}

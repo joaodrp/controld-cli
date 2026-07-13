@@ -385,10 +385,6 @@ fn encode_form(pairs: &[(String, String)]) -> String {
 /// One value percent-encoded for a URL path segment: everything but the
 /// RFC 3986 unreserved set, so a wildcard hostname's `*` becomes `%2A` in
 /// `DELETE /profiles/{id}/rules/{hostname}` paths.
-#[allow(
-    dead_code,
-    reason = "first caller is Phase 3 (rule delete builds per-hostname paths)"
-)]
 pub(crate) fn encode_path_segment(raw: &str) -> String {
     use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
     const KEEP: &percent_encoding::AsciiSet = &NON_ALPHANUMERIC

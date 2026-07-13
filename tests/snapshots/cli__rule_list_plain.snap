@@ -1,0 +1,13 @@
+---
+source: tests/cli.rs
+expression: plain
+---
+ HOSTNAME             ACTION  VIA         ENABLED  FOLDER 
+ host1.example.com    spoof   192.0.2.10  true     -      
+ *.host2.example.com  spoof   192.0.2.10  false    -      
+ *.host3.example.com  spoof   192.0.2.10  true     -      
+ host4.example.com    bypass  -           true     -      
+ host5.example.com    bypass  -           true     -      
+ host6.example.com    bypass  -           true     -      
+ host7.example.com    bypass  -           true     -      
+ host8.example.com    bypass  -           true     -

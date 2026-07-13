@@ -70,7 +70,13 @@ pub struct ActionSpec {
     pub via6: Option<String>,
     pub enabled: Option<bool>,
     /// Private so `validate` — and this module's own tests — are the only
-    /// constructors; an unvalidated spec must never reach `form_pairs`.
+    /// constructors; an unvalidated spec must never reach `form_pairs`. The
+    /// other fields are `pub` regardless: this marker gates *construction*,
+    /// not mutation — a caller can still read and clone them freely. Treat a
+    /// validated `ActionSpec` as frozen once built; if a field would need to
+    /// change, re-validate a new one rather than mutating this one in place,
+    /// or the marker's guarantee (every live `ActionSpec` passed validation)
+    /// stops holding.
     #[expect(
         dead_code,
         reason = "construction-gating marker; its value is never read"
@@ -98,6 +104,43 @@ impl ActionSpec {
         }
         pairs
     }
+
+    /// `--action`/`--via`/`--via6`, rendered from a validated spec for a
+    /// `retry_argv` (`rule create`'s builder). Callers append their own
+    /// `enabled`/`--folder`/targets tail — the caps that validated `self`
+    /// already decide what "no `--action` at all" or "omit `enabled`" means
+    /// per verb, so this stays a pure spelling of the three flags this type
+    /// owns.
+    pub fn retry_flags(&self) -> Vec<String> {
+        action_via_flags(self.action, self.via.as_deref(), self.via6.as_deref())
+    }
+}
+
+/// The single spelling of `--action`/`--via`/`--via6`, beside the clap
+/// definitions that own it — [`ActionSpec::retry_flags`] and `rule
+/// update`'s `retry_argv` (whose patch is a [`RuleUpdateChanges`], not an
+/// `ActionSpec`, but the same three fields) both render through this.
+///
+/// [`RuleUpdateChanges`]: super::plan::RuleUpdateChanges
+pub(crate) fn action_via_flags(
+    action: Option<Action>,
+    via: Option<&str>,
+    via6: Option<&str>,
+) -> Vec<String> {
+    let mut argv = Vec::new();
+    if let Some(action) = action {
+        argv.push("--action".to_owned());
+        argv.push(action.name().to_owned());
+    }
+    if let Some(via) = via {
+        argv.push("--via".to_owned());
+        argv.push(via.to_owned());
+    }
+    if let Some(via6) = via6 {
+        argv.push("--via6".to_owned());
+        argv.push(via6.to_owned());
+    }
+    argv
 }
 
 /// Validate the raw flags into an [`ActionSpec`], every rule exit 2, all
@@ -120,6 +163,30 @@ pub async fn validate(
             "--via6 is accepted by rules and services only; folders and the profile default \
              have no documented via_v6 field (D16)",
         ));
+    }
+    // `--via6=` (the attached empty value) is the one spelling that requests
+    // a via6 clear. The API has no clear operation while the spoof action
+    // persists (write-verification.md) — reject locally rather than forward
+    // it upstream, where it 400s anyway (`err_via6_clear.json`).
+    if caps.via6_allowed && flags.via6.as_deref() == Some("") {
+        return Err(Error::usage(
+            "--via6= (empty) is not supported: the API cannot clear via_v6 while the spoof \
+             action persists",
+        )
+        .with_hint(
+            "there is no update that clears via6; delete the rule and recreate it with the \
+             desired via6 (or omit --via6 to keep the current value)",
+        ));
+    }
+    // A nonempty `--via6` must be a bare IPv6 literal (commands.md#the-shared-action-flags:
+    // "IPv6, spoof only") — `Ipv6Addr::from_str` also rejects the bracketed
+    // `[2001:db8::1]` form, which is fine: only the bare literal is accepted.
+    if let Some(via6) = &flags.via6 {
+        if via6.parse::<std::net::Ipv6Addr>().is_err() {
+            return Err(Error::usage(format!(
+                "--via6 {via6:?} is not an IPv6 literal"
+            )));
+        }
     }
 
     let action = flags.action;
@@ -216,7 +283,7 @@ async fn validate_redirect_via(via: &str, client: &Client) -> Result<(), Error> 
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::api::client::{ClientConfig, RetryPolicy};
     use crate::error::Exit;
@@ -242,10 +309,11 @@ mod tests {
         }
     }
 
-    fn dead_client() -> Client {
-        // Never actually called in tests that don't reach the redirect
-        // branch; an unreachable address makes that a hard failure instead
-        // of a silent pass if a validation path regresses to call it.
+    /// Shared with `rule`'s tests: never actually called in tests that don't
+    /// reach the redirect branch; an unreachable address makes that a hard
+    /// failure instead of a silent pass if a validation path regresses to
+    /// call it.
+    pub(crate) fn dead_client() -> Client {
         Client::new(ClientConfig {
             base_url: reqwest::Url::parse("http://127.0.0.1:1").expect("valid URL"),
             token: None,
@@ -285,6 +353,38 @@ mod tests {
             .await
             .expect_err("via6 unsupported on folders");
         assert_eq!(error.exit(), Exit::Usage);
+        assert!(error.message.contains("via_v6"));
+    }
+
+    #[tokio::test]
+    async fn empty_via6_is_rejected_as_an_unsupported_clear() {
+        let flags = ActionFlags {
+            via6: Some(String::new()),
+            ..no_flags()
+        };
+        let error = validate(
+            &flags,
+            Caps {
+                via6_allowed: true,
+                ..folder_caps()
+            },
+            &dead_client(),
+        )
+        .await
+        .expect_err("empty --via6 is an unsupported clear");
+        assert_eq!(error.exit(), Exit::Usage);
+        assert!(error.hint.expect("hint present").contains("delete"));
+    }
+
+    #[tokio::test]
+    async fn folders_reject_via6_before_the_empty_string_check() {
+        let flags = ActionFlags {
+            via6: Some(String::new()),
+            ..no_flags()
+        };
+        let error = validate(&flags, folder_caps(), &dead_client())
+            .await
+            .expect_err("folders never accept via6, empty or not");
         assert!(error.message.contains("via_v6"));
     }
 
@@ -347,6 +447,96 @@ mod tests {
         )
         .await
         .expect_err("via6 only with spoof");
+        assert_eq!(error.exit(), Exit::Usage);
+    }
+
+    #[tokio::test]
+    async fn via6_rejects_an_ipv4_literal() {
+        let flags = ActionFlags {
+            action: Some(Action::Spoof),
+            via: Some("192.0.2.1".into()),
+            via6: Some("192.0.2.1".into()),
+            ..no_flags()
+        };
+        let error = validate(
+            &flags,
+            Caps {
+                via6_allowed: true,
+                ..folder_caps()
+            },
+            &dead_client(),
+        )
+        .await
+        .expect_err("an IPv4 literal is not an IPv6 literal");
+        assert_eq!(error.exit(), Exit::Usage);
+        assert!(
+            error.message.contains("192.0.2.1"),
+            "got: {}",
+            error.message
+        );
+    }
+
+    #[tokio::test]
+    async fn via6_rejects_a_hostname() {
+        let flags = ActionFlags {
+            action: Some(Action::Spoof),
+            via: Some("192.0.2.1".into()),
+            via6: Some("host.tld".into()),
+            ..no_flags()
+        };
+        let error = validate(
+            &flags,
+            Caps {
+                via6_allowed: true,
+                ..folder_caps()
+            },
+            &dead_client(),
+        )
+        .await
+        .expect_err("a hostname is not an IPv6 literal");
+        assert_eq!(error.exit(), Exit::Usage);
+        assert!(error.message.contains("host.tld"), "got: {}", error.message);
+    }
+
+    #[tokio::test]
+    async fn via6_accepts_a_bare_ipv6_literal() {
+        let flags = ActionFlags {
+            action: Some(Action::Spoof),
+            via: Some("192.0.2.1".into()),
+            via6: Some("2001:db8::1".into()),
+            ..no_flags()
+        };
+        let spec = validate(
+            &flags,
+            Caps {
+                via6_allowed: true,
+                ..folder_caps()
+            },
+            &dead_client(),
+        )
+        .await
+        .expect("a bare IPv6 literal is legal");
+        assert_eq!(spec.via6.as_deref(), Some("2001:db8::1"));
+    }
+
+    #[tokio::test]
+    async fn via6_rejects_the_bracketed_form() {
+        let flags = ActionFlags {
+            action: Some(Action::Spoof),
+            via: Some("192.0.2.1".into()),
+            via6: Some("[2001:db8::1]".into()),
+            ..no_flags()
+        };
+        let error = validate(
+            &flags,
+            Caps {
+                via6_allowed: true,
+                ..folder_caps()
+            },
+            &dead_client(),
+        )
+        .await
+        .expect_err("the bracketed form is not accepted; only the bare literal is");
         assert_eq!(error.exit(), Exit::Usage);
     }
 

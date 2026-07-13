@@ -13,7 +13,7 @@ use super::plan::{
     self, DryRun, FolderCreateIntent, FolderDeleteIntent, FolderUpdateChanges, FolderUpdateIntent,
 };
 use crate::cli::Globals;
-use crate::error::{Error, Exit};
+use crate::error::Error;
 use crate::model::folder::{ApiFolder, Folder};
 use crate::output::{emit, escape_controls, print_key_values, render_table};
 
@@ -148,7 +148,8 @@ async fn create(
     form.extend(spec.form_pairs());
 
     let envelope = client.write(Method::POST, &path, &form, "folder").await?;
-    let folder = single_folder_from(envelope, "create").map_err(landed_write_unverified)?;
+    let folder = single_folder_from(envelope, "create")
+        .map_err(|e| super::landed_write_unverified(e, "folder"))?;
     print_folder(globals, &folder);
     Ok(())
 }
@@ -206,7 +207,8 @@ async fn update(
     form.extend(spec.form_pairs());
 
     let envelope = client.write(Method::PUT, &path, &form, "folder").await?;
-    let folder = single_folder_from(envelope, "update").map_err(landed_write_unverified)?;
+    let folder = single_folder_from(envelope, "update")
+        .map_err(|e| super::landed_write_unverified(e, "folder"))?;
     print_folder(globals, &folder);
     Ok(())
 }
@@ -246,16 +248,6 @@ async fn delete(selector: &str, dry_run: bool, globals: &Globals) -> Result<(), 
         folder.id
     );
     Ok(())
-}
-
-/// A landed write whose response cannot be interpreted: terminal exit 1,
-/// never 8 — the write's success was already confirmed, so the retryable
-/// contract would invite an exit-code-driven agent to replay it (duplicating
-/// the create; folder names are not unique). The hint carries the recovery.
-fn landed_write_unverified(error: Error) -> Error {
-    Error::new("write.unverified", error.message, Exit::Generic).with_hint(
-        "the write itself succeeded; re-fetch with `cdctl folder list` instead of retrying",
-    )
 }
 
 /// `folder create`/`update` both print source **R**: the full folder object

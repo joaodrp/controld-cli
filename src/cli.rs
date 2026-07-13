@@ -4,7 +4,7 @@ use clap::{Args, Parser, Subcommand};
 
 use crate::commands::{
     api::ApiArgs, auth::AuthCommand, config::ConfigCommand, folder::FolderCommand,
-    profile::ProfileCommand,
+    profile::ProfileCommand, rule::RuleCommand,
 };
 use crate::error::Error;
 use crate::output::Mode;
@@ -85,6 +85,9 @@ pub enum Command {
     /// Manage a profile's rule folders (API: groups)
     #[command(subcommand)]
     Folder(FolderCommand),
+    /// Manage a profile's DNS rules
+    #[command(subcommand)]
+    Rule(RuleCommand),
     /// Read and write cdctl's own configuration
     #[command(subcommand)]
     Config(ConfigCommand),
