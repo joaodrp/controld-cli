@@ -1,0 +1,27 @@
+---
+source: tests/cli.rs
+expression: stderr
+---
+{
+  "error": {
+    "code": "write.partial_failure",
+    "message": "1 of 1 rules failed (first: a.example.com: \"a.example.com\" landed but not in the desired state); 0 landed, 0 skipped",
+    "upstream": null,
+    "retryable": false,
+    "retry_after": null,
+    "details": {
+      "kind": "multi_target",
+      "targets": [
+        {
+          "target": "a.example.com",
+          "outcome": "failed",
+          "code": "rule.state_mismatch",
+          "retryable": false,
+          "upstream": null
+        }
+      ],
+      "retry_argv": []
+    },
+    "hint": "a.example.com landed with a via6 that `rule update` can never clear — delete and recreate with the desired via6 (the rules are unprotected between the two commands)"
+  }
+}

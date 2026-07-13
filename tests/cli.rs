@@ -3948,6 +3948,171 @@ async fn rule_create_all_mismatched_targets_retries_with_rule_update() {
     .expect("command runs");
 }
 
+/// A live `via_v6` the desired spec omits can never be cleared by a `rule
+/// update` retry — `PUT /rules` preserves an omitted `via_v6`
+/// (write-verification.md "`via_v6` cannot be cleared"). Advertising the
+/// update anyway would be an unconvergeable remedy loop: the retry
+/// converges everything else and reports the same mismatch forever. The
+/// only real remedy, delete + recreate, must live in the hint instead, and
+/// `retry_argv` must not offer the update at all.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_create_via6_mismatch_is_unconvergeable_and_named_in_the_hint() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    Mock::given(method("POST"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .and(body_string(
+            "do=2&status=1&via=192.0.2.10&hostnames[]=a.example.com",
+        ))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_ack.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "a.example.com", "order": 1, "group": 0,
+                 "action": {"do": 2, "status": 1, "via": "192.0.2.10", "via_v6": "2001:db8::1"}}
+            ]},
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "create",
+                "a.example.com",
+                "--action",
+                "spoof",
+                "--via",
+                "192.0.2.10",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .code(1)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "write.partial_failure");
+        assert_eq!(doc["error"]["retryable"], false);
+        let retry_argv: Vec<&str> = doc["error"]["details"]["retry_argv"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        assert!(
+            !retry_argv.contains(&"update"),
+            "no `rule update` retry can converge an unclearable via6: {retry_argv:?}"
+        );
+        assert!(
+            !retry_argv.contains(&"a.example.com"),
+            "got: {retry_argv:?}"
+        );
+        let hint = doc["error"]["hint"].as_str().unwrap();
+        assert!(hint.contains("a.example.com"), "got: {hint}");
+        assert!(hint.contains("delete"), "got: {hint}");
+        assert!(hint.contains("recreate"), "got: {hint}");
+        insta::with_settings!({filters => port_filters()}, {
+            insta::assert_snapshot!("rule_create_via6_mismatch_unconvergeable_stderr", stderr);
+        });
+    })
+    .await
+    .expect("command runs");
+}
+
+/// Mixed mismatches: one plain state mismatch (convergeable by `rule
+/// update`) and one via6 mismatch (unconvergeable). `retry_argv` must cover
+/// only the former; the hint must name the latter with the delete +
+/// recreate remedy, not the update.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_create_mixed_convergeable_and_via6_mismatch_splits_retry_argv_and_hint() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    Mock::given(method("POST"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .and(body_string(
+            "do=2&status=1&via=192.0.2.10&hostnames[]=a.example.com&hostnames[]=b.example.com",
+        ))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_ack.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "a.example.com", "order": 1, "group": 0,
+                 "action": {"do": 2, "status": 0, "via": "192.0.2.10"}},
+                {"PK": "b.example.com", "order": 2, "group": 0,
+                 "action": {"do": 2, "status": 1, "via": "192.0.2.10", "via_v6": "2001:db8::1"}}
+            ]},
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "create",
+                "a.example.com",
+                "b.example.com",
+                "--action",
+                "spoof",
+                "--via",
+                "192.0.2.10",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .code(1)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "write.partial_failure");
+        let retry_argv: Vec<&str> = doc["error"]["details"]["retry_argv"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        assert_eq!(&retry_argv[1..3], ["rule", "update"], "got: {retry_argv:?}");
+        assert!(retry_argv.contains(&"a.example.com"), "got: {retry_argv:?}");
+        assert!(
+            !retry_argv.contains(&"b.example.com"),
+            "the via6 mismatch is unconvergeable, so it must never ride the update retry: \
+             {retry_argv:?}"
+        );
+        let hint = doc["error"]["hint"].as_str().unwrap();
+        assert!(hint.contains("b.example.com"), "got: {hint}");
+        assert!(hint.contains("delete"), "got: {hint}");
+        assert!(!hint.contains("a.example.com"), "got: {hint}");
+    })
+    .await
+    .expect("command runs");
+}
+
 /// `--folder <name>` on `rule update` resolves to the pk and sends
 /// `group=<pk>` — only `--root`'s `group=0` was wire-tested before.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
