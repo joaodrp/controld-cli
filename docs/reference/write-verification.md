@@ -224,6 +224,9 @@ distinguish outcomes.
 `POST /devices`. `message` is present and human-facing. New profile's `da` is an object
 (`{"do":1,"status":1}`), never `[]`.
 
+`POST /profiles` rejects names longer than **32 characters** (400,
+`Name must be a maximum of 32 characters`) — undocumented in the spec.
+
 **Profile PKs vary in length** (13 chars here, 12 on another account). Treat them as opaque strings.
 
 ## Corrections to earlier docs

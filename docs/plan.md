@@ -256,7 +256,7 @@ since v0.1, semver-guaranteed.
 | Client behavior | `wiremock` | Retry (GET-only, exactly-once writes), origin rules, the 0-byte JSON 500, headers |
 | Command contract | `assert_cmd` | Exit codes; stdout clean on error |
 | Snapshots | `insta` | `--help`, JSON shapes |
-| Live | opt-in suite | Runs only when `CONTROLD_API_TOKEN` is set; isolated to a randomized profile (below) |
+| Live | opt-in suite | Runs only when `CONTROLD_LIVE_TESTS=1` (plus `CONTROLD_API_TOKEN`); isolated to a randomized profile (below) |
 
 Exit codes and the retryable set are **public API**. Test them like it.
 
