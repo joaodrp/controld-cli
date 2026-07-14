@@ -1732,16 +1732,21 @@ async fn mount_profiles(server: &MockServer, expect: u64) {
         .await;
 }
 
-async fn mount_groups(server: &MockServer, expect: u64) {
+/// `GET /profiles/{AGGRESSIVE_PK}/groups`, parameterized by fixture — mirrors
+/// `mount_rules`'s shape.
+async fn mount_groups_fixture(server: &MockServer, fixture_name: &str, expect: u64) {
     Mock::given(method("GET"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/groups")))
         .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_raw(fixture("p_groups_full.json"), "application/json"),
+            ResponseTemplate::new(200).set_body_raw(fixture(fixture_name), "application/json"),
         )
         .expect(expect)
         .mount(server)
         .await;
+}
+
+async fn mount_groups(server: &MockServer, expect: u64) {
+    mount_groups_fixture(server, "p_groups_full.json", expect).await;
 }
 
 async fn mount_proxies(server: &MockServer, expect: u64) {
@@ -1768,6 +1773,16 @@ async fn mount_rules(server: &MockServer, fixture_name: &str, expect: u64) {
         .expect(expect)
         .mount(server)
         .await;
+}
+
+/// The verbatim `{"body":{"rules":[]},"success":true}` envelope — shared by
+/// every mock (root or per-folder) whose read-back needs *some* rules
+/// response but has nothing to say about them.
+fn empty_rules_response() -> ResponseTemplate {
+    ResponseTemplate::new(200).set_body_json(serde_json::json!({
+        "body": {"rules": []},
+        "success": true
+    }))
 }
 
 /// Mounted with `.expect(0)` in tests that must prove no mutation was
@@ -2623,6 +2638,18 @@ async fn rule_list_root_renders_all_three_modes_sorted_by_order() {
     let server = MockServer::start().await;
     mount_profiles(&server, 3).await;
     mount_groups(&server, 3).await;
+    // `p_groups_full.json` has 5 folders; the profile-wide fetch queries
+    // every one of them unconditionally (rule.rs's `fetch_all_rules`) —
+    // none has any rules here, so the root fixture's 8 rules stay the whole
+    // story.
+    for folder_id in 1..=5 {
+        Mock::given(method("GET"))
+            .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules/{folder_id}")))
+            .respond_with(empty_rules_response())
+            .expect(3)
+            .mount(&server)
+            .await;
+    }
     mount_rules(&server, "rules_nofolder.json", 3).await;
 
     let uri = server.uri();
@@ -2681,6 +2708,145 @@ async fn rule_list_root_renders_all_three_modes_sorted_by_order() {
             insta::assert_snapshot!("rule_list_plain", plain);
             insta::assert_snapshot!("rule_list_json", json);
         });
+    })
+    .await
+    .expect("command runs");
+}
+
+/// The root listing omits foldered rules entirely (read-verification.md
+/// "Listing root rules") — `rule list` with no `--folder` must union it with
+/// one `GET /rules/{folder}` per folder to see them at all. Fails before the
+/// fix: no `/rules/1` request is ever made, so the foldered rule never
+/// appears and the merged sort can't be exercised either.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_list_root_aggregates_rules_from_every_folder() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups_smoke.json", 1).await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("rules_root_one.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules/1")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("rules_folder_smoke.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["rule", "list", "--profile", AGGRESSIVE_PK, "--json"])
+            .assert()
+            .success();
+        let json = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        let rules = doc.as_array().expect("array of rules");
+        assert_eq!(rules.len(), 2, "the root rule plus the foldered one");
+        assert_eq!(rules[0]["hostname"], "probe.cdctl-smoke.example.com");
+        assert_eq!(rules[0]["folder"], "Smoke");
+        assert_eq!(rules[0]["folder_id"], 1);
+        assert_eq!(rules[0]["order"], 1, "the foldered rule sorts first");
+        assert_eq!(rules[1]["hostname"], "host.example.com");
+        assert_eq!(rules[1]["folder"], serde_json::Value::Null);
+        assert_eq!(rules[1]["order"], 2);
+    })
+    .await
+    .expect("command runs");
+}
+
+/// The folder ids driving `fetch_all_rules`'s per-folder GETs come from a
+/// `/groups` fetch moments earlier, so a 404 on `GET /rules/{folder_id}` can
+/// only mean the folder was deleted in the race between the two calls — its
+/// rules died with it, so `rule list` must still succeed with the folder
+/// contributing zero rules, not fail outright (read-verification.md "An
+/// empty folder is not an error; a deleted one is").
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_list_tolerates_a_folder_404_as_the_folder_having_vanished() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups_one.json", 1).await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "host.example.com", "order": 1, "group": 0, "action": {"do": 1, "status": 1}}
+            ]},
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules/2")))
+        .respond_with(error_envelope(404, 40401, "No such group exists."))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["rule", "list", "--profile", AGGRESSIVE_PK, "--json"])
+            .assert()
+            .success();
+        let json = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        let rules = doc.as_array().expect("array of rules");
+        assert_eq!(rules.len(), 1, "the deleted folder contributes zero rules");
+        assert_eq!(rules[0]["hostname"], "host.example.com");
+    })
+    .await
+    .expect("command runs");
+}
+
+/// The negative space the tolerance must not widen: a 500 on a folder's leg
+/// is a real error, never a "folder vanished" — pinning that a future
+/// "tolerate flaky folders" regression would print silently-partial data
+/// instead of failing.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_list_a_folder_500_is_a_classified_error_not_a_partial_list() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups_one.json", 1).await;
+    mount_rules(&server, "rules_root_one.json", 1).await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules/2")))
+        .respond_with(error_envelope(500, 0, "boom"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "list",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+                "--no-retry",
+            ])
+            .assert()
+            .code(8)
+            .stdout(predicates::str::is_empty());
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "upstream.error");
+        assert_eq!(doc["error"]["retryable"], true);
     })
     .await
     .expect("command runs");
@@ -2792,6 +2958,7 @@ async fn rule_list_unknown_folder_exits_3() {
 async fn rule_create_sends_the_exact_form_and_prints_the_readback() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
     Mock::given(method("POST"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .and(body_string(
@@ -2849,12 +3016,16 @@ async fn rule_create_sends_the_exact_form_and_prints_the_readback() {
 }
 
 /// The `group` scalar precedes the `hostnames[]` pairs (D11: scalars first),
-/// and the resolved folder pk — never the name — reaches the wire.
+/// and the resolved folder pk — never the name — reaches the wire. The
+/// read-back mocks the real shape: the root listing never carries a
+/// foldered rule (read-verification.md "Listing root rules"), only
+/// `GET /rules/2` does — fails before the fix with a false
+/// `write.partial_failure`, since only the root path was ever fetched.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rule_create_with_folder_sends_group_before_hostnames() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
-    mount_groups(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups_one.json", 1).await;
     Mock::given(method("POST"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .and(body_string("do=0&status=1&group=2&hostnames[]=a.com"))
@@ -2867,6 +3038,12 @@ async fn rule_create_with_folder_sends_group_before_hostnames() {
         .await;
     Mock::given(method("GET"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(empty_rules_response())
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules/2")))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "body": {"rules": [
                 {"PK": "a.com", "order": 1, "group": 2, "action": {"do": 0, "status": 1}}
@@ -2912,6 +3089,7 @@ async fn rule_create_with_folder_sends_group_before_hostnames() {
 async fn rule_create_spoof_sends_via_and_via6_without_a_proxy_lookup() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
     Mock::given(method("POST"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .and(body_string(
@@ -2965,6 +3143,7 @@ async fn rule_create_spoof_sends_via_and_via6_without_a_proxy_lookup() {
 async fn rule_create_multi_target_verifies_the_readback_and_prints_every_target() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
     Mock::given(method("POST"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .and(body_string(
@@ -3020,6 +3199,7 @@ async fn rule_create_multi_target_verifies_the_readback_and_prints_every_target(
 async fn rule_create_verification_gap_is_retryable_and_excludes_landed_targets() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
     Mock::given(method("POST"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .and(body_string(
@@ -3074,6 +3254,219 @@ async fn rule_create_verification_gap_is_retryable_and_excludes_landed_targets()
     .expect("command runs");
 }
 
+/// The negative space the fix must preserve: a target absent from the root
+/// listing *and* every folder's listing is still `rule.write_dropped` — the
+/// profile-wide read-back checking every folder must not manufacture a false
+/// positive for a hostname that plainly never landed anywhere.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_create_absent_from_every_folder_and_root_is_still_write_dropped() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups_one.json", 1).await;
+    Mock::given(method("POST"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .and(body_string(
+            "do=0&status=1&hostnames[]=a.example.com&hostnames[]=b.example.com&hostnames[]=c.example.com",
+        ))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_ack.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "a.example.com", "order": 1, "group": 0, "action": {"do": 0, "status": 1}},
+                {"PK": "b.example.com", "order": 2, "group": 0, "action": {"do": 0, "status": 1}}
+            ]},
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules/2")))
+        .respond_with(empty_rules_response())
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "create",
+                "a.example.com",
+                "b.example.com",
+                "c.example.com",
+                "--action",
+                "block",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .code(8)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "write.partial_failure");
+        assert_eq!(doc["error"]["retryable"], true);
+        let retry_argv: Vec<&str> = doc["error"]["details"]["retry_argv"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        assert!(retry_argv.contains(&"c.example.com"));
+        assert!(!retry_argv.contains(&"a.example.com"));
+        assert!(!retry_argv.contains(&"b.example.com"));
+        let targets = doc["error"]["details"]["targets"].as_array().unwrap();
+        let c = targets
+            .iter()
+            .find(|t| t["target"] == "c.example.com")
+            .expect("c.example.com is a target row");
+        assert_eq!(c["outcome"], "failed");
+        assert_eq!(c["code"], "rule.write_dropped");
+        assert_eq!(c["retryable"], true);
+    })
+    .await
+    .expect("command runs");
+}
+
+/// A folder deleted between the `/groups` fetch and its own listing must not
+/// misreport a landed write as `rule.write_dropped` — the same 404 tolerance
+/// `rule list` gets (module doc, `fetch_all_rules`).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_create_read_back_tolerates_a_folder_404_as_the_folder_having_vanished() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups_one.json", 1).await;
+    Mock::given(method("POST"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .and(body_string(
+            "do=0&status=1&hostnames[]=a.example.com&hostnames[]=b.example.com",
+        ))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_ack.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "a.example.com", "order": 1, "group": 0, "action": {"do": 0, "status": 1}},
+                {"PK": "b.example.com", "order": 2, "group": 0, "action": {"do": 0, "status": 1}}
+            ]},
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules/2")))
+        .respond_with(error_envelope(404, 40401, "No such group exists."))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "create",
+                "a.example.com",
+                "b.example.com",
+                "--action",
+                "block",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .success();
+        let json = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        let hostnames: Vec<&str> = doc
+            .as_array()
+            .expect("array")
+            .iter()
+            .map(|r| r["hostname"].as_str().unwrap())
+            .collect();
+        assert_eq!(hostnames, vec!["a.example.com", "b.example.com"]);
+    })
+    .await
+    .expect("command runs");
+}
+
+/// The negative space the tolerance must not widen: a 500 on the folder leg
+/// of the read-back's union routes through `landed_write_unverified` exactly
+/// like the root leg — never tolerated as an empty contribution.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_create_read_back_folder_500_is_write_unverified() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups_one.json", 1).await;
+    Mock::given(method("POST"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_ack.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(empty_rules_response())
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules/2")))
+        .respond_with(error_envelope(500, 0, "boom"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "create",
+                "a.example.com",
+                "--action",
+                "block",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+                "--no-retry",
+            ])
+            .assert()
+            .code(1)
+            .stdout(predicates::str::is_empty());
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "write.unverified");
+        assert_eq!(doc["error"]["retryable"], false);
+        assert_eq!(doc["error"]["upstream"]["http_status"], 500);
+    })
+    .await
+    .expect("command runs");
+}
+
 /// One absent target (safe to retry) plus one present-but-wrong-state
 /// target (a create retry would duplicate-POST it) is a mixed batch: exit
 /// `1`, `retry_argv` covers only the absent one, and the hint names the
@@ -3082,6 +3475,7 @@ async fn rule_create_verification_gap_is_retryable_and_excludes_landed_targets()
 async fn rule_create_mixed_absent_and_mismatched_targets_yields_exit_1() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
     Mock::given(method("POST"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .and(body_string(
@@ -3150,6 +3544,78 @@ async fn rule_create_mixed_absent_and_mismatched_targets_yields_exit_1() {
     .expect("command runs");
 }
 
+/// The wrong-folder-landing case is distinguishable only because the union
+/// sees every folder (module doc — the fix's own stated rationale): a
+/// target that landed with the right action/enabled but in a folder the
+/// create never asked for is `rule.state_mismatch`, terminal — never
+/// `rule.write_dropped`, which would invite an unsafe duplicate-POST retry.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_create_landed_in_the_wrong_folder_is_a_state_mismatch_not_write_dropped() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups_one.json", 1).await;
+    Mock::given(method("POST"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .and(body_string("do=0&status=1&hostnames[]=a.example.com"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_ack.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(empty_rules_response())
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules/2")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "a.example.com", "order": 1, "group": 2, "action": {"do": 0, "status": 1}}
+            ]},
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "create",
+                "a.example.com",
+                "--action",
+                "block",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .code(1)
+            .stdout(predicates::str::is_empty());
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "write.partial_failure");
+        assert_eq!(doc["error"]["retryable"], false);
+        let targets = doc["error"]["details"]["targets"].as_array().unwrap();
+        let target = targets
+            .iter()
+            .find(|t| t["target"] == "a.example.com")
+            .expect("a.example.com is a target row");
+        assert_eq!(target["outcome"], "failed");
+        assert_eq!(target["code"], "rule.state_mismatch");
+        assert_eq!(target["retryable"], false);
+    })
+    .await
+    .expect("command runs");
+}
+
 /// A retryable read-back failure (a 500 on the verifying `GET`) remaps to
 /// `write.unverified`, exit 1, `retryable: false` — the write already landed,
 /// so exit 8 must not invite a replay. The remap still preserves the source
@@ -3159,6 +3625,7 @@ async fn rule_create_mixed_absent_and_mismatched_targets_yields_exit_1() {
 async fn rule_create_read_back_failure_preserves_upstream_and_remaps_to_write_unverified() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
     Mock::given(method("POST"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .respond_with(
@@ -3217,6 +3684,7 @@ async fn rule_create_read_back_failure_preserves_upstream_and_remaps_to_write_un
 async fn rule_create_read_back_auth_failure_passes_through_terminal() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
     Mock::given(method("POST"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .respond_with(
@@ -3271,6 +3739,7 @@ async fn rule_create_read_back_auth_failure_passes_through_terminal() {
 async fn rule_create_read_back_missing_do_is_write_unverified() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
     Mock::given(method("POST"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .respond_with(
@@ -3327,6 +3796,7 @@ async fn rule_create_read_back_missing_do_is_write_unverified() {
 async fn rule_create_retryable_write_error_all_landed_succeeds_with_an_info_line() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
     Mock::given(method("POST"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .respond_with(error_envelope(500, 0, "boom"))
@@ -3384,6 +3854,7 @@ async fn rule_create_retryable_write_error_all_landed_succeeds_with_an_info_line
 async fn rule_create_retryable_write_error_none_landed_passes_through_the_original_error() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
     Mock::given(method("POST"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .respond_with(error_envelope(429, 0, "rate limited").insert_header("retry-after", "12"))
@@ -3392,10 +3863,7 @@ async fn rule_create_retryable_write_error_none_landed_passes_through_the_origin
         .await;
     Mock::given(method("GET"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "body": {"rules": []},
-            "success": true
-        })))
+        .respond_with(empty_rules_response())
         .expect(1)
         .mount(&server)
         .await;
@@ -3438,6 +3906,7 @@ async fn rule_create_retryable_write_error_none_landed_passes_through_the_origin
 async fn rule_create_retryable_write_error_partial_landed_attributes_absent_targets_to_it() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
     Mock::given(method("POST"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .respond_with(error_envelope(429, 0, "rate limited").insert_header("retry-after", "9"))
@@ -3514,6 +3983,7 @@ async fn rule_create_retryable_write_error_partial_landed_attributes_absent_targ
 async fn rule_create_retryable_write_error_and_read_back_failure_is_write_unverified() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
     Mock::given(method("POST"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .respond_with(error_envelope(500, 0, "write boom"))
@@ -3672,7 +4142,7 @@ async fn rule_delete_upstream_404_is_exit_3() {
 async fn rule_update_disabled_alone_sends_status_and_hostnames_only() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
-    mount_groups(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
     Mock::given(method("PUT"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .and(body_string("status=0&hostnames[]=x.example.com"))
@@ -3716,10 +4186,78 @@ async fn rule_update_disabled_alone_sends_status_and_hostnames_only() {
     .expect("command runs");
 }
 
+/// No `--folder` flag on `rule update` must not blind the read-back to a
+/// target that already lives inside a folder: the root listing alone never
+/// carries it (read-verification.md "Listing root rules"), only
+/// `GET /rules/2` does — a root-only read-back reads the foldered target as
+/// absent, so a converged update falsely reports `rule.write_dropped`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_update_finds_a_foldered_target_with_no_folder_flag() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups_one.json", 1).await;
+    Mock::given(method("PUT"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .and(body_string("status=0&hostnames[]=x.example.com"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_ack.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(empty_rules_response())
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules/2")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "x.example.com", "order": 1, "group": 2, "action": {"do": 1, "status": 0}}
+            ]},
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "update",
+                "x.example.com",
+                "--disabled",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .success();
+        let json = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(doc[0]["hostname"], "x.example.com");
+        assert_eq!(doc[0]["folder"], "Spoofed");
+        assert_eq!(doc[0]["folder_id"], 2);
+        assert_eq!(doc[0]["enabled"], false);
+    })
+    .await
+    .expect("command runs");
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rule_update_root_sends_group_zero_and_clears_folder_id() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    // `--root` fetches folders unconditionally, like every other rule
+    // update (module doc, src/commands/rule.rs) — no folder is resolved
+    // from it here, so the empty fixture is enough.
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
     Mock::given(method("PUT"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .and(body_string("group=0&hostnames[]=y.example.com"))
@@ -3755,6 +4293,76 @@ async fn rule_update_root_sends_group_zero_and_clears_folder_id() {
     .expect("command runs");
 }
 
+/// `--root`'s target that never actually left folder 2 is distinguishable
+/// from an absent one only because the union sees every folder: it is
+/// `rule.state_mismatch`, retryable (the merge is idempotent — a rerun
+/// converges it) — never `rule.write_dropped`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_update_root_target_still_in_a_folder_is_a_state_mismatch_not_write_dropped() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups_one.json", 1).await;
+    Mock::given(method("PUT"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .and(body_string("group=0&hostnames[]=z.example.com"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_ack.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(empty_rules_response())
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules/2")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "z.example.com", "order": 1, "group": 2, "action": {"do": 0, "status": 1}}
+            ]},
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "update",
+                "z.example.com",
+                "--root",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .code(8)
+            .stdout(predicates::str::is_empty());
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "write.partial_failure");
+        assert_eq!(doc["error"]["retryable"], true);
+        let targets = doc["error"]["details"]["targets"].as_array().unwrap();
+        let target = targets
+            .iter()
+            .find(|t| t["target"] == "z.example.com")
+            .expect("z.example.com is a target row");
+        assert_eq!(target["outcome"], "failed");
+        assert_eq!(target["code"], "rule.state_mismatch");
+        assert_eq!(target["retryable"], true);
+    })
+    .await
+    .expect("command runs");
+}
+
 /// A retryable read-back gap on `rule update` (the merge is idempotent, so a
 /// re-run converges it): exit `8`, `retry_argv` is a `rule update` covering
 /// only the still-mismatched target with the original flags.
@@ -3762,7 +4370,7 @@ async fn rule_update_root_sends_group_zero_and_clears_folder_id() {
 async fn rule_update_verification_gap_is_retryable_with_a_convergent_retry_argv() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
-    mount_groups(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
     Mock::given(method("PUT"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .and(body_string(
@@ -3839,7 +4447,7 @@ async fn rule_update_verification_gap_is_retryable_with_a_convergent_retry_argv(
 async fn rule_update_retryable_write_error_all_converged_succeeds_with_an_info_line() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
-    mount_groups(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
     Mock::given(method("PUT"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .and(body_string("status=0&hostnames[]=x.example.com"))
@@ -3887,6 +4495,7 @@ async fn rule_update_retryable_write_error_all_converged_succeeds_with_an_info_l
 async fn rule_create_all_mismatched_targets_retries_with_rule_update() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
     Mock::given(method("POST"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .and(body_string(
@@ -3959,6 +4568,7 @@ async fn rule_create_all_mismatched_targets_retries_with_rule_update() {
 async fn rule_create_via6_mismatch_is_unconvergeable_and_named_in_the_hint() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
     Mock::given(method("POST"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .and(body_string(
@@ -4041,6 +4651,7 @@ async fn rule_create_via6_mismatch_is_unconvergeable_and_named_in_the_hint() {
 async fn rule_create_mixed_convergeable_and_via6_mismatch_splits_retry_argv_and_hint() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
     Mock::given(method("POST"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .and(body_string(
@@ -4114,12 +4725,15 @@ async fn rule_create_mixed_convergeable_and_via6_mismatch_splits_retry_argv_and_
 }
 
 /// `--folder <name>` on `rule update` resolves to the pk and sends
-/// `group=<pk>` — only `--root`'s `group=0` was wire-tested before.
+/// `group=<pk>` — only `--root`'s `group=0` was wire-tested before. The
+/// read-back mocks the real shape: a rule that landed in folder 2 is
+/// invisible on the root listing (read-verification.md "Listing root
+/// rules") — only `GET /rules/2` sees it.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rule_update_folder_sends_the_resolved_group_pk() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
-    mount_groups(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups_one.json", 1).await;
     Mock::given(method("PUT"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .and(body_string("group=2&hostnames[]=x.example.com"))
@@ -4132,6 +4746,12 @@ async fn rule_update_folder_sends_the_resolved_group_pk() {
         .await;
     Mock::given(method("GET"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(empty_rules_response())
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules/2")))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "body": {"rules": [
                 {"PK": "x.example.com", "order": 1, "group": 2, "action": {"do": 1, "status": 1}}
@@ -4348,6 +4968,7 @@ async fn rule_create_non_ascii_hostname_is_exit_2_before_any_request() {
 async fn rule_create_dedups_duplicate_argv_hostnames() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
     Mock::given(method("POST"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .and(body_string("do=0&status=1&hostnames[]=a.com"))
@@ -4608,6 +5229,11 @@ async fn rule_delete_with_yes_and_an_explicit_profile_succeeds() {
 async fn rule_create_dry_run_prints_the_intent_and_writes_nothing() {
     let server = MockServer::start().await;
     mount_profiles(&server, 2).await;
+    // Folders are fetched unconditionally, even on the dry-run path
+    // (module doc, src/commands/rule.rs) — cost accepted for one uniform
+    // read-back contract; no `--folder` is given, so the fixture's content
+    // never surfaces.
+    mount_groups_fixture(&server, "p_groups.json", 2).await;
     mount_no_writes(&server).await;
 
     let uri = server.uri();
@@ -4669,6 +5295,9 @@ async fn rule_create_dry_run_prints_the_intent_and_writes_nothing() {
 async fn rule_update_dry_run_prints_a_sparse_patch_including_root() {
     let server = MockServer::start().await;
     mount_profiles(&server, 2).await;
+    // Folders are fetched unconditionally, even on the dry-run path and
+    // for `--root` (module doc, src/commands/rule.rs).
+    mount_groups_fixture(&server, "p_groups.json", 2).await;
     mount_no_writes(&server).await;
 
     let uri = server.uri();

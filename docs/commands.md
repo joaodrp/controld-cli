@@ -354,7 +354,10 @@ key of its map). :warning: The dropdown write is **unprobed** — verify before 
 - `rule update --root` moves rules back out of a folder — `group=0` on `PUT`, **verified live**.
   Mutually exclusive with `--folder`.
 - `rule list` **omits** the folder segment. Passing `folder_id=0` 404s — see
-  [read-verification section 3](reference/read-verification.md).
+  [read-verification section 3](reference/read-verification.md). That segment-less listing returns
+  **root rules only**: a rule inside a folder is invisible on it. `rule list` with no `--folder`
+  therefore aggregates the root listing with one listing per folder (`GET /profiles/{id}/groups` for
+  the folder ids) into one client-side result, sorted by `order` — not a single request.
 - **A missing `action.do` is an error, not a default.** Never coerce to `0` (= BLOCK).
 - `rule update` sends only the flags given — **`PUT /rules` merges**, preserving omitted fields
   (verified live), so `rule update x.com --disabled` needs no `--action`.
@@ -374,7 +377,9 @@ key of its map). :warning: The dropdown write is **unprobed** — verify before 
   chunk size, safely inside the server's silent ~1001-form-var ceiling ([D11](decisions.md)).
   More is exit `2` with a hint to `rule import` (resumable, quota-aware). Whatever the count,
   **read back and verify** every target landed in the desired state before printing it — the
-  write response is a one-entry summary that cannot reveal a dropped hostname.
+  write response is a one-entry summary that cannot reveal a dropped hostname. The read-back is
+  the same profile-wide aggregation `rule list` does (root plus every folder), never just the root
+  listing — a rule that landed in a folder must still be found.
 - **Partial failure is per-target, inside the error envelope.** When a multi-target
   `create`/`update`/`delete` fails partway, or verification finds a gap, the [D4](decisions.md)
   `details` (`kind: "multi_target"`) carries ordered per-target entries and a shell-neutral
@@ -398,9 +403,10 @@ add/converge/delete plan and exits `0`.
   other folders are never read into the plan, never converged, never deleted. There is no
   whole-profile replace in v1; run once per folder.
 - **Quota first — and profile-wide.** Profiles cap at **10,000 rules across all folders**
-  (enforced; a crossing batch fails whole). Fetch the **whole profile's rules once** (`GET /rules`,
-  segment omitted — entries carry `group`, so the folder subset for the diff falls out of the same
-  fetch). Compute the budget from that full set — never from `profile.rule.count` (it counts
+  (enforced; a crossing batch fails whole). Fetch the **whole profile's rules once**: the root
+  listing (`GET /rules`, segment omitted) unioned with one `GET /rules/{folder_id}` per folder (ids
+  from `GET /groups`) — entries carry `group`, so the folder subset for the diff falls out of the
+  same aggregate fetch. Compute the budget from that full set — never from `profile.rule.count` (it counts
   *enabled* rules only) and never from the folder subset: 9,900 rules in other folders are
   invisible to a scoped fetch yet count against the cap. Under `--force-delete-first`, recompute
   `peak` and `final` once the deletion set is known, before the first DELETE — the cap check runs

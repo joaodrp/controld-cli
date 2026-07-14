@@ -85,7 +85,7 @@ spec's folder path parameter is literally `{folder}`).
 
 | Command | API |
 | --- | --- |
-| `rule list [--folder <id>]` | **`GET /profiles/{id}/rules`** — segment **omitted**, returns *all* rules. :warning: The docs also offer `folder_id=0` for root; **that 404s**. With `--folder`, `GET /profiles/{id}/rules/{folder_id}` |
+| `rule list [--folder <id>]` | No `--folder`: **`GET /profiles/{id}/rules`** (segment **omitted**) — returns *root rules only*, unioned client-side with one `GET .../rules/{folder_id}` per folder (ids from `GET /profiles/{id}/groups`), since the root listing alone omits every foldered rule. :warning: The docs also offer `folder_id=0` for root; **that 404s**. With `--folder`, just `GET /profiles/{id}/rules/{folder_id}` |
 | `rule create <hostname>... --action <a>` | `POST /profiles/{profile_id}/rules` |
 | `rule update <hostname> ...` | `PUT /profiles/{profile_id}/rules` |
 | `rule delete <hostname>` | `DELETE /profiles/{profile_id}/rules/{hostname}` — hostname may be a wildcard; **percent-encode carefully** |

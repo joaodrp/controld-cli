@@ -1,7 +1,8 @@
 # Live Verification (reads)
 
-Read-only `GET` probes against a real account, 2026-07-11. Where this contradicts Control D's spec or
-docs, **this wins**. Writes: [write-verification.md](write-verification.md).
+Read-only `GET` probes against a real account. Where this contradicts Control D's spec or docs, **this
+wins**. Writes: [write-verification.md](write-verification.md). Provenance is per section below — most
+of this file is from the initial 2026-07-11 pass; sections that say otherwise are later.
 
 ## The envelope has three shapes, not one
 
@@ -29,19 +30,45 @@ not a 404. All of these are `400` / `40001`:
 
 **Classify on `error.code`, never on the HTTP status.** See [error-codes.md](error-codes.md).
 
-## Listing root rules: the docs offer two ways, one is false
+## Listing root rules: the docs offer two ways, one is false — and the working one isn't "all rules"
 
 The `folder_id` param says *"0 or omit for root"*. **Only `omit` works.**
 
 ```
 GET /profiles/{id}/rules/0   -> 404  "No such group exists."
-GET /profiles/{id}/rules     -> 200  all rules
+GET /profiles/{id}/rules     -> 200  root rules only
 ```
 
 `folder_id=0` never resolves. The working form is **absent from the spec's `paths`** (documented only
 in the param prose), so a spec-generated client never finds it — and `0` is the more natural guess.
 
+**The root listing is not profile-wide — it omits every foldered rule outright.** Verified 2026-07-14
+on a fresh profile with one folder (id 1) containing one rule:
+
+```
+GET /profiles/{pk}/rules     -> {"body":{"rules":[]},"success":true}              # the rule is absent
+GET /profiles/{pk}/rules/1   -> {"body":{"rules":[{"PK":"probe.cdctl-smoke.example.com",
+                                  "order":1,"group":1,"action":{"do":0,"status":1}}]},"success":true}
+```
+
+A foldered rule is visible **only** through its own folder's listing, `GET /profiles/{id}/rules/{folder_id}`
+(folder ids from `GET /profiles/{id}/groups`). A client that wants every rule in a profile must fetch
+the root listing plus one such GET per folder — `cdctl` does this (`rule.rs`'s `fetch_all_rules`).
+
 `group: 0` *inside a rule* means something else: a sentinel for **"not in a folder"**. Not a listable id.
+
+**An empty folder is not an error; a deleted one is.** Verified 2026-07-14 — this probe was not
+read-only, since telling the two apart needed a folder deleted mid-test:
+
+```
+GET /profiles/{pk}/rules/{empty_folder_id}    -> {"body":{"rules":[]},"success":true}  # still exists
+GET /profiles/{pk}/rules/{deleted_folder_id}  -> 404  "No such group exists."
+```
+
+The empty case does **not** trigger the `body: []`-on-error flip — `success` stays `true`. `cdctl`
+relies on this: the folder ids driving `fetch_all_rules`'s per-folder GETs come from a `/groups` fetch
+moments earlier, so a 404 there can only mean the folder was deleted in the race between the two calls
+— its rules died with it, so contributing zero rules is the true state, not a failure to tolerate.
 
 ## The action model (live data)
 
