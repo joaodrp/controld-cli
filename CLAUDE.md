@@ -60,6 +60,8 @@ contradicts this list, update the reference doc and this index.**
 - **Three envelope shapes**, and `body` becomes `[]` on error — deserialize `body` as `Value`, unwrap
   per operation.
 - **`GET /profiles/{id}/rules` must omit the folder segment** — the documented `folder_id=0` 404s.
+  The segment-less path returns **root rules only**; a foldered rule is invisible on it. Seeing every
+  rule in a profile needs one `GET /rules/{folder_id}` per folder on top of it.
 - **`content-type: application/json` can carry a 0-byte body.**
 - **Error messages can be multi-line dumps** — never parse them.
 - **`error.code` is a coarse bucket** — classify on its 3-digit HTTP prefix

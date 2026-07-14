@@ -6,7 +6,12 @@
 //! `create`/`update` are read back and verified against the desired state
 //! before anything is printed: the write response is a hostname-less
 //! one-entry summary that cannot reveal a dropped hostname (the
-//! ~1001-form-var silent truncation, write-verification.md). A *retryable*
+//! ~1001-form-var silent truncation, write-verification.md). The read-back
+//! is always profile-wide — the root listing unioned with one `GET` per
+//! folder ([`fetch_all_rules`]) — never just the root: the root listing
+//! alone omits every foldered rule outright (read-verification.md "Listing
+//! root rules"), which would otherwise misreport a landed-in-a-folder write
+//! as dropped. A *retryable*
 //! `client.write` failure (timeout, 5xx, 429) does not propagate blind
 //! either: it resolves through that same read-back — full convergence is
 //! still success (with an info line explaining why), an all-absent read-back
@@ -21,6 +26,7 @@
 //! `write.partial_failure` error.
 
 use clap::Subcommand;
+use futures_util::future::try_join_all;
 use reqwest::Method;
 
 use super::action_flags::{self, ActionFlags, ActionSpec, Caps};
@@ -44,10 +50,20 @@ use crate::output::{emit, escape_controls, render_table};
 /// is uncapped by design, since a `DELETE` sends no form variables.
 const MAX_HOSTNAMES: usize = 500;
 
-/// The profile-wide rules collection — never a folder segment (the
-/// documented `folder_id=0` 404s, read-verification.md section 3).
+/// Segment-less rules path (the documented `folder_id=0` 404s,
+/// read-verification.md section 3). As a `GET` this lists root rules only —
+/// it silently omits every rule that lives in a folder (read-verification.md
+/// "Listing root rules"), so [`fetch_all_rules`] is the profile-wide union
+/// callers need. As a `POST`/`PUT` it addresses hostnames profile-wide: a
+/// write is never scoped to root, and moving a rule into a folder is the
+/// `group` form field, not a path segment.
 fn rules_path(profile_id: &str) -> String {
     format!("/profiles/{profile_id}/rules")
+}
+
+/// One folder's rules listing.
+fn folder_rules_path(profile_id: &str, folder_id: i64) -> String {
+    format!("/profiles/{profile_id}/rules/{folder_id}")
 }
 
 /// One rule's path. The sole caller of `encode_path_segment` for rule
@@ -61,10 +77,7 @@ fn rule_path(profile_id: &str, hostname: &str) -> String {
 }
 
 /// Shared by list/create/update: a given `--folder` is control-character
-/// hardened before anything else runs. Not a full `scope::resolve_folder`
-/// abstraction — the three callers fetch folders and resolve the selector
-/// at different points (`list` has no dry-run gate to sequence around;
-/// `create`/`update` resolve it relative to theirs).
+/// hardened before anything else runs.
 fn validate_folder_selector(selector: Option<&String>) -> Result<(), Error> {
     if let Some(selector) = selector {
         super::validate::reject_control_chars(selector, "the folder selector")?;
@@ -146,27 +159,17 @@ async fn list(folder_selector: Option<String>, globals: &Globals) -> Result<(), 
     let scope = super::scope::resolve_profile(&client, globals, config.default_profile()).await?;
 
     // `api_folders` names every rule's FOLDER column/field either way
-    // (commands.md#rule).
-    let (api_folders, api_rules): (Vec<ApiFolder>, Vec<ApiRule>) =
-        if let Some(selector) = &folder_selector {
-            // Sequential: the rules path needs the resolved folder pk, so
-            // the second GET can't start before the first returns.
-            let api_folders = super::scope::fetch_folders(&client, &scope.id).await?;
-            let folder = super::scope::find_folder(&api_folders, selector)?;
-            let path = format!("/profiles/{}/rules/{}", scope.id, folder.pk);
-            let api_rules = client.get(&path, "rule").await?.keyed_as("rules")?;
-            (api_folders, api_rules)
-        } else {
-            // Independent GETs: the root list needs no resolved pk (never a
-            // folder segment — `folder_id=0` 404s, read-verification.md
-            // section 3), so fetch both concurrently.
-            let root_path = rules_path(&scope.id);
-            let (api_folders, rules_envelope) = tokio::try_join!(
-                super::scope::fetch_folders(&client, &scope.id),
-                client.get(&root_path, "rule"),
-            )?;
-            (api_folders, rules_envelope.keyed_as("rules")?)
-        };
+    // (commands.md#rule) and, with no `--folder` given, also drives
+    // `fetch_all_rules`'s per-folder GETs — the root listing alone omits
+    // every foldered rule (read-verification.md "Listing root rules").
+    let api_folders = super::scope::fetch_folders(&client, &scope.id).await?;
+    let api_rules: Vec<ApiRule> = if let Some(selector) = &folder_selector {
+        let folder = super::scope::find_folder(&api_folders, selector)?;
+        let path = folder_rules_path(&scope.id, folder.pk);
+        client.get(&path, "rule").await?.keyed_as("rules")?
+    } else {
+        fetch_all_rules(&client, &scope.id, &api_folders).await?
+    };
 
     let mut rules: Vec<Rule> = api_rules
         .iter()
@@ -203,16 +206,16 @@ async fn create(
 
     let scope = super::scope::resolve_profile(&client, globals, config.default_profile()).await?;
 
-    // Folders are fetched only to resolve `--folder`: with none given,
-    // `folder_id` is unconditionally `None`, so the created rules' folder
-    // display needs no live lookup.
-    let (api_folders, folder_id) = match &folder_selector {
-        Some(selector) => {
-            let folders = super::scope::fetch_folders(&client, &scope.id).await?;
-            let pk = super::scope::find_folder(&folders, selector)?.pk;
-            (folders, Some(pk))
-        }
-        None => (Vec::new(), None),
+    // Fetched once, unconditionally: the dry-run intent needs `--folder`
+    // resolved to a pk, and the read-back needs every folder in the profile
+    // regardless of `--folder` — the created rule could land in the wrong
+    // folder (or root) rather than the desired one, and distinguishing that
+    // `state_mismatch` from a plain `write_dropped` absence needs to see it
+    // wherever it landed, not just the target folder (module doc).
+    let api_folders = super::scope::fetch_folders(&client, &scope.id).await?;
+    let folder_id = match &folder_selector {
+        Some(selector) => Some(super::scope::find_folder(&api_folders, selector)?.pk),
+        None => None,
     };
 
     let path = rules_path(&scope.id);
@@ -297,7 +300,7 @@ async fn verify_create(
     globals: &Globals,
     write_error: Option<&Error>,
 ) -> Result<(), Error> {
-    let api_rules = read_back_for_verification(client, &scope.id, write_error).await?;
+    let api_rules = read_back_for_verification(client, &scope.id, api_folders, write_error).await?;
     let mut reconciled = reconcile(
         hostnames,
         &api_rules,
@@ -450,21 +453,21 @@ async fn update(
 
     let scope = super::scope::resolve_profile(&client, globals, config.default_profile()).await?;
 
-    // `--root` needs no folder lookup (the touched rules end up with no
-    // folder either way). `--folder` resolves the pk before the dry-run
-    // gate — the intent needs it. Neither given never changes `folder_id`,
-    // so nothing is fetched here; the groups list for the read-back's
-    // `folder` display is fetched further down, after the dry-run
-    // early-return (a `rule update --dry-run` with no `--folder` must not
-    // pay for a display it will never print).
-    let (early_api_folders, folder_change) = if root {
-        (Vec::new(), Some(FolderPatch::Root))
+    // Fetched once, unconditionally, like `create`: a plain update's targets
+    // can live in any folder, and a root-only read-back would misreport a
+    // converged update as dropped (module doc) — `--folder` also resolves
+    // its pk from this list, and the read-back's `folder` display must stay
+    // accurate profile-wide for a rule an untouched update (or `--root`)
+    // leaves inside — or moves out of — an existing folder (commands.md#rule).
+    let api_folders = super::scope::fetch_folders(&client, &scope.id).await?;
+    let folder_change = if root {
+        Some(FolderPatch::Root)
     } else if let Some(selector) = &folder_selector {
-        let folders = super::scope::fetch_folders(&client, &scope.id).await?;
-        let pk = super::scope::find_folder(&folders, selector)?.pk;
-        (folders, Some(FolderPatch::To(pk)))
+        Some(FolderPatch::To(
+            super::scope::find_folder(&api_folders, selector)?.pk,
+        ))
     } else {
-        (Vec::new(), None)
+        None
     };
 
     let changes = RuleUpdateChanges::from_spec(&spec, folder_change);
@@ -482,14 +485,6 @@ async fn update(
         );
         return Ok(());
     }
-
-    // `folder` is informational only, but must stay accurate for a rule an
-    // untouched update leaves inside an existing folder (commands.md#rule).
-    let api_folders = if folder_selector.is_none() && !root {
-        super::scope::fetch_folders(&client, &scope.id).await?
-    } else {
-        early_api_folders
-    };
 
     let mut form: Vec<(&str, String)> = spec.form_pairs();
     match folder_change {
@@ -547,7 +542,7 @@ async fn verify_update(
     globals: &Globals,
     write_error: Option<&Error>,
 ) -> Result<(), Error> {
-    let api_rules = read_back_for_verification(client, &scope.id, write_error).await?;
+    let api_rules = read_back_for_verification(client, &scope.id, api_folders, write_error).await?;
     // A re-run of `rule update` converges either kind of gap (the merge is
     // idempotent), unlike create's mismatch, which would duplicate-POST —
     // both feed one retry_argv.
@@ -715,17 +710,74 @@ fn delete_prompt(hostnames: &[String], profile_name: &str) -> String {
     )
 }
 
-/// The re-fetch every read-back verification shares: profile-wide, no
-/// folder segment — entries carry `group`, so folder placement is
-/// verifiable from the same fetch (commands.md#rule). Any failure here
-/// means the preceding write's success cannot be confirmed, but it already
-/// landed, so it is `write.unverified`, never a bare classified error.
-async fn read_back(client: &Client, profile_id: &str) -> Result<Vec<ApiRule>, Error> {
-    client
-        .get(&rules_path(profile_id), "rule")
+/// Every rule in `profile_id`: the root listing (no folder segment) unioned
+/// with one `GET` per entry in `folders`, run concurrently. The root listing
+/// alone includes only unfoldered rules — a rule inside a folder is visible
+/// solely through that folder's own listing (read-verification.md "Listing
+/// root rules") — so a caller that skips a folder here silently drops every
+/// rule inside it. `folders` is the caller's, not fetched here: a caller
+/// that already has it for another reason (folder resolution, the FOLDER
+/// column) pays no second `/groups` GET.
+async fn fetch_all_rules(
+    client: &Client,
+    profile_id: &str,
+    folders: &[ApiFolder],
+) -> Result<Vec<ApiRule>, Error> {
+    let root_path = rules_path(profile_id);
+    let folder_paths: Vec<String> = folders
+        .iter()
+        .map(|folder| folder_rules_path(profile_id, folder.pk))
+        .collect();
+    let (root_envelope, folder_rule_lists) = tokio::try_join!(
+        client.get(&root_path, "rule"),
+        try_join_all(
+            folder_paths
+                .iter()
+                .map(|path| fetch_folder_rules(client, path))
+        ),
+    )?;
+
+    let mut rules: Vec<ApiRule> = root_envelope.keyed_as("rules")?;
+    for folder_rules in folder_rule_lists {
+        rules.extend(folder_rules);
+    }
+    Ok(rules)
+}
+
+/// One folder's rules, tolerating exactly the not-found classification: the
+/// folder ids driving this GET come from a `/groups` fetch moments earlier,
+/// so a 404 here can only mean the folder was deleted in the race between
+/// the two calls — its rules died with it, so an empty contribution is the
+/// true state (read-verification.md "Listing root rules"). Every other
+/// error (500, auth, transport) still propagates through the caller's
+/// `try_join_all` — treating those as empty too would make `rule list` print
+/// silently-partial data, the exact class of bug this module exists to
+/// prevent. The root GET ([`fetch_all_rules`]) keeps full propagation: a
+/// root 404 means the profile itself is gone, a real error.
+async fn fetch_folder_rules(client: &Client, path: &str) -> Result<Vec<ApiRule>, Error> {
+    match client.get(path, "rule").await {
+        Ok(envelope) => envelope.keyed_as("rules"),
+        Err(e) if e.exit() == Exit::NotFound => Ok(Vec::new()),
+        Err(e) => Err(e),
+    }
+}
+
+/// The re-fetch every read-back verification shares: profile-wide (module
+/// doc — [`fetch_all_rules`]), not just the root listing. A *retryable*
+/// failure here means the preceding write's success cannot be confirmed,
+/// but it already landed, so `landed_write_unverified` remaps it to
+/// `write.unverified`. A terminal failure (e.g. the profile itself is gone)
+/// passes through unremapped, by design (PR 5 reviewed intent): it is
+/// already a real, actionable error, and folding it into `write.unverified`
+/// would bury its own hint (auth's `cdctl auth login`, say) under a generic
+/// one.
+async fn read_back(
+    client: &Client,
+    profile_id: &str,
+    folders: &[ApiFolder],
+) -> Result<Vec<ApiRule>, Error> {
+    fetch_all_rules(client, profile_id, folders)
         .await
-        .map_err(|e| super::landed_write_unverified(e, "rule"))?
-        .keyed_as("rules")
         .map_err(|e| super::landed_write_unverified(e, "rule"))
 }
 
@@ -743,9 +795,10 @@ async fn read_back(client: &Client, profile_id: &str) -> Result<Vec<ApiRule>, Er
 async fn read_back_for_verification(
     client: &Client,
     profile_id: &str,
+    folders: &[ApiFolder],
     write_error: Option<&Error>,
 ) -> Result<Vec<ApiRule>, Error> {
-    read_back(client, profile_id)
+    read_back(client, profile_id, folders)
         .await
         .map_err(|error| match write_error {
             Some(write_error) => {

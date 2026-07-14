@@ -300,6 +300,7 @@ dependencies = [
  "etcetera",
  "fastrand",
  "form_urlencoded",
+ "futures-util",
  "httpdate",
  "insta",
  "libc",

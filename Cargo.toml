@@ -23,6 +23,9 @@ comfy-table = ">=7.1, <7.2.2"
 etcetera = "0.10.0"
 fastrand = "2.4.1"
 form_urlencoded = "1.2.2"
+# `try_join_all`, for the variable-length concurrent per-folder rule GETs
+# (rule.rs) — already resolved via reqwest's own dependency tree.
+futures-util = "0.3.32"
 httpdate = "1.0.3"
 percent-encoding = "2.3.2"
 reqwest = { version = "0.13.4", default-features = false, features = ["rustls", "http2", "form"] }
