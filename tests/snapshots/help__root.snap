@@ -1,0 +1,54 @@
+---
+source: tests/help.rs
+expression: help
+---
+Manage a Control D account over its REST API.
+
+cdctl is not ctrld: ctrld is Control D's DNS daemon and runs DNS on a machine; cdctl manages the
+account behind it. They coexist.
+
+Usage: cdctl [OPTIONS] <COMMAND>
+
+Commands:
+  api          Raw request against the API origin (escape hatch; GET by default)
+  auth         Authenticate cdctl with an API token
+  profile      Inspect the account's profiles
+  folder       Manage a profile's rule folders (API: groups)
+  rule         Manage a profile's DNS rules
+  config       Read and write cdctl's own configuration
+  completions  Shell completion script (works without a token)
+  reference    The full command surface as one Markdown document (works without a token)
+  help         Print this message or the help of the given subcommand(s)
+
+Options:
+  -p, --profile <PK|name>
+          Profile to operate on (name or PK)
+          
+          [env: CONTROLD_PROFILE=]
+
+      --json
+          Emit JSON (full document) instead of a table
+
+      --fields <a,b>
+          Comma-separated JSON fields to keep; implies --json
+
+      --plain
+          Tables without borders, for awk/cut
+
+  -y, --yes
+          Skip confirmation prompts (ignored when the target profile is implicit)
+
+      --no-retry
+          Disable automatic retries (GETs only ever retry)
+
+      --timeout <SECS>
+          Per-request timeout in seconds
+
+      --debug
+          Request/response trace on stderr; token always redacted
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version

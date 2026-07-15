@@ -10,3 +10,9 @@
 
 # Local probe output
 /scratch
+
+# Man pages + completions: generated per-release by the `github-build-setup`
+# steps injected into dist's build jobs (dist-workspace.toml); committing them
+# would go stale on every version bump.
+/man
+/completions

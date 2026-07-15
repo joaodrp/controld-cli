@@ -1,0 +1,3 @@
+[workspace]
+git_release_enable = false  # cargo-dist owns the GitHub Release (D14)
+release_always = false      # publish only when the release PR is merged, never on ordinary pushes

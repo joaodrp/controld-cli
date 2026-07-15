@@ -101,9 +101,11 @@ Plus the release machinery, because v0.1 is the first public artifact:
 - `cargo-dist` (linux gnu/musl, macOS arm64/x64, Windows) + Homebrew tap; `release-plz` ->
   crates.io. First-release traps recorded in [D14](decisions.md).
 - CI re-runs `scripts/fetch-spec.sh` on a schedule, then
-  `git diff --exit-code docs/reference/controld-openapi.json` — the fetch itself always exits 0;
+  `git diff --exit-code docs/reference/controld-openapi.json` — the fetch exits 0 even on a
+  changed spec (it fails only when the docs pages disagree with each other);
   **only the diff step detects drift**.
-- CI runs `cargo +1.85 check` — the MSRV claim is untested until a job enforces it.
+- CI runs `cargo check` on the `rust-version` from Cargo.toml — the MSRV claim is untested until
+  a job enforces it.
 
 Behavior:
 

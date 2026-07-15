@@ -9,7 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 daemon is already `ctrld`, and a trailing `-d` reads as daemon). `cdctl` manages the *account* over
 REST; [`ctrld`](https://github.com/Control-D-Inc/ctrld) runs DNS on the machine. They coexist.
 
-**There is no code yet.** Implementation starts at Phase 1 of [`docs/plan.md`](docs/plan.md).
+Delivery is sliced per [`docs/plan.md`](docs/plan.md): v0.1 ships profiles, rules, folders, and
+the `cdctl api` escape hatch; `rule import`/`restore` follow in v0.2.
 
 ## Doc map
 
@@ -33,7 +34,7 @@ amending that file, never by drifting.
 cp .env.example .env             # then add a CONTROLD_API_TOKEN
 ```
 
-Once Phase 1 lands: `cargo build` / `cargo test` / `cargo clippy`. Toolchain and dependency choices
+`cargo build` / `cargo test` / `cargo clippy --all-targets`. Toolchain and dependency choices
 (and their gotchas) are pinned in [`docs/plan.md`](docs/plan.md) Phase 1.
 
 ### The account behind `.env`

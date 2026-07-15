@@ -1,0 +1,23 @@
+---
+source: tests/help.rs
+expression: help
+---
+Inspect the account's profiles
+
+Usage: cdctl profile [OPTIONS] <COMMAND>
+
+Commands:
+  list  List profiles (RULES counts enabled rules only)
+  get   Show one profile by id or name
+  help  Print this message or the help of the given subcommand(s)
+
+Options:
+  -p, --profile <PK|name>  Profile to operate on (name or PK) [env: CONTROLD_PROFILE=]
+      --json               Emit JSON (full document) instead of a table
+      --fields <a,b>       Comma-separated JSON fields to keep; implies --json
+      --plain              Tables without borders, for awk/cut
+  -y, --yes                Skip confirmation prompts (ignored when the target profile is implicit)
+      --no-retry           Disable automatic retries (GETs only ever retry)
+      --timeout <SECS>     Per-request timeout in seconds
+      --debug              Request/response trace on stderr; token always redacted
+  -h, --help               Print help

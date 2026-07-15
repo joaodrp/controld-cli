@@ -8,15 +8,57 @@ devices. For humans, scripts, and AI agents.
 >
 > Package `controld-cli`, binary **`cdctl`**
 
-**Status: design complete, implementation not started.** No CLI for the Control D API existed — hence
-this one. Delivery is sliced: rules and folders first (v0.1), `rule import`/`restore` next (v0.2) —
-see [`docs/plan.md`](docs/plan.md).
-
 ```console
 $ cdctl profile list
 $ cdctl rule create ads.example.com --action block --profile Home
-$ cdctl rule list --json | jq '.[] | select(.action == "block")'
-$ curl -s https://.../blocklist.txt | cdctl rule import - --action block
+$ cdctl rule list --profile Home --json | jq '.[] | select(.action == "block")'
+```
+
+## Install
+
+v0.1 is the first release; artifacts below land with it.
+
+```console
+$ brew install joaodrp/tap/cdctl
+```
+
+(`joaodrp/tap` resolves to the [`joaodrp/homebrew-tap`](https://github.com/joaodrp/homebrew-tap) repo.)
+
+```console
+$ curl --proto '=https' --tlsv1.2 -LsSf \
+    https://github.com/joaodrp/controld-cli/releases/latest/download/controld-cli-installer.sh | sh
+```
+
+Or grab a prebuilt archive from [Releases](https://github.com/joaodrp/controld-cli/releases) —
+Linux (gnu, musl), macOS (arm64, x64), Windows.
+
+```console
+$ cargo install controld-cli
+```
+
+> **musl static binary in a certless container:** it reads OS certificates at runtime
+> (`/etc/ssl/certs`), so a scratch/certless image needs CA certs installed or mounted, or
+> `SSL_CERT_FILE`/`SSL_CERT_DIR` pointed at them ([D14](docs/decisions.md)).
+
+### Shell completions and man pages
+
+Prebuilt archives ship generated completions and man pages. To generate a completion script
+yourself:
+
+```console
+$ cdctl completions zsh > _cdctl
+```
+
+Supported shells: `bash`, `elvish`, `fish`, `powershell`, `zsh`.
+
+## Quickstart
+
+```console
+$ echo -n "$CONTROLD_API_TOKEN" | cdctl auth login --token-stdin   # token: https://controld.com/dashboard/api
+$ cdctl profile list
+$ cdctl rule create ads.example.com --action block --profile Home
+$ cdctl rule list --profile Home
+$ cdctl rule delete ads.example.com --profile Home --yes
 ```
 
 ## For agents as well as humans
@@ -33,6 +75,10 @@ $ curl -s https://.../blocklist.txt | cdctl rule import - --action block
 **Personal accounts.** Organization endpoints are deferred ([D15](docs/decisions.md)) — untestable on a
 personal account, and untested commands are worse than none. The design keeps them additive.
 
+**v0.1** ships `profile list/get`, `rule`/`folder` CRUD, and `cdctl api` (the escape hatch for
+everything else). `rule import`/`restore` land in v0.2; the full roadmap is in
+[`docs/plan.md`](docs/plan.md).
+
 ## Docs
 
 | | |
@@ -42,6 +88,7 @@ personal account, and untested commands are worse than none. The design keeps th
 | [decisions.md](docs/decisions.md) | What was decided, why, what it cost |
 | [plan.md](docs/plan.md) | Implementation phases |
 | [reference/](docs/reference/) | OpenAPI spec + provenance, live/write verification, error codes |
+| [AGENTS.md](AGENTS.md) | Instructions for coding agents (any agent, not just Claude Code) |
 
 ### The spec
 
@@ -55,12 +102,15 @@ $ ./scripts/fetch-spec.sh
     35 paths, 46 operations
 ```
 
-The Control D API is **unversioned** — *"[breaking changes can be introduced without warning](https://docs.controld.com/reference/get-started)"* — so re-run and diff.
+The Control D API is **unversioned** — *"[breaking changes can be introduced without warning](https://docs.controld.com/reference/get-started)"* — so re-run and diff. CI does this weekly.
 
 ## Development
 
 ```console
 $ cp .env.example .env    # add a Control D API token
+$ cargo test
+$ cargo clippy --all-targets -- -D warnings
+$ cargo fmt --check
 ```
 
 Live tests confine their writes to a temporary `cdctl-test-*` profile they create and delete

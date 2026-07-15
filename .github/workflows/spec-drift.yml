@@ -1,0 +1,17 @@
+name: spec drift
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      # fetch-spec.sh exits 0 even when the spec has drifted (it fails only
+      # when the docs pages disagree with each other or the fetch breaks);
+      # only the diff below detects drift.
+      - run: ./scripts/fetch-spec.sh
+      - run: git diff --exit-code docs/reference/controld-openapi.json

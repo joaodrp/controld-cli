@@ -97,5 +97,6 @@ async fn dispatch(command: Command, globals: &Globals) -> Result<(), Error> {
         Command::Config(command) => commands::config::run(command, globals),
         Command::Completions { shell } => commands::completions::run(shell, globals),
         Command::Reference => commands::reference::run(globals),
+        Command::Man { out_dir } => commands::man::run(&out_dir, globals),
     }
 }

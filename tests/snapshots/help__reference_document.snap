@@ -1,0 +1,180 @@
+---
+source: tests/help.rs
+expression: stdout
+---
+# cdctl reference
+
+Manage a Control D account over its REST API.
+
+cdctl is not ctrld: ctrld is Control D's DNS daemon and runs DNS on a machine; cdctl manages the account behind it. They coexist.
+
+## Global flags
+
+- `-p, --profile <PK|name>` — Profile to operate on (name or PK) (env: `CONTROLD_PROFILE`)
+- `--json` — Emit JSON (full document) instead of a table
+- `--fields <a,b>` — Comma-separated JSON fields to keep; implies --json
+- `--plain` — Tables without borders, for awk/cut
+- `-y, --yes` — Skip confirmation prompts (ignored when the target profile is implicit)
+- `--no-retry` — Disable automatic retries (GETs only ever retry)
+- `--timeout <SECS>` — Per-request timeout in seconds
+- `--debug` — Request/response trace on stderr; token always redacted
+
+## cdctl api
+
+Raw request against the API origin (escape hatch; GET by default)
+
+- `<path>` — Path relative to the API origin, query string included (e.g. '/access?device_id=abc')
+- `-X, --method <METHOD>` — HTTP method; non-GET also requires --yes
+- `-F, --field <key=value>` — Form field (repeatable); keys are sent literally — write 'hostnames[]=a' yourself. Requires a non-GET -X
+- `--input <->` — Read a JSON body from stdin, sent verbatim; "-" is the only accepted value. Requires a non-GET -X
+
+## cdctl auth
+
+Authenticate cdctl with an API token
+
+### cdctl auth login
+
+Store an API token read from stdin
+
+- `--token-stdin` — Read the token from stdin
+
+### cdctl auth status
+
+Whether a token is configured, where from, and who it authenticates
+
+### cdctl auth logout
+
+Remove the stored token for the active context
+
+## cdctl profile
+
+Inspect the account's profiles
+
+### cdctl profile list
+
+List profiles (RULES counts enabled rules only)
+
+### cdctl profile get
+
+Show one profile by id or name
+
+- `<SELECTOR>` — Profile id or name (names resolve case-insensitively; ambiguity is an error)
+
+## cdctl folder
+
+Manage a profile's rule folders (API: groups)
+
+### cdctl folder list
+
+List a profile's folders
+
+### cdctl folder create
+
+Create a folder (omitting --action makes an action-less folder)
+
+- `<NAME>` — Folder name
+- `--action <ACTION>` — Action to apply
+- `--via <IP|CNAME|proxy>` — Spoof target (IP or CNAME), or the redirect proxy PK (see `proxy list`)
+- `--via6 <IPv6>` — Spoof-only IPv6 target; rejected on folders and the profile default (D16)
+- `--enabled` — Enable
+- `--disabled` — Disable
+- `-n, --dry-run` — Print the withheld mutation as a plan; write nothing
+
+### cdctl folder update
+
+Rename a folder or change its action (sends only the flags given)
+
+- `<SELECTOR>` — Folder id or name (names resolve case-insensitively; ambiguity is an error)
+- `--name <NAME>` — New name
+- `--action <ACTION>` — Action to apply
+- `--via <IP|CNAME|proxy>` — Spoof target (IP or CNAME), or the redirect proxy PK (see `proxy list`)
+- `--via6 <IPv6>` — Spoof-only IPv6 target; rejected on folders and the profile default (D16)
+- `--enabled` — Enable
+- `--disabled` — Disable
+- `-n, --dry-run` — Print the withheld mutation as a plan; write nothing
+
+### cdctl folder delete
+
+Delete a folder and its contained rules
+
+- `<SELECTOR>` — Folder id or name (names resolve case-insensitively; ambiguity is an error)
+- `-n, --dry-run` — Print the withheld mutation as a plan; write nothing
+
+## cdctl rule
+
+Manage a profile's DNS rules
+
+### cdctl rule list
+
+List a profile's rules
+
+- `--folder <id|name>` — Folder id or name; omitted lists the whole profile (never a `folder_id=0` segment — read-verification.md section 3)
+
+### cdctl rule create
+
+Create rules (action required; at most 500 hostnames per invocation)
+
+- `<HOSTNAME>` — Hostnames to create (wildcards like *.example.com are legal)
+- `--action <ACTION>` — Action to apply
+- `--via <IP|CNAME|proxy>` — Spoof target (IP or CNAME), or the redirect proxy PK (see `proxy list`)
+- `--via6 <IPv6>` — Spoof-only IPv6 target; rejected on folders and the profile default (D16)
+- `--enabled` — Enable
+- `--disabled` — Disable
+- `--folder <id|name>` — Folder id or name to create the rules in
+- `-n, --dry-run` — Print the withheld mutation as a plan; write nothing
+
+### cdctl rule update
+
+Update rules (sends only the flags given — `PUT /rules` merges)
+
+- `<HOSTNAME>`
+- `--action <ACTION>` — Action to apply
+- `--via <IP|CNAME|proxy>` — Spoof target (IP or CNAME), or the redirect proxy PK (see `proxy list`)
+- `--via6 <IPv6>` — Spoof-only IPv6 target; rejected on folders and the profile default (D16)
+- `--enabled` — Enable
+- `--disabled` — Disable
+- `--folder <id|name>` — Move to this folder (id or name)
+- `--root` — Move back to the root, out of any folder
+- `-n, --dry-run` — Print the withheld mutation as a plan; write nothing
+
+### cdctl rule delete
+
+Delete rules
+
+- `<HOSTNAME>`
+- `-n, --dry-run` — Print the withheld mutation as a plan; write nothing
+
+## cdctl config
+
+Read and write cdctl's own configuration
+
+### cdctl config get
+
+Print one value (raw, not JSON)
+
+- `<KEY>`
+
+### cdctl config set
+
+Set one value
+
+- `<KEY>`
+- `<VALUE>`
+
+### cdctl config list
+
+The active context, each value annotated with its source
+
+### cdctl config path
+
+The config file path
+
+## cdctl completions
+
+Shell completion script (works without a token)
+
+- `<SHELL>`
+
+## cdctl reference
+
+The full command surface as one Markdown document (works without a token)

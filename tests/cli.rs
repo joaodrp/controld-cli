@@ -8,16 +8,8 @@ use assert_cmd::Command;
 use wiremock::matchers::{body_string, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-/// A hermetic `cdctl`: empty environment, config under a private tempdir.
-fn cdctl(config_home: &std::path::Path) -> Command {
-    let mut cmd = Command::cargo_bin("cdctl").expect("binary builds");
-    cmd.env_clear().env("XDG_CONFIG_HOME", config_home);
-    cmd
-}
-
-fn tempdir() -> tempfile::TempDir {
-    tempfile::tempdir().expect("tempdir")
-}
+mod common;
+use common::{cdctl, tempdir};
 
 /// Point cdctl at a mock server, authenticated via env token.
 fn cdctl_against(server_uri: &str, config_home: &std::path::Path) -> Command {
@@ -82,9 +74,12 @@ fn reference_works_without_a_token() {
 #[test]
 fn artifact_commands_reject_explicit_json() {
     let dir = tempdir();
+    let man_dir = tempdir();
+    let man_out = man_dir.path().to_str().expect("utf8 tempdir path");
     for args in [
         ["completions", "bash", "--json"].as_slice(),
         ["reference", "--json"].as_slice(),
+        ["man", "--out-dir", man_out, "--json"].as_slice(),
     ] {
         let assert = cdctl(dir.path()).args(args).assert().code(2);
         assert.stdout(predicates::str::is_empty());
@@ -95,6 +90,39 @@ fn artifact_commands_reject_explicit_json() {
         .args(["completions", "bash"])
         .assert()
         .success();
+}
+
+// --- `cdctl man` (hidden packaging command) ---
+
+#[test]
+fn man_generates_pages_with_empty_stdout() {
+    let dir = tempdir();
+    let man_dir = tempdir();
+    let assert = cdctl(dir.path())
+        .args(["man", "--out-dir"])
+        .arg(man_dir.path())
+        .assert()
+        .success();
+    assert
+        .stdout(predicates::str::is_empty())
+        .stderr(predicates::str::is_empty());
+    assert!(man_dir.path().join("cdctl.1").exists());
+}
+
+#[test]
+fn man_out_dir_collision_with_a_file_is_a_loud_generic_error() {
+    let dir = tempdir();
+    let parent = tempdir();
+    let blocking_file = parent.path().join("not-a-dir");
+    std::fs::write(&blocking_file, b"occupied").expect("write");
+    let assert = cdctl(dir.path())
+        .args(["man", "--out-dir"])
+        .arg(&blocking_file)
+        .assert()
+        .code(1);
+    assert
+        .stdout(predicates::str::is_empty())
+        .stderr(predicates::str::contains("could not create"));
 }
 
 #[test]

@@ -9,6 +9,7 @@ pub mod completions;
 pub mod config;
 pub mod confirm;
 pub mod folder;
+pub mod man;
 pub mod multi;
 pub mod plan;
 pub mod profile;
