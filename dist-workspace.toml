@@ -1,0 +1,31 @@
+[workspace]
+members = ["cargo:."]
+
+# Config for 'dist'
+[dist]
+# The preferred dist version to use in CI (Cargo.toml SemVer syntax)
+cargo-dist-version = "0.32.0"
+# CI backends to support
+ci = "github"
+# The installers to generate for each app
+installers = ["shell", "homebrew"]
+# A GitHub repo to push Homebrew formulas to
+tap = "joaodrp/homebrew-tap"
+# Customize the Homebrew formula name
+formula = "cdctl"
+# Target platforms to build apps for (Rust target-triple syntax)
+targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-unknown-linux-musl", "x86_64-pc-windows-msvc"]
+# Path that installers should place binaries in
+install-path = "CARGO_HOME"
+# Whether to install an updater program
+install-updater = false
+# Publish jobs to run in CI. Keep in lockstep with `installers`: with
+# "homebrew" here but not there, the publish job loops over zero formula
+# artifacts and no-ops green — the tap silently never updates.
+publish-jobs = ["homebrew"]
+# Steps run before `dist build` in every build job: generates man pages and
+# shell completions so `include` below can bundle them into archives (they
+# are never committed — see build-setup.yml).
+github-build-setup = "build-setup.yml"
+# Extra static files to include in each App (path relative to this Cargo.toml's dir)
+include = ["man", "completions"]

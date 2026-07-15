@@ -1,5 +1,7 @@
 //! Root parser: noun-verb tree plus the global flags (design.md).
 
+use std::path::PathBuf;
+
 use clap::{Args, Parser, Subcommand};
 
 use crate::commands::{
@@ -95,6 +97,12 @@ pub enum Command {
     Completions { shell: clap_complete::Shell },
     /// The full command surface as one Markdown document (works without a token)
     Reference,
+    /// Roff man pages for the whole command tree (packaging only; laid out like `completions` per D18)
+    #[command(hide = true)]
+    Man {
+        #[arg(long, value_name = "DIR")]
+        out_dir: PathBuf,
+    },
 }
 
 /// Post-parse global state. `CONTROLD_OUTPUT=json` selects JSON mode but is
@@ -154,6 +162,10 @@ impl Globals {
 }
 
 /// The built command tree, shared by `completions` and `reference`.
+///
+/// `man` deliberately does NOT use this: `.build()` bakes in the auto-inserted
+/// `help` subcommand, which `clap_mangen` must see absent or it emits stray
+/// `cdctl-*-help.1` pages (see `commands/man.rs`).
 pub fn command() -> clap::Command {
     use clap::CommandFactory;
     let mut command = Cli::command();

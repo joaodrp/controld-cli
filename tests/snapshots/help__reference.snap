@@ -1,0 +1,18 @@
+---
+source: tests/help.rs
+expression: help
+---
+The full command surface as one Markdown document (works without a token)
+
+Usage: cdctl reference [OPTIONS]
+
+Options:
+  -p, --profile <PK|name>  Profile to operate on (name or PK) [env: CONTROLD_PROFILE=]
+      --json               Emit JSON (full document) instead of a table
+      --fields <a,b>       Comma-separated JSON fields to keep; implies --json
+      --plain              Tables without borders, for awk/cut
+  -y, --yes                Skip confirmation prompts (ignored when the target profile is implicit)
+      --no-retry           Disable automatic retries (GETs only ever retry)
+      --timeout <SECS>     Per-request timeout in seconds
+      --debug              Request/response trace on stderr; token always redacted
+  -h, --help               Print help
