@@ -38,7 +38,7 @@ cargo fmt --check
 ### Release
 
 `dist build` needs `man/` and `completions/` populated first (`dist plan` does not) — CI does
-this via `.github/workflows/build-setup.yml`; locally, run `cargo run -- man --out-dir man` and
+this via `.github/dist-build-setup.yml`; locally, run `cargo run -- man --out-dir man` and
 the `completions` step in that file yourself before building.
 
 ## API hazards

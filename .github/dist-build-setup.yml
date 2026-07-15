@@ -1,5 +1,7 @@
 # Steps injected into every local-artifacts dist build job before `dist build`
-# (dist-workspace.toml's `github-build-setup`), not a workflow on its own.
+# (dist-workspace.toml's `github-build-setup`), not a workflow on its own. It
+# lives outside .github/workflows/ because GitHub treats every YAML there as a
+# workflow and records a failed run per push for one it cannot parse.
 # Man pages and completions are generated here rather than committed: a
 # committed page embeds the crate version, so every release-PR version bump
 # would stale it and the spec-drift-style check would block the release PR.

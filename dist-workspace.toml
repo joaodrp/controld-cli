@@ -25,7 +25,7 @@ install-updater = false
 publish-jobs = ["homebrew"]
 # Steps run before `dist build` in every build job: generates man pages and
 # shell completions so `include` below can bundle them into archives (they
-# are never committed — see build-setup.yml).
-github-build-setup = "build-setup.yml"
+# are never committed — see dist-build-setup.yml).
+github-build-setup = "../dist-build-setup.yml"
 # Extra static files to include in each App (path relative to this Cargo.toml's dir)
 include = ["man", "completions"]
