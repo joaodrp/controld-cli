@@ -80,16 +80,49 @@ fn artifact_commands_reject_explicit_json() {
         ["completions", "bash", "--json"].as_slice(),
         ["reference", "--json"].as_slice(),
         ["man", "--out-dir", man_out, "--json"].as_slice(),
+        ["auth", "logout", "--json"].as_slice(),
+        ["config", "get", "current_context", "--json"].as_slice(),
+        ["config", "set", "default_profile", "Home", "--json"].as_slice(),
+        ["config", "path", "--json"].as_slice(),
     ] {
         let assert = cdctl(dir.path()).args(args).assert().code(2);
         assert.stdout(predicates::str::is_empty());
     }
+    // A rejected `config set` must not have written anything.
+    let config_file = dir.path().join("cdctl").join("config.toml");
+    assert!(
+        !config_file.exists(),
+        "a rejected `config set --json` must not create a config file"
+    );
     // Ambient CONTROLD_OUTPUT=json is not a conflict.
     cdctl(dir.path())
         .env("CONTROLD_OUTPUT", "json")
         .args(["completions", "bash"])
         .assert()
         .success();
+    cdctl(dir.path())
+        .env("CONTROLD_OUTPUT", "json")
+        .args(["auth", "logout"])
+        .assert()
+        .success();
+}
+
+/// `auth login` needs `--token-stdin` plus a stdin body, so it doesn't fit
+/// the args-only loop above; exercised separately.
+#[test]
+fn auth_login_rejects_explicit_json() {
+    let dir = tempdir();
+    let assert = cdctl(dir.path())
+        .args(["auth", "login", "--token-stdin", "--json"])
+        .write_stdin("api.test-token\n")
+        .assert()
+        .code(2);
+    assert.stdout(predicates::str::is_empty());
+    let config_file = dir.path().join("cdctl").join("config.toml");
+    assert!(
+        !config_file.exists(),
+        "a rejected login must not write a token"
+    );
 }
 
 // --- `cdctl man` (hidden packaging command) ---
@@ -151,6 +184,70 @@ fn usage_errors_exit_2() {
         .args(["config", "set", "default_profile", "bad\u{7}name"])
         .assert()
         .code(2);
+}
+
+/// `config path` prints the path unconditionally (it is the contract — where
+/// cdctl reads and writes, usable before the first write), but flags a
+/// not-yet-created file on stderr so the path never reads as a lie.
+#[test]
+fn config_path_notes_a_file_that_does_not_exist_yet() {
+    use predicates::prelude::PredicateBooleanExt;
+    let dir = tempdir();
+    let config_file = dir.path().join("cdctl").join("config.toml");
+
+    let assert = cdctl(dir.path())
+        .args(["config", "path"])
+        .assert()
+        .success();
+    assert
+        .stdout(predicates::str::contains(
+            config_file.to_str().expect("utf8"),
+        ))
+        .stderr(predicates::str::contains("not created yet"));
+
+    // Once the file exists, the note disappears.
+    cdctl(dir.path())
+        .args(["config", "set", "default_profile", "Home"])
+        .assert()
+        .success();
+    let assert = cdctl(dir.path())
+        .args(["config", "path"])
+        .assert()
+        .success();
+    assert
+        .stdout(predicates::str::contains(
+            config_file.to_str().expect("utf8"),
+        ))
+        .stderr(predicates::str::contains("not created yet").not());
+}
+
+/// Item 3(b): `--timeout`'s value parser (`cli::parse_timeout_secs`) rejects
+/// `0` with a plain message, not clap's default `1..18446744073709551615`
+/// range dump — clap-level, so no server is needed.
+#[test]
+fn timeout_zero_is_a_clap_level_usage_error() {
+    let dir = tempdir();
+    cdctl(dir.path())
+        .args(["auth", "status", "--timeout", "0"])
+        .assert()
+        .code(2)
+        .stdout(predicates::str::is_empty())
+        .stderr(predicates::str::contains("must be at least 1"));
+}
+
+/// Usage errors must outrank auth errors: a locally-invalid action-flag
+/// combination is a mistake regardless of whether a token is configured, so
+/// it must not be masked by `auth.missing_token` (exit 4) when one isn't.
+#[test]
+fn local_flag_errors_outrank_a_missing_token() {
+    let dir = tempdir();
+    let assert = cdctl(dir.path())
+        .args(["rule", "create", "x.example.com", "--action", "spoof"])
+        .assert()
+        .code(2)
+        .stdout(predicates::str::is_empty());
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(stderr.contains("requires --via"), "got: {stderr}");
 }
 
 // --- Auth without a token: exit 4, stdout empty, one JSON envelope ---
@@ -500,6 +597,30 @@ fn config_lifecycle_roundtrips() {
         .code(2);
 }
 
+/// `config list`'s document shape (`context`/`token`/`default_profile`) is
+/// known upfront, so a typo'd `--fields` is a usage error like every other
+/// noun's upfront check.
+#[test]
+fn config_list_fields_typo_is_a_usage_error() {
+    let dir = tempdir();
+    let assert = cdctl(dir.path())
+        .args(["config", "list", "--fields", "bogus"])
+        .assert()
+        .code(2)
+        .stdout(predicates::str::is_empty());
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    let doc: serde_json::Value =
+        serde_json::from_str(&stderr).expect("stderr is one JSON document");
+    assert_eq!(doc["error"]["code"], "usage.invalid");
+    assert!(
+        doc["error"]["message"]
+            .as_str()
+            .expect("message is a string")
+            .contains("no such field \"bogus\""),
+        "got: {stderr}"
+    );
+}
+
 // --- D9 origin rules at the binary level ---
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -597,6 +718,35 @@ fn auth_logout_is_idempotent() {
     );
 }
 
+/// Codex round-2: `auth logout` never emits JSON, so an explicit
+/// `--fields`/`--json` must be rejected upfront (`super::reject_explicit_json`)
+/// before the token is touched — not after deleting it and exiting `0`.
+#[test]
+fn auth_logout_rejects_explicit_fields_and_preserves_the_token() {
+    let dir = tempdir();
+    cdctl(dir.path())
+        .args(["auth", "login", "--token-stdin"])
+        .write_stdin("api.stored-token\n")
+        .assert()
+        .success();
+
+    let assert = cdctl(dir.path())
+        .args(["auth", "logout", "--fields", "bogus"])
+        .assert()
+        .code(2);
+    assert.stdout(predicates::str::is_empty());
+
+    let assert = cdctl(dir.path())
+        .args(["config", "list", "--json"])
+        .assert()
+        .success();
+    let doc: serde_json::Value = serde_json::from_slice(&assert.get_output().stdout).expect("data");
+    assert_eq!(
+        doc["token"]["set"], true,
+        "the rejected logout must not have deleted the stored token"
+    );
+}
+
 #[test]
 fn a_corrupt_config_file_fails_with_its_path() {
     let dir = tempdir();
@@ -629,16 +779,15 @@ fn switching_to_an_unknown_context_notes_the_missing_token() {
 
 // --- output contracts ---
 
+/// A `--fields` typo is a usage error, not a silent no-op: a warning-and-exit-0
+/// would let an agent read an empty `{}` as "the field is genuinely absent"
+/// rather than "you misspelled it". `AuthStatus::FIELDS` validates upfront,
+/// so `mount_no_requests`'s `.expect(0)` proves the check runs before the
+/// `/users` request, not on the post-request `emit` call.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_misspelled_field_draws_a_warning() {
+async fn a_misspelled_field_is_a_usage_error() {
     let server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/users"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(fixture("users.json"), "application/json"),
-        )
-        .mount(&server)
-        .await;
+    mount_no_requests(&server).await;
 
     let uri = server.uri();
     let dir = tempdir();
@@ -646,12 +795,152 @@ async fn a_misspelled_field_draws_a_warning() {
         let assert = cdctl_against(&uri, dir.path())
             .args(["auth", "status", "--fields", "emial"])
             .assert()
-            .success();
-        let doc: serde_json::Value =
-            serde_json::from_slice(&assert.get_output().stdout).expect("data");
-        assert_eq!(doc, serde_json::json!({}));
+            .code(2)
+            .stdout(predicates::str::is_empty());
         let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
-        assert!(stderr.contains("no such field \"emial\""), "got: {stderr}");
+        let doc: serde_json::Value =
+            serde_json::from_str(&stderr).expect("stderr is one JSON document");
+        assert_eq!(doc["error"]["code"], "usage.invalid");
+        assert!(
+            doc["error"]["message"]
+                .as_str()
+                .expect("message is a string")
+                .contains("no such field \"emial\""),
+            "got: {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+/// The behavioral fix: on a mutating handler, a `--fields` typo must fail
+/// *before* the write, not on the post-write read-back's `emit()` call —
+/// catching it there would perform the mutation, then exit 2 with nothing
+/// printed, misreadable as "nothing happened, retry" (a retried `create`
+/// duplicate-POSTs). `mount_no_requests`'s `.expect(0)` is the actual proof:
+/// no request of any kind — the POST included — ever leaves.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_create_fields_typo_is_exit_2_before_any_write() {
+    let server = MockServer::start().await;
+    mount_no_requests(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "create",
+                "x.example.com",
+                "--action",
+                "block",
+                "--fields",
+                "bogus",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&stderr)
+            .expect("--fields implies JSON mode: stderr is one document");
+        assert_eq!(doc["error"]["code"], "usage.invalid");
+        assert!(
+            doc["error"]["message"]
+                .as_str()
+                .expect("message is a string")
+                .contains("no such field \"bogus\""),
+            "got: {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+/// Mirrors `rule_create_fields_typo_is_exit_2_before_any_write` for the
+/// other noun that shares the upfront `--fields` check.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_create_fields_typo_is_exit_2_before_any_write() {
+    let server = MockServer::start().await;
+    mount_no_requests(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "create",
+                "Games",
+                "--fields",
+                "bogus",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&stderr)
+            .expect("--fields implies JSON mode: stderr is one document");
+        assert_eq!(doc["error"]["code"], "usage.invalid");
+        assert!(
+            doc["error"]["message"]
+                .as_str()
+                .expect("message is a string")
+                .contains("no such field \"bogus\""),
+            "got: {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+/// Item 2: unified dry-run `--fields` semantics — the upfront check
+/// (`Rule::FIELDS`) now runs unconditionally, live or dry-run, so a typo
+/// exits 2 before the plan is even built, same as the live path.
+/// `mount_no_requests`'s `.expect(0)` proves it: no request, not even a
+/// validation GET, ever leaves. Check order (Codex round-2): the fields-name
+/// check runs before the `--fields`/`--dry-run` conflict check
+/// (`commands::reject_fields_with_dry_run`), so a typo still wins here even
+/// though this invocation also carries `--dry-run` — pinned by the message
+/// asserting "no such field", not the conflict wording.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_create_fields_typo_is_exit_2_before_any_request_on_a_dry_run() {
+    let server = MockServer::start().await;
+    mount_no_requests(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "create",
+                "x.example.com",
+                "--action",
+                "block",
+                "--fields",
+                "bogus",
+                "--dry-run",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&stderr)
+            .expect("--fields implies JSON mode: stderr is one document");
+        assert_eq!(doc["error"]["code"], "usage.invalid");
+        assert!(
+            doc["error"]["message"]
+                .as_str()
+                .expect("message is a string")
+                .contains("no such field \"bogus\""),
+            "got: {stderr}"
+        );
     })
     .await
     .expect("command runs");
@@ -1592,6 +1881,71 @@ async fn profile_list_empty_is_exit_0_with_empty_json_array() {
     .expect("command runs");
 }
 
+/// `profile list` names a known field on an empty account: `Profile::FIELDS`
+/// validates upfront, before any request, so a *valid* field is inert on a
+/// zero-profile account — exit 0, `[]` — same as the vacuous-empty rule in
+/// `output::emit` would have given it anyway.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn profile_list_fields_on_an_empty_account_is_exit_0_with_empty_json_array() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/profiles"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"profiles": []},
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["profile", "list", "--fields", "name"])
+            .assert()
+            .success();
+        assert_eq!(assert.get_output().stdout, b"[]\n");
+    })
+    .await
+    .expect("command runs");
+}
+
+/// The unified contract: an unknown `--fields` name is a usage error
+/// rejected upfront, before any request — even on an account that would
+/// otherwise have printed the vacuous-empty `[]`. Before the fix, `profile
+/// list` checked fields only at emit time, so a typo on a zero-profile
+/// account slipped through as exit 0 `[]` (the vacuous-empty rule
+/// swallowing it, not the check catching it).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn profile_list_fields_typo_on_an_empty_account_is_exit_2_before_any_request() {
+    let server = MockServer::start().await;
+    mount_no_requests(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["profile", "list", "--fields", "bogus"])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        let doc: serde_json::Value =
+            serde_json::from_str(&stderr).expect("stderr is one JSON document");
+        assert_eq!(doc["error"]["code"], "usage.invalid");
+        assert!(
+            doc["error"]["message"]
+                .as_str()
+                .expect("message is a string")
+                .contains("no such field \"bogus\""),
+            "got: {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn profile_list_error_keeps_stdout_empty() {
     let server = MockServer::start().await;
@@ -1682,9 +2036,14 @@ async fn profile_list_shape_error_exits_8() {
     .expect("command runs");
 }
 
+/// A typo among otherwise-valid fields still fails the whole request: partial
+/// projection with a silently dropped field would be worse than an error.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn fields_typo_warns_on_stderr() {
-    let server = profiles_server("profiles.json", 1).await;
+async fn a_fields_typo_among_valid_fields_is_still_a_usage_error() {
+    // Upfront validation rejects the whole `--fields` list before any
+    // request, so the mock must see zero calls, not one.
+    let server = MockServer::start().await;
+    mount_no_requests(&server).await;
 
     let uri = server.uri();
     let dir = tempdir();
@@ -1692,22 +2051,17 @@ async fn fields_typo_warns_on_stderr() {
         let assert = cdctl_against(&uri, dir.path())
             .args(["profile", "list", "--fields", "name,nmae"])
             .assert()
-            .success();
-        let doc: serde_json::Value =
-            serde_json::from_slice(&assert.get_output().stdout).expect("data");
-        let profiles = doc.as_array().expect("array");
-        for profile in profiles {
-            let keys: Vec<&str> = profile
-                .as_object()
-                .expect("object")
-                .keys()
-                .map(String::as_str)
-                .collect();
-            assert_eq!(keys, ["name"]);
-        }
+            .code(2)
+            .stdout(predicates::str::is_empty());
         let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        let doc: serde_json::Value =
+            serde_json::from_str(&stderr).expect("stderr is one JSON document");
+        assert_eq!(doc["error"]["code"], "usage.invalid");
         assert!(
-            stderr.contains("warning: --fields: no such field \"nmae\""),
+            doc["error"]["message"]
+                .as_str()
+                .expect("message is a string")
+                .contains("no such field \"nmae\""),
             "got: {stderr}"
         );
     })
@@ -1886,6 +2240,36 @@ async fn folder_list_renders_all_three_modes_plus_fields() {
             insta::assert_snapshot!("folder_list_json", json);
             insta::assert_snapshot!("folder_list_fields", fields_json);
         });
+    })
+    .await
+    .expect("command runs");
+}
+
+/// Mirrors `rule_list_fields_on_an_empty_profile_is_exit_0_with_empty_json_array`
+/// for the other read handler that carries an upfront `Folder::FIELDS`
+/// check: an empty top-level array must still exit 0 and print `[]`, never a
+/// false "no such field" — `p_groups.json` is the empty-groups fixture.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_list_fields_on_an_empty_profile_is_exit_0_with_empty_json_array() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "list",
+                "--fields",
+                "name",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .success();
+        assert_eq!(assert.get_output().stdout, b"[]\n");
     })
     .await
     .expect("command runs");
@@ -2225,6 +2609,48 @@ async fn folder_update_with_no_flags_is_a_usage_error_before_any_request() {
     .expect("command runs");
 }
 
+/// Item 3(a): the upfront `--fields` check is a per-handler call site — the
+/// `create` typo tests above don't exercise `update`'s copy of it.
+/// `mount_no_requests`'s `.expect(0)` proves it fires before the scope
+/// resolution GETs `update` would otherwise need to resolve `selector`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_update_fields_typo_is_exit_2_before_any_request() {
+    let server = MockServer::start().await;
+    mount_no_requests(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "update",
+                "1",
+                "--enabled",
+                "--fields",
+                "bogus",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&stderr)
+            .expect("--fields implies JSON mode: stderr is one document");
+        assert_eq!(doc["error"]["code"], "usage.invalid");
+        assert!(
+            doc["error"]["message"]
+                .as_str()
+                .expect("message is a string")
+                .contains("no such field \"bogus\""),
+            "got: {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn folder_create_dry_run_prints_the_plan_and_validation_gets_still_run() {
     let server = MockServer::start().await;
@@ -2476,6 +2902,49 @@ async fn folder_delete_with_yes_and_an_explicit_profile_succeeds() {
         assert_eq!(assert.get_output().stdout, b"");
         let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
         assert!(stderr.contains("deleted folder"), "got: {stderr}");
+    })
+    .await
+    .expect("command runs");
+}
+
+/// `folder delete`'s twin of `rule_delete_fields_typo_is_exit_2_before_any_request_or_delete`:
+/// an unknown `--fields` name is a usage error rejected upfront, before any
+/// request, before the confirmation prompt, before the delete. Before the
+/// fix, `folder delete` never validated `--fields` at all: the typo was
+/// silently ignored, the delete ran, and the command exited 0.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_delete_fields_typo_is_exit_2_before_any_request_or_delete() {
+    let server = MockServer::start().await;
+    mount_no_requests(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "delete",
+                "2",
+                "--fields",
+                "bogus",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--yes",
+            ])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        let doc: serde_json::Value =
+            serde_json::from_str(&stderr).expect("stderr is one JSON document");
+        assert_eq!(doc["error"]["code"], "usage.invalid");
+        assert!(
+            doc["error"]["message"]
+                .as_str()
+                .expect("message is a string")
+                .contains("no such field \"bogus\""),
+            "got: {stderr}"
+        );
     })
     .await
     .expect("command runs");
@@ -2977,6 +3446,45 @@ async fn rule_list_unknown_folder_exits_3() {
         let doc: serde_json::Value =
             serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
         assert_eq!(doc["error"]["code"], "folder.not_found");
+    })
+    .await
+    .expect("command runs");
+}
+
+/// The behavioral fix (item 1): an empty top-level array has no elements for
+/// a requested field to (mis)match against, so the check must be vacuous —
+/// `--fields hostname` on a profile with zero rules must still exit 0 and
+/// print `[]`, not a false "no such field" (there's nothing here to compare
+/// the name against, valid or not). `p_groups.json` is the empty-groups
+/// fixture, so `fetch_all_rules` never issues a per-folder GET — the root
+/// listing alone is the whole story.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_list_fields_on_an_empty_profile_is_exit_0_with_empty_json_array() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(empty_rules_response())
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "list",
+                "--fields",
+                "hostname",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .success();
+        assert_eq!(assert.get_output().stdout, b"[]\n");
     })
     .await
     .expect("command runs");
@@ -4834,6 +5342,47 @@ async fn rule_update_with_no_flags_is_a_usage_error_before_any_request() {
     .expect("command runs");
 }
 
+/// Item 3(a): mirrors `folder_update_fields_typo_is_exit_2_before_any_request`
+/// — the upfront `--fields` check is a per-handler call site, so `update`
+/// needs its own proof the `create` typo tests don't cover.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_update_fields_typo_is_exit_2_before_any_request() {
+    let server = MockServer::start().await;
+    mount_no_requests(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "update",
+                "x.example.com",
+                "--enabled",
+                "--fields",
+                "bogus",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&stderr)
+            .expect("--fields implies JSON mode: stderr is one document");
+        assert_eq!(doc["error"]["code"], "usage.invalid");
+        assert!(
+            doc["error"]["message"]
+                .as_str()
+                .expect("message is a string")
+                .contains("no such field \"bogus\""),
+            "got: {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
 /// The attached-empty spelling is refused locally — never forwarded, where
 /// it would 400 (`err_via6_clear.json` documents that response).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -5251,6 +5800,190 @@ async fn rule_delete_with_yes_and_an_explicit_profile_succeeds() {
     })
     .await
     .expect("command runs");
+}
+
+/// The unified `--fields` contract on `rule delete`: an unknown field is a
+/// usage error rejected upfront — before any request, before the
+/// confirmation prompt, before the delete. Before the fix, `rule delete`
+/// never validated `--fields` at all: the typo was silently ignored, the
+/// delete ran, and the command exited 0.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_delete_fields_typo_is_exit_2_before_any_request_or_delete() {
+    let server = MockServer::start().await;
+    mount_no_requests(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "delete",
+                "a.example.com",
+                "--fields",
+                "bogus",
+                "--yes",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        let doc: serde_json::Value =
+            serde_json::from_str(&stderr).expect("stderr is one JSON document");
+        assert_eq!(doc["error"]["code"], "usage.invalid");
+        assert!(
+            doc["error"]["message"]
+                .as_str()
+                .expect("message is a string")
+                .contains("no such field \"bogus\""),
+            "got: {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+/// A *valid* `--fields` name is inert on `rule delete`: the command emits no
+/// row, but the field namespace is still `Rule::FIELDS` (the command's data
+/// schema), so a real field must not be rejected — the delete proceeds and
+/// exits 0, same as without `--fields` at all.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_delete_with_a_valid_fields_name_still_deletes() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    Mock::given(method("DELETE"))
+        .and(path(format!(
+            "/profiles/{AGGRESSIVE_PK}/rules/a.example.com"
+        )))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_delete_ack.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "delete",
+                "a.example.com",
+                "--fields",
+                "hostname",
+                "--yes",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .success();
+        assert_eq!(assert.get_output().stdout, b"");
+    })
+    .await
+    .expect("command runs");
+}
+
+/// Item 2's behavioral fix, and item 3(c)'s live end-to-end coverage in one
+/// test: `--fields hostname` names a field of `Rule` (the command's data
+/// schema), so a live create succeeds and projects normally. Superseded
+/// (Codex round-2) on the dry-run half: `--fields` and `--dry-run` now
+/// conflict outright — a dry run prints the request plan, not data rows, so
+/// projecting row fields over it is meaningless — checked upfront via
+/// `commands::reject_fields_with_dry_run`, before any request, so the mock
+/// server sees nothing at all (`mount_no_requests`).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_create_fields_hostname_succeeds_live_and_conflicts_with_dry_run() {
+    let live = MockServer::start().await;
+    mount_profiles(&live, 1).await;
+    mount_groups_fixture(&live, "p_groups.json", 1).await;
+    Mock::given(method("POST"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .and(body_string("do=0&status=1&hostnames[]=a.example.com"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_ack.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&live)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "a.example.com", "order": 1, "group": 0, "action": {"do": 0, "status": 1}}
+            ]},
+            "success": true
+        })))
+        .expect(1)
+        .mount(&live)
+        .await;
+
+    let live_uri = live.uri();
+    let live_dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&live_uri, live_dir.path())
+            .args([
+                "rule",
+                "create",
+                "a.example.com",
+                "--action",
+                "block",
+                "--fields",
+                "hostname",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .success();
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stdout).expect("projected JSON");
+        assert_eq!(doc, serde_json::json!([{"hostname": "a.example.com"}]));
+    })
+    .await
+    .expect("live command runs");
+
+    let dry = MockServer::start().await;
+    mount_no_requests(&dry).await;
+
+    let dry_uri = dry.uri();
+    let dry_dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&dry_uri, dry_dir.path())
+            .args([
+                "rule",
+                "create",
+                "a.example.com",
+                "--action",
+                "block",
+                "--fields",
+                "hostname",
+                "--dry-run",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&stderr)
+            .expect("--fields implies JSON mode: stderr is one document");
+        assert_eq!(doc["error"]["code"], "usage.invalid");
+        assert!(
+            doc["error"]["message"]
+                .as_str()
+                .expect("message is a string")
+                .contains("drop --fields or run without --dry-run"),
+            "got: {stderr}"
+        );
+    })
+    .await
+    .expect("dry-run command runs");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

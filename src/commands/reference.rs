@@ -25,8 +25,16 @@ pub fn run(globals: &Globals) -> Result<(), Error> {
             2,
         );
     }
+    write_exit_codes(&mut doc);
     print!("{doc}");
     Ok(())
+}
+
+fn write_exit_codes(doc: &mut String) {
+    let _ = writeln!(doc, "## Exit codes\n");
+    let _ = writeln!(doc, "```");
+    let _ = writeln!(doc, "{}", crate::error::EXIT_CODES_HELP);
+    let _ = writeln!(doc, "```");
 }
 
 fn write_global_flags(doc: &mut String, root: &clap::Command) {

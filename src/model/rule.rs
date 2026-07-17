@@ -37,6 +37,23 @@ pub struct Rule {
 }
 
 impl Rule {
+    /// The struct's serialized top-level key set, in order — the mutating
+    /// `rule create`/`update` handlers' upfront `--fields` check
+    /// (`output::validate_fields`) validates against exactly this, before
+    /// anything is written. `rule_fields_matches_the_serialized_key_set`
+    /// (below) is the drift guard: it fails the moment a field is added,
+    /// renamed, or removed here without a matching edit to this list.
+    pub const FIELDS: &'static [&'static str] = &[
+        "hostname",
+        "action",
+        "via",
+        "via6",
+        "enabled",
+        "folder",
+        "folder_id",
+        "order",
+    ];
+
     /// `folders` supplies the display name for `folder_id`; a `group` with
     /// no matching folder (deleted concurrently) yields `folder: null`, not
     /// an error.
@@ -83,6 +100,30 @@ mod tests {
     use super::*;
     use crate::error::Exit;
     use crate::model::folder::folders_fixture;
+
+    /// Drift guard for [`Rule::FIELDS`]: a field added, renamed, or removed
+    /// on the struct without a matching edit to `FIELDS` fails here.
+    #[test]
+    fn rule_fields_matches_the_serialized_key_set() {
+        let rule = Rule {
+            hostname: "a.example.com".into(),
+            action: Action::Block,
+            via: None,
+            via6: None,
+            enabled: true,
+            folder: None,
+            folder_id: None,
+            order: 1,
+        };
+        let value = serde_json::to_value(&rule).expect("serializes");
+        let keys: Vec<&str> = value
+            .as_object()
+            .expect("object")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(keys, Rule::FIELDS);
+    }
 
     #[test]
     fn group_zero_normalizes_to_no_folder() {

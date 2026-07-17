@@ -33,6 +33,15 @@ pub struct Folder {
 }
 
 impl Folder {
+    /// The struct's serialized top-level key set, in order — the mutating
+    /// `folder create`/`update` handlers' upfront `--fields` check
+    /// (`output::validate_fields`) validates against exactly this, before
+    /// anything is written. `folder_fields_matches_the_serialized_key_set`
+    /// (below) is the drift guard: it fails the moment a field is added,
+    /// renamed, or removed here without a matching edit to this list.
+    pub const FIELDS: &'static [&'static str] =
+        &["id", "name", "action", "via", "enabled", "rules"];
+
     pub fn from_api(api: &ApiFolder) -> Result<Self, Error> {
         // No action object at all, or an action object with no `do`: both
         // are the action-less state, never coerced to block; absence of
@@ -79,6 +88,28 @@ pub(crate) fn folders_fixture(name: &str) -> Vec<ApiFolder> {
 mod tests {
     use super::*;
     use crate::error::Exit;
+
+    /// Drift guard for [`Folder::FIELDS`]: a field added, renamed, or
+    /// removed on the struct without a matching edit to `FIELDS` fails here.
+    #[test]
+    fn folder_fields_matches_the_serialized_key_set() {
+        let folder = Folder {
+            id: 1,
+            name: "Ads".into(),
+            action: None,
+            via: None,
+            enabled: true,
+            rules: 0,
+        };
+        let value = serde_json::to_value(&folder).expect("serializes");
+        let keys: Vec<&str> = value
+            .as_object()
+            .expect("object")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(keys, Folder::FIELDS);
+    }
 
     #[test]
     fn an_action_less_folder_normalizes_to_null_and_enabled() {

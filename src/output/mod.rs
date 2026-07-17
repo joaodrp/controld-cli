@@ -7,6 +7,8 @@ use std::borrow::Cow;
 
 use serde::Serialize;
 
+use crate::error::Error;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     Human,
@@ -21,17 +23,42 @@ pub fn print_json<T: Serialize>(value: &T) {
 /// The one data-output entry point: JSON mode always honors `--fields`,
 /// human mode runs the caller's renderer. Handlers never branch on [`Mode`]
 /// or project fields themselves, so `--fields` stays uniform.
-pub fn emit<T: Serialize>(mode: Mode, fields: Option<&[String]>, value: &T, human: impl FnOnce()) {
+///
+/// Matching is shallow, not "anywhere in the document": a top-level key on
+/// the document itself, or on each element when the document is an array
+/// ([`project_tracking`]'s single-level key match). A requested field that
+/// matches none of those is a usage error, not a silent no-op: a typo'd
+/// field must not become silent data loss with exit 0. A field present on
+/// *some* but not *every* array element still projects cleanly (each object
+/// keeps only the fields it has), since that's the ordinary shape of
+/// heterogeneous API data, not a typo. An empty top-level array is the one
+/// exception: there are no elements to disagree with the request, so the
+/// check is vacuous and `[]` prints — an empty `rule list`/`folder list`
+/// must not fail a request that would succeed non-empty.
+pub fn emit<T: Serialize>(
+    mode: Mode,
+    fields: Option<&[String]>,
+    value: &T,
+    human: impl FnOnce(),
+) -> Result<(), Error> {
     match mode {
         Mode::Json => {
             let mut doc = serde_json::to_value(value).expect("output types serialize");
             if let Some(fields) = fields {
+                // Vacuous on an empty top-level array: `project_tracking`
+                // never visits an element to (mis)match against, so there is
+                // nothing for a requested field to legitimately disagree
+                // with — failing here would turn an empty `rule list`/
+                // `folder list` into a false "no such field", precisely on
+                // the input a sweep across every profile is most likely to
+                // hit.
+                let is_vacuous_empty =
+                    matches!(&doc, serde_json::Value::Array(items) if items.is_empty());
                 let mut matched = std::collections::HashSet::new();
                 doc = project_tracking(doc, fields, &mut matched);
-                // A typo'd field must not become silent data loss with exit 0.
-                for field in fields {
-                    if !matched.contains(field.as_str()) {
-                        eprintln!("warning: --fields: no such field \"{field}\"");
+                if !is_vacuous_empty {
+                    if let Some(field) = fields.iter().find(|f| !matched.contains(f.as_str())) {
+                        return Err(Error::usage(format!("--fields: no such field \"{field}\"")));
                     }
                 }
             }
@@ -39,6 +66,27 @@ pub fn emit<T: Serialize>(mode: Mode, fields: Option<&[String]>, value: &T, huma
         }
         Mode::Human => human(),
     }
+    Ok(())
+}
+
+/// The mutating handlers' upfront `--fields` check (rule/folder
+/// `create`/`update`): run before the write, unlike [`emit`]'s check, which
+/// only fires on the post-write read-back — a typo there would perform the
+/// mutation, then exit 2 with nothing printed (misreading as "nothing
+/// happened, retry", which duplicate-POSTs a create). `allowed` is the
+/// handler's row type's canonical top-level field list (its `FIELDS`
+/// const); matching is exactly [`project_tracking`]'s single-level key
+/// match, so this never rejects a field `emit` would actually project. Not a
+/// replacement for `emit`'s check, which stays the general mechanism for
+/// read paths and the backstop everywhere else.
+pub(crate) fn validate_fields(requested: Option<&[String]>, allowed: &[&str]) -> Result<(), Error> {
+    let Some(requested) = requested else {
+        return Ok(());
+    };
+    if let Some(field) = requested.iter().find(|f| !allowed.contains(&f.as_str())) {
+        return Err(Error::usage(format!("--fields: no such field \"{field}\"")));
+    }
+    Ok(())
 }
 
 /// `--fields a,b`: project each object down to the named keys, preserving
@@ -130,6 +178,23 @@ mod tests {
     fn json_is_pretty_with_two_space_indent() {
         let doc = serde_json::to_string_pretty(&json!({"a": [1]})).expect("serializes");
         assert_eq!(doc, "{\n  \"a\": [\n    1\n  ]\n}");
+    }
+
+    #[test]
+    fn validate_fields_accepts_known_fields_and_a_missing_request() {
+        assert!(validate_fields(None, &["a", "b"]).is_ok());
+        assert!(validate_fields(Some(&["a".to_owned()]), &["a", "b"]).is_ok());
+    }
+
+    #[test]
+    fn validate_fields_rejects_an_unknown_field() {
+        let error = validate_fields(Some(&["a".to_owned(), "nope".to_owned()]), &["a", "b"])
+            .expect_err("nope is not allowed");
+        assert!(
+            error.message.contains("no such field \"nope\""),
+            "got: {}",
+            error.message
+        );
     }
 
     #[test]

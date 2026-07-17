@@ -1,21 +1,50 @@
 ---
 source: tests/help.rs
-expression: help
+expression: "help_for(dir.path(), &[noun])"
 ---
 Shell completion script (works without a token)
 
 Usage: cdctl completions [OPTIONS] <SHELL>
 
 Arguments:
-  <SHELL>  [possible values: bash, elvish, fish, powershell, zsh]
+  <SHELL>
+          [possible values: bash, elvish, fish, powershell, zsh]
 
 Options:
-  -p, --profile <PK|name>  Profile to operate on (name or PK) [env: CONTROLD_PROFILE=]
-      --json               Emit JSON (full document) instead of a table
-      --fields <a,b>       Comma-separated JSON fields to keep; implies --json
-      --plain              Tables without borders, for awk/cut
-  -y, --yes                Skip confirmation prompts (ignored when the target profile is implicit)
-      --no-retry           Disable automatic retries (GETs only ever retry)
-      --timeout <SECS>     Per-request timeout in seconds
-      --debug              Request/response trace on stderr; token always redacted
-  -h, --help               Print help
+  -h, --help
+          Print help (see a summary with '-h')
+
+Global options:
+  -p, --profile <PK|name>
+          Profile to operate on (name or PK)
+          
+          [env: CONTROLD_PROFILE=]
+
+      --json
+          Emit JSON (full document) instead of a table
+
+      --fields <a,b>
+          Comma-separated JSON fields to keep (implies --json)
+
+      --plain
+          Tables without borders, for awk/cut
+
+  -y, --yes
+          Skip confirmation prompts (ignored when the target profile is implicit)
+
+      --no-retry
+          Disable automatic retries
+
+      --timeout <SECS>
+          Per-request timeout in seconds
+
+      --debug
+          Request/response trace on stderr (token always redacted)
+
+Install:
+  bash  cdctl completions bash > ~/.local/share/bash-completion/completions/cdctl
+  zsh   cdctl completions zsh > ~/.zfunc/_cdctl   (add fpath+=~/.zfunc before compinit)
+  fish  cdctl completions fish > ~/.config/fish/completions/cdctl.fish
+
+Create the target directory first if missing (mkdir -p). Open a new shell afterwards. Regenerate
+after upgrading cdctl.

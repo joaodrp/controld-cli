@@ -156,6 +156,26 @@ impl std::fmt::Display for DefaultAction {
 }
 
 impl Profile {
+    /// The struct's serialized top-level key set, in order — `profile
+    /// list`/`get`'s upfront `--fields` check (`output::validate_fields`)
+    /// validates against exactly this, before any request.
+    /// `profile_fields_matches_the_serialized_key_set` (below) is the drift
+    /// guard: it fails the moment a field is added, renamed, or removed here
+    /// without a matching edit to this list.
+    pub const FIELDS: &'static [&'static str] = &[
+        "id",
+        "name",
+        "enabled_rules",
+        "enabled_filters",
+        "enabled_services",
+        "folders",
+        "options",
+        "default_action",
+        "enabled",
+        "disabled_until",
+        "updated",
+    ];
+
     pub fn from_api(api: &ApiProfile) -> Result<Self, Error> {
         // The API has no timestamps before its own existence; a negative
         // value is upstream garbage that must fail loud, never silently
@@ -228,6 +248,38 @@ pub(crate) fn profiles_fixture(name: &str) -> Vec<ApiProfile> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Drift guard for [`Profile::FIELDS`]: a field added, renamed, or
+    /// removed on the struct without a matching edit to `FIELDS` fails here.
+    #[test]
+    fn profile_fields_matches_the_serialized_key_set() {
+        let profile = Profile {
+            id: "pk1".into(),
+            name: "Home".into(),
+            enabled_rules: 0,
+            enabled_filters: 0,
+            enabled_services: 0,
+            folders: 0,
+            options: 0,
+            default_action: DefaultAction {
+                action: Action::Bypass,
+                via: None,
+                enabled: true,
+            },
+            enabled: true,
+            disabled_until: None,
+            updated: "2025-01-01T00:00:00Z".into(),
+            updated_unix: 0,
+        };
+        let value = serde_json::to_value(&profile).expect("serializes");
+        let keys: Vec<&str> = value
+            .as_object()
+            .expect("object")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(keys, Profile::FIELDS);
+    }
 
     #[test]
     fn the_captured_list_normalizes() {

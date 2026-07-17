@@ -1,16 +1,13 @@
 ---
 source: tests/help.rs
-expression: help
+expression: root
 ---
-Manage a Control D account over its REST API.
-
-cdctl is not ctrld: ctrld is Control D's DNS daemon and runs DNS on a machine; cdctl manages the
-account behind it. They coexist.
+Manage a Control D account over its REST API
 
 Usage: cdctl [OPTIONS] <COMMAND>
 
 Commands:
-  api          Raw request against the API origin (escape hatch; GET by default)
+  api          Raw request against the API origin (escape hatch, GET by default)
   auth         Authenticate cdctl with an API token
   profile      Inspect the account's profiles
   folder       Manage a profile's rule folders (API: groups)
@@ -21,6 +18,13 @@ Commands:
   help         Print this message or the help of the given subcommand(s)
 
 Options:
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
+
+Global options:
   -p, --profile <PK|name>
           Profile to operate on (name or PK)
           
@@ -30,7 +34,7 @@ Options:
           Emit JSON (full document) instead of a table
 
       --fields <a,b>
-          Comma-separated JSON fields to keep; implies --json
+          Comma-separated JSON fields to keep (implies --json)
 
       --plain
           Tables without borders, for awk/cut
@@ -39,16 +43,23 @@ Options:
           Skip confirmation prompts (ignored when the target profile is implicit)
 
       --no-retry
-          Disable automatic retries (GETs only ever retry)
+          Disable automatic retries
 
       --timeout <SECS>
           Per-request timeout in seconds
 
       --debug
-          Request/response trace on stderr; token always redacted
+          Request/response trace on stderr (token always redacted)
 
-  -h, --help
-          Print help (see a summary with '-h')
-
-  -V, --version
-          Print version
+Exit codes:
+  0    ok
+  1    generic error
+  2    usage error
+  3    not found
+  4    auth
+  5    forbidden / plan required
+  6    conflict
+  7    confirmation required
+  8    retryable (the only retryable code)
+  130  interrupted (SIGINT)
+  141  broken pipe (SIGPIPE, Unix)

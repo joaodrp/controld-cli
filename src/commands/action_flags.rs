@@ -29,7 +29,8 @@ pub struct ActionFlags {
     /// Spoof target (IP or CNAME), or the redirect proxy PK (see `proxy list`)
     #[arg(long, value_name = "IP|CNAME|proxy")]
     pub via: Option<String>,
-    /// Spoof-only IPv6 target; rejected on folders and the profile default (D16)
+    /// Spoof-only IPv6 target (the API documents no via6 field on folders
+    /// or the profile default)
     #[arg(long, value_name = "IPv6")]
     pub via6: Option<String>,
     /// Enable
@@ -114,6 +115,23 @@ impl ActionSpec {
     pub fn retry_flags(&self) -> Vec<String> {
         action_via_flags(self.action, self.via.as_deref(), self.via6.as_deref())
     }
+
+    /// The one part of validation that needs the API: `--action redirect`'s
+    /// `--via` must name a known proxy. A no-op for every other action, so a
+    /// caller can call it unconditionally right after a client exists,
+    /// without re-checking `self.action` itself.
+    pub async fn check_redirect_via(&self, client: &Client) -> Result<(), Error> {
+        if self.action == Some(Action::Redirect) {
+            validate_redirect_via(
+                self.via
+                    .as_deref()
+                    .expect("redirect requires --via (checked by validate)"),
+                client,
+            )
+            .await?;
+        }
+        Ok(())
+    }
 }
 
 /// The single spelling of `--action`/`--via`/`--via6`, beside the clap
@@ -143,15 +161,16 @@ pub(crate) fn action_via_flags(
     argv
 }
 
-/// Validate the raw flags into an [`ActionSpec`], every rule exit 2, all
-/// before any mutating request. `--action redirect`'s `--via` check is a
-/// live `GET /proxies` read — it runs under `--dry-run` too (dry runs
-/// validate everything, persist nothing).
-pub async fn validate(
-    flags: &ActionFlags,
-    caps: Caps,
-    client: &Client,
-) -> Result<ActionSpec, Error> {
+/// Validate the raw flags into an [`ActionSpec`] — every rule exit 2, purely
+/// local (no client), so callers can run it before resolving auth: a
+/// malformed `--action`/`--via`/`--via6` combination is a usage mistake
+/// whether or not a token is configured, and must not be masked by
+/// `auth.missing_token`. `--action redirect`'s `--via` still needs a live
+/// `GET /proxies` read to confirm the PK exists — that's
+/// [`ActionSpec::check_redirect_via`], run once a client exists (still
+/// before any mutating request; dry runs validate everything, persist
+/// nothing).
+pub fn validate(flags: &ActionFlags, caps: Caps) -> Result<ActionSpec, Error> {
     if let Some(via) = &flags.via {
         super::validate::reject_control_chars(via, "--via")?;
     }
@@ -161,7 +180,7 @@ pub async fn validate(
     if flags.via6.is_some() && !caps.via6_allowed {
         return Err(Error::usage(
             "--via6 is accepted by rules and services only; folders and the profile default \
-             have no documented via_v6 field (D16)",
+             have no documented via_v6 field",
         ));
     }
     // `--via6=` (the attached empty value) is the one spelling that requests
@@ -209,15 +228,12 @@ pub async fn validate(
         return Err(Error::usage("--via6 requires --action spoof"));
     }
 
-    match action {
-        Some(Action::Spoof) => {
-            validate_spoof_via(flags.via.as_deref().expect("checked above"))?;
-        }
-        Some(Action::Redirect) => {
-            validate_redirect_via(flags.via.as_deref().expect("checked above"), client).await?;
-        }
-        _ => {}
+    if let Some(Action::Spoof) = action {
+        validate_spoof_via(flags.via.as_deref().expect("checked above"))?;
     }
+    // Redirect's `--via` is checked against the live proxy list separately
+    // (`check_redirect_via`, after a client exists) — this function stays
+    // client-free so it can run before auth resolves.
 
     let enabled = if flags.enabled {
         Some(true)
@@ -309,10 +325,8 @@ pub(crate) mod tests {
         }
     }
 
-    /// Shared with `rule`'s tests: never actually called in tests that don't
-    /// reach the redirect branch; an unreachable address makes that a hard
-    /// failure instead of a silent pass if a validation path regresses to
-    /// call it.
+    /// Points at an unreachable address, so `check_redirect_via_is_a_noop_for_non_redirect_actions`
+    /// below fails loudly if a non-redirect action ever makes a network call.
     pub(crate) fn dead_client() -> Client {
         Client::new(ClientConfig {
             base_url: reqwest::Url::parse("http://127.0.0.1:1").expect("valid URL"),
@@ -329,35 +343,31 @@ pub(crate) mod tests {
         .expect("client builds")
     }
 
-    #[tokio::test]
-    async fn control_characters_in_via_are_rejected() {
+    #[test]
+    fn control_characters_in_via_are_rejected() {
         let flags = ActionFlags {
             via: Some("1.2.3.4\u{7}".into()),
             ..no_flags()
         };
-        let error = validate(&flags, folder_caps(), &dead_client())
-            .await
-            .expect_err("rejected");
+        let error = validate(&flags, folder_caps()).expect_err("rejected");
         assert_eq!(error.exit(), Exit::Usage);
     }
 
-    #[tokio::test]
-    async fn via6_is_rejected_when_the_caller_does_not_allow_it() {
+    #[test]
+    fn via6_is_rejected_when_the_caller_does_not_allow_it() {
         let flags = ActionFlags {
             action: Some(Action::Spoof),
             via: Some("192.0.2.1".into()),
             via6: Some("2001:db8::1".into()),
             ..no_flags()
         };
-        let error = validate(&flags, folder_caps(), &dead_client())
-            .await
-            .expect_err("via6 unsupported on folders");
+        let error = validate(&flags, folder_caps()).expect_err("via6 unsupported on folders");
         assert_eq!(error.exit(), Exit::Usage);
         assert!(error.message.contains("via_v6"));
     }
 
-    #[tokio::test]
-    async fn empty_via6_is_rejected_as_an_unsupported_clear() {
+    #[test]
+    fn empty_via6_is_rejected_as_an_unsupported_clear() {
         let flags = ActionFlags {
             via6: Some(String::new()),
             ..no_flags()
@@ -368,69 +378,65 @@ pub(crate) mod tests {
                 via6_allowed: true,
                 ..folder_caps()
             },
-            &dead_client(),
         )
-        .await
         .expect_err("empty --via6 is an unsupported clear");
         assert_eq!(error.exit(), Exit::Usage);
         assert!(error.hint.expect("hint present").contains("delete"));
     }
 
-    #[tokio::test]
-    async fn folders_reject_via6_before_the_empty_string_check() {
+    #[test]
+    fn folders_reject_via6_before_the_empty_string_check() {
         let flags = ActionFlags {
             via6: Some(String::new()),
             ..no_flags()
         };
-        let error = validate(&flags, folder_caps(), &dead_client())
-            .await
-            .expect_err("folders never accept via6, empty or not");
+        let error =
+            validate(&flags, folder_caps()).expect_err("folders never accept via6, empty or not");
         assert!(error.message.contains("via_v6"));
     }
 
-    #[tokio::test]
-    async fn a_required_action_must_be_given() {
+    #[test]
+    fn a_required_action_must_be_given() {
         let error = validate(
             &no_flags(),
             Caps {
                 action_required: true,
                 ..folder_caps()
             },
-            &dead_client(),
         )
-        .await
         .expect_err("missing --action");
         assert_eq!(error.exit(), Exit::Usage);
     }
 
-    #[tokio::test]
-    async fn via_without_an_action_is_rejected_even_on_updates() {
+    #[test]
+    fn via_without_an_action_is_rejected_even_on_updates() {
         let flags = ActionFlags {
             via: Some("192.0.2.1".into()),
             ..no_flags()
         };
-        let error = validate(&flags, folder_caps(), &dead_client())
-            .await
-            .expect_err("via needs action context");
+        let error = validate(&flags, folder_caps()).expect_err("via needs action context");
         assert_eq!(error.exit(), Exit::Usage);
     }
 
-    #[tokio::test]
-    async fn spoof_or_redirect_without_via_is_rejected() {
+    #[test]
+    fn spoof_or_redirect_without_via_is_rejected() {
         for action in [Action::Spoof, Action::Redirect] {
             let flags = ActionFlags {
                 action: Some(action),
                 ..no_flags()
             };
-            let error = validate(&flags, folder_caps(), &dead_client())
-                .await
-                .expect_err("via required");
+            let error = validate(&flags, folder_caps()).expect_err("via required");
             assert_eq!(error.exit(), Exit::Usage);
+            assert!(
+                error.message.contains("requires --via"),
+                "got: {}",
+                error.message
+            );
         }
     }
 
-    #[tokio::test]
-    async fn via6_requires_spoof_specifically() {
+    #[test]
+    fn via6_requires_spoof_specifically() {
         let flags = ActionFlags {
             action: Some(Action::Redirect),
             via: Some("LHR".into()),
@@ -443,15 +449,13 @@ pub(crate) mod tests {
                 via6_allowed: true,
                 ..folder_caps()
             },
-            &dead_client(),
         )
-        .await
         .expect_err("via6 only with spoof");
         assert_eq!(error.exit(), Exit::Usage);
     }
 
-    #[tokio::test]
-    async fn via6_rejects_an_ipv4_literal() {
+    #[test]
+    fn via6_rejects_an_ipv4_literal() {
         let flags = ActionFlags {
             action: Some(Action::Spoof),
             via: Some("192.0.2.1".into()),
@@ -464,9 +468,7 @@ pub(crate) mod tests {
                 via6_allowed: true,
                 ..folder_caps()
             },
-            &dead_client(),
         )
-        .await
         .expect_err("an IPv4 literal is not an IPv6 literal");
         assert_eq!(error.exit(), Exit::Usage);
         assert!(
@@ -476,8 +478,8 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn via6_rejects_a_hostname() {
+    #[test]
+    fn via6_rejects_a_hostname() {
         let flags = ActionFlags {
             action: Some(Action::Spoof),
             via: Some("192.0.2.1".into()),
@@ -490,16 +492,14 @@ pub(crate) mod tests {
                 via6_allowed: true,
                 ..folder_caps()
             },
-            &dead_client(),
         )
-        .await
         .expect_err("a hostname is not an IPv6 literal");
         assert_eq!(error.exit(), Exit::Usage);
         assert!(error.message.contains("host.tld"), "got: {}", error.message);
     }
 
-    #[tokio::test]
-    async fn via6_accepts_a_bare_ipv6_literal() {
+    #[test]
+    fn via6_accepts_a_bare_ipv6_literal() {
         let flags = ActionFlags {
             action: Some(Action::Spoof),
             via: Some("192.0.2.1".into()),
@@ -512,15 +512,13 @@ pub(crate) mod tests {
                 via6_allowed: true,
                 ..folder_caps()
             },
-            &dead_client(),
         )
-        .await
         .expect("a bare IPv6 literal is legal");
         assert_eq!(spec.via6.as_deref(), Some("2001:db8::1"));
     }
 
-    #[tokio::test]
-    async fn via6_rejects_the_bracketed_form() {
+    #[test]
+    fn via6_rejects_the_bracketed_form() {
         let flags = ActionFlags {
             action: Some(Action::Spoof),
             via: Some("192.0.2.1".into()),
@@ -533,23 +531,19 @@ pub(crate) mod tests {
                 via6_allowed: true,
                 ..folder_caps()
             },
-            &dead_client(),
         )
-        .await
         .expect_err("the bracketed form is not accepted; only the bare literal is");
         assert_eq!(error.exit(), Exit::Usage);
     }
 
-    #[tokio::test]
-    async fn spoof_via_must_be_an_ip_or_a_plausible_hostname() {
+    #[test]
+    fn spoof_via_must_be_an_ip_or_a_plausible_hostname() {
         let bad = ActionFlags {
             action: Some(Action::Spoof),
             via: Some("not a host".into()),
             ..no_flags()
         };
-        let error = validate(&bad, folder_caps(), &dead_client())
-            .await
-            .expect_err("not IP-like or hostname-like");
+        let error = validate(&bad, folder_caps()).expect_err("not IP-like or hostname-like");
         assert_eq!(error.exit(), Exit::Usage);
 
         for via in ["192.0.2.53", "2001:db8::1", "spoof.example.com"] {
@@ -558,11 +552,25 @@ pub(crate) mod tests {
                 via: Some(via.to_owned()),
                 ..no_flags()
             };
-            let spec = validate(&flags, folder_caps(), &dead_client())
-                .await
-                .expect("legal spoof target");
+            let spec = validate(&flags, folder_caps()).expect("legal spoof target");
             assert_eq!(spec.via.as_deref(), Some(via));
         }
+    }
+
+    #[tokio::test]
+    async fn check_redirect_via_is_a_noop_for_non_redirect_actions() {
+        let flags = ActionFlags {
+            action: Some(Action::Spoof),
+            via: Some("192.0.2.1".into()),
+            ..no_flags()
+        };
+        let spec = validate(&flags, folder_caps()).expect("valid spoof spec");
+        // `dead_client` points at an unreachable address; a real request
+        // here would fail (connection refused, or the 50ms cap) and trip
+        // the expect.
+        spec.check_redirect_via(&dead_client())
+            .await
+            .expect("non-redirect actions never touch the client");
     }
 
     async fn proxies_client() -> (MockServer, Client) {
@@ -606,7 +614,8 @@ pub(crate) mod tests {
             via: Some("LHR".into()),
             ..no_flags()
         };
-        let spec = validate(&flags, folder_caps(), &client)
+        let spec = validate(&flags, folder_caps()).expect("passes local validation");
+        spec.check_redirect_via(&client)
             .await
             .expect("LHR is a known proxy");
         assert_eq!(spec.via.as_deref(), Some("LHR"));
@@ -620,7 +629,9 @@ pub(crate) mod tests {
             via: Some("LON".into()),
             ..no_flags()
         };
-        let error = validate(&flags, folder_caps(), &client)
+        let spec = validate(&flags, folder_caps()).expect("passes local validation");
+        let error = spec
+            .check_redirect_via(&client)
             .await
             .expect_err("LON is not a proxy PK");
         assert_eq!(error.exit(), Exit::Usage);
@@ -628,23 +639,19 @@ pub(crate) mod tests {
         assert!(hint.contains("LHR"), "got: {hint}");
     }
 
-    #[tokio::test]
-    async fn enabled_defaults_per_caller_caps() {
+    #[test]
+    fn enabled_defaults_per_caller_caps() {
         let create_like = validate(
             &no_flags(),
             Caps {
                 default_enabled: true,
                 ..folder_caps()
             },
-            &dead_client(),
         )
-        .await
         .expect("no flags still validates");
         assert_eq!(create_like.enabled, Some(true));
 
-        let update_like = validate(&no_flags(), folder_caps(), &dead_client())
-            .await
-            .expect("no flags still validates");
+        let update_like = validate(&no_flags(), folder_caps()).expect("no flags still validates");
         assert_eq!(
             update_like.enabled, None,
             "omitted on updates: never re-enables"
@@ -656,9 +663,7 @@ pub(crate) mod tests {
                 ..no_flags()
             },
             folder_caps(),
-            &dead_client(),
         )
-        .await
         .expect("explicit --disabled");
         assert_eq!(disabled.enabled, Some(false));
     }

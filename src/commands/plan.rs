@@ -9,6 +9,7 @@ use serde_json::Value;
 
 use super::action_flags::ActionSpec;
 use crate::cli::Globals;
+use crate::error::Error;
 use crate::model::action::Action;
 use crate::output::{emit, print_key_values};
 
@@ -16,7 +17,7 @@ use crate::output::{emit, print_key_values};
 /// typed remote-mutation commands (commands.md#dry-run).
 #[derive(Debug, clap::Args)]
 pub struct DryRun {
-    /// Print the withheld mutation as a plan; write nothing
+    /// Print the planned mutation without writing anything
     #[arg(short = 'n', long)]
     pub dry_run: bool,
 }
@@ -159,19 +160,28 @@ pub struct RuleDeleteIntent {
     pub hostname: String,
 }
 
-/// Print the plan and let the caller `return Ok(())` — dry runs always
-/// exit 0, and confirmation is skipped (nothing mutates).
-pub fn print(globals: &Globals, plan: &Plan) {
+/// Print the plan and let the caller `return print(...)` — dry runs always
+/// exit 0 (a `--fields` typo is already caught upfront, before the plan is
+/// even built, and `--fields` together with `--dry-run` is rejected outright
+/// as a conflict — `commands::reject_fields_with_dry_run` — so `globals.fields`
+/// is always `None` by the time a handler reaches here), and confirmation is
+/// skipped (nothing mutates).
+pub fn print(globals: &Globals, plan: &Plan) -> Result<(), Error> {
     emit(globals.mode, globals.fields.as_deref(), plan, || {
         for request in &plan.requests {
             println!("would send: {} {}", request.method, request.path);
             render_intent(&request.intent);
         }
-    });
+    })
 }
 
 /// [`print`] for the common case of a single planned request.
-pub fn print_one(globals: &Globals, method: &'static str, path: String, intent: &impl Serialize) {
+pub fn print_one(
+    globals: &Globals,
+    method: &'static str,
+    path: String,
+    intent: &impl Serialize,
+) -> Result<(), Error> {
     print(
         globals,
         &Plan {
@@ -181,7 +191,7 @@ pub fn print_one(globals: &Globals, method: &'static str, path: String, intent: 
                 intent: serde_json::to_value(intent).expect("intent serializes"),
             }],
         },
-    );
+    )
 }
 
 fn render_intent(intent: &Value) {

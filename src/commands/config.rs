@@ -8,14 +8,22 @@ use serde_json::json;
 use crate::cli::Globals;
 use crate::config::{Store, TOKEN_ENV_VAR, env_var, resolve_token};
 use crate::error::Error;
-use crate::output::{emit, print_key_values};
+use crate::output::{emit, print_key_values, validate_fields};
 
 #[derive(Debug, Subcommand)]
 pub enum ConfigCommand {
     /// Print one value (raw, not JSON)
-    Get { key: Key },
+    Get {
+        /// Config key
+        key: Key,
+    },
     /// Set one value
-    Set { key: Key, value: String },
+    Set {
+        /// Config key
+        key: Key,
+        /// New value
+        value: String,
+    },
     /// The active context, each value annotated with its source
     List,
     /// The config file path
@@ -34,17 +42,27 @@ pub enum Key {
 pub fn run(command: ConfigCommand, globals: &Globals) -> Result<(), Error> {
     let store = Store::discover()?;
     match command {
-        ConfigCommand::Get { key } => get(&store, key),
-        ConfigCommand::Set { key, value } => set(&store, key, value),
+        ConfigCommand::Get { key } => get(&store, key, globals),
+        ConfigCommand::Set { key, value } => set(&store, key, value, globals),
         ConfigCommand::List => list(&store, globals),
         ConfigCommand::Path => {
+            super::reject_explicit_json(globals, "config path", "a path")?;
             println!("{}", store.path().display());
+            // The path is the contract (where cdctl reads and writes) and must
+            // print before the file exists — but a path that `cat` can't open
+            // reads as a lie without this.
+            if !store.path().exists() {
+                eprintln!(
+                    "info: not created yet (`cdctl auth login` or `cdctl config set` will create it)"
+                );
+            }
             Ok(())
         }
     }
 }
 
-fn get(store: &Store, key: Key) -> Result<(), Error> {
+fn get(store: &Store, key: Key, globals: &Globals) -> Result<(), Error> {
+    super::reject_explicit_json(globals, "config get", "a raw value")?;
     let config = super::load_config(store)?;
     match key {
         Key::CurrentContext => println!("{}", config.current_context_name()),
@@ -58,7 +76,8 @@ fn get(store: &Store, key: Key) -> Result<(), Error> {
     Ok(())
 }
 
-fn set(store: &Store, key: Key, value: String) -> Result<(), Error> {
+fn set(store: &Store, key: Key, value: String, globals: &Globals) -> Result<(), Error> {
+    super::reject_explicit_json(globals, "config set", "nothing on stdout")?;
     super::validate::reject_control_chars(&value, "the value")?;
     let mut config = super::load_config(store)?;
     match key {
@@ -82,7 +101,33 @@ struct Annotated {
     source: Option<&'static str>,
 }
 
+/// The `config list` document's top-level key set, in order — the command's
+/// upfront `--fields` check (`output::validate_fields`) validates against
+/// exactly this. `token`'s nested `set`/`source` keys are not projectable
+/// (`--fields` matches only top-level keys — `output::project_tracking`), so
+/// only top-level keys belong here. `document` builds the exact document
+/// this validates against, so `config_list_fields_matches_the_built_document`
+/// (below) is the drift guard: it fails the moment a top-level key is added,
+/// renamed, or removed without a matching edit to this list.
+const FIELDS: &[&str] = &["context", "token", "default_profile"];
+
+fn document(
+    current_context: &Annotated,
+    token_source: Option<&str>,
+    default_profile: &Annotated,
+) -> serde_json::Value {
+    json!({
+        "context": current_context,
+        "token": { "set": token_source.is_some(), "source": token_source },
+        "default_profile": default_profile,
+    })
+}
+
 fn list(store: &Store, globals: &Globals) -> Result<(), Error> {
+    // Upfront: `config list`'s document shape is known (`FIELDS`), so a
+    // typo'd `--fields` is a usage error rather than a check deferred to the
+    // post-build `emit` call.
+    validate_fields(globals.fields.as_deref(), FIELDS)?;
     let config = super::load_config(store)?;
 
     let current_context = Annotated {
@@ -109,12 +154,8 @@ fn list(store: &Store, globals: &Globals) -> Result<(), Error> {
         }
     };
 
-    let document = json!({
-        "context": current_context,
-        "token": { "set": token_source.is_some(), "source": token_source },
-        "default_profile": default_profile,
-    });
-    emit(globals.mode, globals.fields.as_deref(), &document, || {
+    let doc = document(&current_context, token_source.as_deref(), &default_profile);
+    emit(globals.mode, globals.fields.as_deref(), &doc, || {
         let show = |a: &Annotated| match (&a.value, a.source) {
             (Some(value), Some(source)) => format!("{value} ({source})"),
             _ => "(not set)".to_owned(),
@@ -129,6 +170,33 @@ fn list(store: &Store, globals: &Globals) -> Result<(), Error> {
             ),
             ("default_profile", show(&default_profile)),
         ]);
-    });
-    Ok(())
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Drift guard for [`FIELDS`]: a top-level key added, renamed, or
+    /// removed from `document`'s output without a matching edit to `FIELDS`
+    /// fails here.
+    #[test]
+    fn config_list_fields_matches_the_built_document() {
+        let current_context = Annotated {
+            value: Some("personal".into()),
+            source: Some("default"),
+        };
+        let default_profile = Annotated {
+            value: None,
+            source: None,
+        };
+        let doc = document(&current_context, None, &default_profile);
+        let keys: Vec<&str> = doc
+            .as_object()
+            .expect("object")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(keys, FIELDS);
+    }
 }

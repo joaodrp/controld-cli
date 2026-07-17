@@ -10,7 +10,7 @@ use serde::Serialize;
 use crate::cli::Globals;
 use crate::config::Store;
 use crate::error::Error;
-use crate::output::{emit, print_key_values};
+use crate::output::{emit, print_key_values, validate_fields};
 
 #[derive(Debug, Subcommand)]
 pub enum AuthCommand {
@@ -31,13 +31,14 @@ pub struct LoginArgs {
 
 pub async fn run(command: AuthCommand, globals: &Globals) -> Result<(), Error> {
     match command {
-        AuthCommand::Login(args) => login(&args),
+        AuthCommand::Login(args) => login(&args, globals),
         AuthCommand::Status => status(globals).await,
-        AuthCommand::Logout => logout(),
+        AuthCommand::Logout => logout(globals),
     }
 }
 
-fn login(args: &LoginArgs) -> Result<(), Error> {
+fn login(args: &LoginArgs, globals: &Globals) -> Result<(), Error> {
+    super::reject_explicit_json(globals, "auth login", "nothing on stdout")?;
     if !args.token_stdin {
         return Err(
             Error::usage("a token is only accepted on stdin; pass --token-stdin").with_hint(
@@ -80,7 +81,21 @@ struct AuthStatus {
     token_source: String,
 }
 
+impl AuthStatus {
+    /// The struct's serialized top-level key set, in order — `auth status`'s
+    /// upfront `--fields` check (`output::validate_fields`) validates
+    /// against exactly this, before any request.
+    /// `auth_status_fields_matches_the_serialized_key_set` (below) is the
+    /// drift guard: it fails the moment a field is added, renamed, or
+    /// removed here without a matching edit to this list.
+    const FIELDS: &'static [&'static str] = &["authenticated", "email", "region", "token_source"];
+}
+
 async fn status(globals: &Globals) -> Result<(), Error> {
+    // Upfront, before any request: `auth status`'s row shape is known
+    // (`AuthStatus::FIELDS`), so a typo'd `--fields` is a usage error rather
+    // than a check deferred to the post-request `emit` call.
+    validate_fields(globals.fields.as_deref(), AuthStatus::FIELDS)?;
     let (client, source, _config) = super::authenticated_client(globals)?;
     let user = client.get("/users", "account").await?.flat()?;
 
@@ -104,11 +119,11 @@ async fn status(globals: &Globals) -> Result<(), Error> {
                 ("token_source", auth_status.token_source.clone()),
             ]);
         },
-    );
-    Ok(())
+    )
 }
 
-fn logout() -> Result<(), Error> {
+fn logout(globals: &Globals) -> Result<(), Error> {
+    super::reject_explicit_json(globals, "auth logout", "nothing on stdout")?;
     let store = Store::discover()?;
     let mut config = super::load_config(&store)?;
     let context = config.current_context_name().to_owned();
@@ -122,4 +137,29 @@ fn logout() -> Result<(), Error> {
     store.save(&config)?;
     eprintln!("info: token removed for context \"{context}\"");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Drift guard for [`AuthStatus::FIELDS`]: a field added, renamed, or
+    /// removed on the struct without a matching edit to `FIELDS` fails here.
+    #[test]
+    fn auth_status_fields_matches_the_serialized_key_set() {
+        let status = AuthStatus {
+            authenticated: true,
+            email: Some("user@example.com".into()),
+            region: Some("europe".into()),
+            token_source: "config".into(),
+        };
+        let value = serde_json::to_value(&status).expect("serializes");
+        let keys: Vec<&str> = value
+            .as_object()
+            .expect("object")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(keys, AuthStatus::FIELDS);
+    }
 }

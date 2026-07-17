@@ -6,16 +6,16 @@ use clap::Subcommand;
 use crate::cli::Globals;
 use crate::error::Error;
 use crate::model::profile::Profile;
-use crate::output::{emit, print_key_values, render_table, time};
+use crate::output::{emit, print_key_values, render_table, time, validate_fields};
 
 #[derive(Debug, Subcommand)]
 pub enum ProfileCommand {
-    /// List profiles (RULES counts enabled rules only)
+    /// List profiles
     List,
     /// Show one profile by id or name
     Get {
-        /// Profile id or name (names resolve case-insensitively; ambiguity
-        /// is an error)
+        /// Profile id or name (case-insensitive, an ambiguous name is an
+        /// error)
         selector: String,
     },
 }
@@ -28,6 +28,11 @@ pub async fn run(command: ProfileCommand, globals: &Globals) -> Result<(), Error
 }
 
 async fn list(globals: &Globals) -> Result<(), Error> {
+    // Upfront, before any request: `profile list`'s row shape is known
+    // (`Profile::FIELDS`), so a typo'd `--fields` is a usage error even when
+    // the eventual result is empty — `emit`'s own check alone would be
+    // vacuous on a zero-profile account and let the typo through with exit 0.
+    validate_fields(globals.fields.as_deref(), Profile::FIELDS)?;
     let (client, _source, _config) = super::authenticated_client(globals)?;
     let api_profiles = super::scope::fetch_profiles(&client).await?;
     let profiles = api_profiles
@@ -52,12 +57,13 @@ async fn list(globals: &Globals) -> Result<(), Error> {
             "{}",
             render_table(&["NAME", "ID", "RULES", "UPDATED"], rows, globals.plain)
         );
-    });
-    Ok(())
+    })
 }
 
 async fn get(selector: &str, globals: &Globals) -> Result<(), Error> {
     super::validate::reject_control_chars(selector, "the profile selector")?;
+    // Upfront, before any request; see `list`'s matching comment.
+    validate_fields(globals.fields.as_deref(), Profile::FIELDS)?;
     let (client, _source, _config) = super::authenticated_client(globals)?;
     let api_profiles = super::scope::fetch_profiles(&client).await?;
     let profile = Profile::from_api(super::scope::find_profile(&api_profiles, selector)?)?;
@@ -79,6 +85,5 @@ async fn get(selector: &str, globals: &Globals) -> Result<(), Error> {
             ),
             ("updated", profile.updated.clone()),
         ]);
-    });
-    Ok(())
+    })
 }

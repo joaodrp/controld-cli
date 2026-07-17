@@ -12,7 +12,12 @@ Written before implementation so the commands are consistent by construction, no
   [Dry run](#dry-run). All argument values pass [input hardening](#input-hardening) before any
   request is built.
 - Table columns are the *default human view*; `--json` returns the full object; `--fields a,b`
-  projects it.
+  projects it. An unknown field is a usage error (exit `2`), checked upfront — before any request,
+  confirmation prompt, or dry-run plan — never data-dependent. A valid field on an empty result
+  still prints `[]`. `--fields` conflicts with `--dry-run` (usage error, exit `2`, checked
+  upfront): a dry run prints the [request plan](#dry-run), not data rows, so projecting row fields
+  over it is meaningless — `--json` alone stays legal on a dry run (the plan **is** a JSON
+  document).
 - **Stable key set.** Fields the API sends optionally are always present in our JSON, `null` when
   absent. Consumers never branch on key existence. Scope: **resource, error, and creation-intent
   schemas** (in a creation intent, `null` means the field will not be sent — a create has nothing
@@ -299,7 +304,7 @@ not reshape what it carries. It is gated by [D9](decisions.md) instead.
 | `profile default get` | — |
 | `profile default set` | *action flags* |
 
-**Table:** `NAME, ID, RULES, UPDATED` — `RULES` shows the **enabled** count, and `--help` says so
+**Table:** `NAME, ID, RULES, UPDATED` — `RULES` shows the **enabled** count
 **JSON:** `{id, name, enabled_rules, enabled_filters, enabled_services, folders, options, default_action, enabled, disabled_until, updated}`
 
 The counts come from `profile.*.count`, which tracks **enabled items only** — the list endpoints
@@ -673,8 +678,8 @@ alias — the boolean cannot say which disable it means.
 | Command | stdout |
 | --- | --- |
 | `auth status` | `{authenticated, email, region, token_source}` — `token_source`: `env` \| `config`. Human mode: key/value lines. No token is the D4 envelope (`auth.missing_token`, exit `4`) — `authenticated: false` is never printed |
-| `auth login` / `auth logout` | nothing — confirmation goes to stderr |
-| `config get <k>` | the raw value (nothing when unset); `config list` -> `{context: {value, source}, token: {set, source}, default_profile: {value, source}}`, `source`: `env` \| `config` \| `default` \| `null` — the token's *value* never prints; `config path` -> the file path |
+| `auth login` / `auth logout` | nothing — confirmation goes to stderr. An explicit `--json`/`--fields` is a usage error (exit `2`) like the artifact rows below; ambient `CONTROLD_OUTPUT=json` is ignored |
+| `config get <k>` / `config set <k> <v>` / `config path` | the raw value (nothing when unset) / nothing / the file path, respectively — never JSON; an explicit `--json`/`--fields` is a usage error (exit `2`) on all three, ambient `CONTROLD_OUTPUT=json` ignored. `config list` -> `{context: {value, source}, token: {set, source}, default_profile: {value, source}}`, `source`: `env` \| `config` \| `default` \| `null` — the token's *value* never prints |
 | `completions <shell>` / `reference` | the artifact itself (script / Markdown) — **not JSON**; an explicit `--json`/`--fields` is a usage error (exit 2), ambient `CONTROLD_OUTPUT=json` is ignored — an env-configured agent can still install completions |
 | `api ...` | the upstream body **verbatim**, byte-for-byte with no added newline (the binary `/mobileconfig` response survives piping) — unstable by design ([D9](decisions.md)); errors still classify to standard exit codes, with the literal noun `resource` in slugs (`resource.not_found`) — the passthrough cannot know what it touched. An explicit `--json`/`--fields` is a usage error (exit `2`) like the artifact rows — neither can be honored on a verbatim body; ambient `CONTROLD_OUTPUT=json` shapes only error rendering. A 2xx whose body carries no error marker is **success, whatever the body's shape** — typed writes demand `success: true`, but the passthrough cannot impose the envelope (the binary `/mobileconfig` case); confirming a raw write's effect means re-fetching state |
 

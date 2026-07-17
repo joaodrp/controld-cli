@@ -23,6 +23,31 @@ pub enum Exit {
     Interrupt = 130,
 }
 
+/// The code list only — no leading "Exit codes:" line; callers supply their
+/// own header (`cli::Cli`'s `after_long_help` and `commands::reference`'s
+/// `## Exit codes` section both render this verbatim). One line per
+/// [`Exit`] variant; `exit_codes_help_matches_every_exit_variant_exhaustively`
+/// (below) is the drift guard: no `_` arm means a new `Exit` variant fails to
+/// compile until it gets a match arm there; the guard's assert then fails
+/// until this constant gains the matching line too.
+pub const EXIT_CODES_HELP: &str = concat!(
+    "  0    ok\n",
+    "  1    generic error\n",
+    "  2    usage error\n",
+    "  3    not found\n",
+    "  4    auth\n",
+    "  5    forbidden / plan required\n",
+    "  6    conflict\n",
+    "  7    confirmation required\n",
+    "  8    retryable (the only retryable code)\n",
+    "  130  interrupted (SIGINT)\n",
+    // 141 is not an `Exit` variant: `main`'s `reset_sigpipe` restores the
+    // default handler and the kernel reports 128+SIGPIPE. It is still part of
+    // the documented contract (design.md D5), so the advertised list carries
+    // it; the drift guard pins it as the one non-variant line.
+    "  141  broken pipe (SIGPIPE, Unix)",
+);
+
 impl From<Exit> for std::process::ExitCode {
     fn from(exit: Exit) -> Self {
         Self::from(exit as u8)
@@ -508,6 +533,57 @@ fn classify_effective(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The drift guard `EXIT_CODES_HELP`'s doc comment promises: no `_` arm
+    /// means a new `Exit` variant fails to compile until it gets a match arm
+    /// here; the assert below then fails until `EXIT_CODES_HELP` gains the
+    /// matching line. Each expected line is derived from the variant's own
+    /// discriminant (`variant as u8`), not a second hand-typed copy of the
+    /// numbers — a mismatched number, not just a missing description, now
+    /// fails the assert too.
+    #[test]
+    fn exit_codes_help_matches_every_exit_variant_exhaustively() {
+        fn description(exit: Exit) -> &'static str {
+            match exit {
+                Exit::Success => "ok",
+                Exit::Generic => "generic error",
+                Exit::Usage => "usage error",
+                Exit::NotFound => "not found",
+                Exit::Auth => "auth",
+                Exit::Forbidden => "forbidden / plan required",
+                Exit::Conflict => "conflict",
+                Exit::ConfirmationRequired => "confirmation required",
+                Exit::Retryable => "retryable (the only retryable code)",
+                Exit::Interrupt => "interrupted (SIGINT)",
+            }
+        }
+        let variants = [
+            Exit::Success,
+            Exit::Generic,
+            Exit::Usage,
+            Exit::NotFound,
+            Exit::Auth,
+            Exit::Forbidden,
+            Exit::Conflict,
+            Exit::ConfirmationRequired,
+            Exit::Retryable,
+            Exit::Interrupt,
+        ];
+        let rebuilt = variants
+            .iter()
+            .map(|&exit| format!("  {:<4} {}", exit as u8, description(exit)))
+            .collect::<Vec<_>>()
+            .join("\n")
+            // 141 is kernel-reported (128+SIGPIPE), never an `Exit` variant —
+            // the one advertised line that cannot be derived from the enum.
+            + "\n  141  broken pipe (SIGPIPE, Unix)";
+        assert_eq!(rebuilt, EXIT_CODES_HELP);
+        assert_eq!(
+            EXIT_CODES_HELP.lines().count(),
+            variants.len() + 1,
+            "a forgotten array entry above must not silently pass with fewer lines than variants"
+        );
+    }
 
     #[track_caller]
     fn assert_classified(

@@ -16,9 +16,7 @@ use crate::output::Mode;
     name = "cdctl",
     version,
     about = "Manage a Control D account over its REST API",
-    long_about = "Manage a Control D account over its REST API.\n\n\
-        cdctl is not ctrld: ctrld is Control D's DNS daemon and runs DNS on a \
-        machine; cdctl manages the account behind it. They coexist."
+    after_long_help = format!("Exit codes:\n{}", crate::error::EXIT_CODES_HELP)
 )]
 pub struct Cli {
     #[command(flatten)]
@@ -30,6 +28,7 @@ pub struct Cli {
 /// D6 forbids `--token` (argv is world-readable) and design.md forbids a
 /// `-v` short flag (version/verbose ambiguity) — their absence is deliberate.
 #[derive(Debug, Args)]
+#[command(next_help_heading = "Global options")]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "CLI flags are boolean by nature"
@@ -49,7 +48,7 @@ pub struct GlobalArgs {
     #[arg(long, global = true)]
     pub json: bool,
 
-    /// Comma-separated JSON fields to keep; implies --json
+    /// Comma-separated JSON fields to keep (implies --json)
     #[arg(long, global = true, value_delimiter = ',', value_name = "a,b")]
     pub fields: Option<Vec<String>>,
 
@@ -61,22 +60,33 @@ pub struct GlobalArgs {
     #[arg(short = 'y', long, global = true)]
     pub yes: bool,
 
-    /// Disable automatic retries (GETs only ever retry)
+    /// Disable automatic retries
     #[arg(long, global = true)]
     pub no_retry: bool,
 
     /// Per-request timeout in seconds
-    #[arg(long, global = true, value_name = "SECS", value_parser = clap::value_parser!(u64).range(1..))]
+    #[arg(long, global = true, value_name = "SECS", value_parser = parse_timeout_secs)]
     pub timeout: Option<u64>,
 
-    /// Request/response trace on stderr; token always redacted
+    /// Request/response trace on stderr (token always redacted)
     #[arg(long, global = true)]
     pub debug: bool,
 }
 
+/// `--timeout`'s value parser: a plain message on `0` instead of clap's
+/// default `1..18446744073709551615` range dump. Clap-level: exit 2, fires
+/// before any client or config exists.
+fn parse_timeout_secs(raw: &str) -> Result<u64, String> {
+    match raw.parse::<u64>() {
+        Ok(0) => Err("must be at least 1".to_owned()),
+        Ok(value) => Ok(value),
+        Err(err) => Err(err.to_string()),
+    }
+}
+
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Raw request against the API origin (escape hatch; GET by default)
+    /// Raw request against the API origin (escape hatch, GET by default)
     Api(ApiArgs),
     /// Authenticate cdctl with an API token
     #[command(subcommand)]
@@ -94,10 +104,16 @@ pub enum Command {
     #[command(subcommand)]
     Config(ConfigCommand),
     /// Shell completion script (works without a token)
+    #[command(after_long_help = "Install:\n  \
+        bash  cdctl completions bash > ~/.local/share/bash-completion/completions/cdctl\n  \
+        zsh   cdctl completions zsh > ~/.zfunc/_cdctl   (add fpath+=~/.zfunc before compinit)\n  \
+        fish  cdctl completions fish > ~/.config/fish/completions/cdctl.fish\n\n\
+        Create the target directory first if missing (mkdir -p). Open a new \
+        shell afterwards. Regenerate after upgrading cdctl.")]
     Completions { shell: clap_complete::Shell },
     /// The full command surface as one Markdown document (works without a token)
     Reference,
-    /// Roff man pages for the whole command tree (packaging only; laid out like `completions` per D18)
+    /// Roff man pages for the whole command tree (packaging only, laid out like `completions`)
     #[command(hide = true)]
     Man {
         #[arg(long, value_name = "DIR")]
