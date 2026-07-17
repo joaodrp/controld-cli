@@ -42,7 +42,7 @@ use crate::cli::Globals;
 use crate::error::{Error, Exit};
 use crate::model::folder::ApiFolder;
 use crate::model::rule::{ApiRule, Rule};
-use crate::output::{emit, escape_controls, render_table};
+use crate::output::{emit, escape_controls, render_table, validate_fields};
 
 /// The import chunk size, comfortably inside the server's silent
 /// ~1001-form-var ceiling (D11, write-verification.md) — the cap binds
@@ -89,12 +89,11 @@ fn validate_folder_selector(selector: Option<&String>) -> Result<(), Error> {
 pub enum RuleCommand {
     /// List a profile's rules
     List {
-        /// Folder id or name; omitted lists the whole profile (never a
-        /// `folder_id=0` segment — read-verification.md section 3)
+        /// Folder id or name (omitted lists the whole profile)
         #[arg(long, value_name = "id|name")]
         folder: Option<String>,
     },
-    /// Create rules (action required; at most 500 hostnames per invocation)
+    /// Create rules
     Create {
         /// Hostnames to create (wildcards like *.example.com are legal)
         #[arg(required = true, value_name = "HOSTNAME")]
@@ -109,6 +108,7 @@ pub enum RuleCommand {
     },
     /// Update rules (sends only the flags given — `PUT /rules` merges)
     Update {
+        /// Hostnames to update
         #[arg(required = true, value_name = "HOSTNAME")]
         hostnames: Vec<String>,
         #[command(flatten)]
@@ -124,6 +124,7 @@ pub enum RuleCommand {
     },
     /// Delete rules
     Delete {
+        /// Hostnames to delete
         #[arg(required = true, value_name = "HOSTNAME")]
         hostnames: Vec<String>,
         #[command(flatten)]
@@ -155,6 +156,11 @@ pub async fn run(command: RuleCommand, globals: &Globals) -> Result<(), Error> {
 
 async fn list(folder_selector: Option<String>, globals: &Globals) -> Result<(), Error> {
     validate_folder_selector(folder_selector.as_ref())?;
+    // Upfront, before any request: `rule list`'s row shape is known
+    // (`Rule::FIELDS`), so a typo'd `--fields` is a usage error even when
+    // the eventual result is empty — `emit`'s own check alone would be
+    // vacuous on an empty profile and let the typo through with exit 0.
+    validate_fields(globals.fields.as_deref(), Rule::FIELDS)?;
     let (client, _source, config) = super::authenticated_client(globals)?;
     let scope = super::scope::resolve_profile(&client, globals, config.default_profile()).await?;
 
@@ -177,8 +183,7 @@ async fn list(folder_selector: Option<String>, globals: &Globals) -> Result<(), 
         .collect::<Result<_, _>>()?;
     rules.sort_by_key(|rule| rule.order);
 
-    print_rules(globals, &rules);
-    Ok(())
+    print_rules(globals, &rules)
 }
 
 async fn create(
@@ -191,16 +196,22 @@ async fn create(
     validate_folder_selector(folder_selector.as_ref())?;
     let hostnames = canonicalize_hostnames(raw_hostnames, super::validate::reject_control_chars)?;
     check_hostname_cap(&hostnames)?;
-
-    let (client, _source, config) = super::authenticated_client(globals)?;
-    let spec = action_flags::validate(
+    // Before anything is written or planned, live or dry-run alike:
+    // `--fields` always names fields of `Rule`, the command's data schema —
+    // never the dry-run plan envelope's own keys (`method`/`path`/`intent`).
+    // A dry run prints the plan, not rows, so the two flags conflict outright
+    // (`reject_fields_with_dry_run`, checked once the field names themselves
+    // are known-good).
+    validate_fields(globals.fields.as_deref(), Rule::FIELDS)?;
+    super::reject_fields_with_dry_run(dry_run, globals)?;
+    let (spec, client, config) = super::validated_client(
         flags,
         Caps {
             via6_allowed: true,
             action_required: true,
             default_enabled: true,
         },
-        &client,
+        globals,
     )
     .await?;
 
@@ -228,8 +239,7 @@ async fn create(
             enabled: spec.enabled.expect("create caps default enabled"),
             folder_id,
         };
-        plan::print_one(globals, "POST", path, &intent);
-        return Ok(());
+        return plan::print_one(globals, "POST", path, &intent);
     }
 
     let mut form: Vec<(&str, String)> = spec.form_pairs();
@@ -310,7 +320,7 @@ async fn verify_create(
     )?;
 
     if reconciled.absent.is_empty() && reconciled.mismatched.is_empty() {
-        print_rules(globals, &reconciled.landed);
+        print_rules(globals, &reconciled.landed)?;
         announce_if_ambiguous_write_landed(write_error);
         return Ok(());
     }
@@ -438,16 +448,18 @@ async fn update(
             "rule update needs at least one change: an action flag, --folder, or --root",
         ));
     }
-
-    let (client, _source, config) = super::authenticated_client(globals)?;
-    let spec = action_flags::validate(
+    // Before anything is written or planned, live or dry-run alike; see
+    // `create`'s matching comment.
+    validate_fields(globals.fields.as_deref(), Rule::FIELDS)?;
+    super::reject_fields_with_dry_run(dry_run, globals)?;
+    let (spec, client, config) = super::validated_client(
         flags,
         Caps {
             via6_allowed: true,
             action_required: false,
             default_enabled: false,
         },
-        &client,
+        globals,
     )
     .await?;
 
@@ -474,7 +486,7 @@ async fn update(
 
     let path = rules_path(&scope.id);
     if dry_run {
-        plan::print_one(
+        return plan::print_one(
             globals,
             "PUT",
             path,
@@ -483,7 +495,6 @@ async fn update(
                 changes,
             },
         );
-        return Ok(());
     }
 
     let mut form: Vec<(&str, String)> = spec.form_pairs();
@@ -555,7 +566,7 @@ async fn verify_update(
     )?;
 
     if reconciled.absent.is_empty() && reconciled.mismatched.is_empty() {
-        print_rules(globals, &reconciled.landed);
+        print_rules(globals, &reconciled.landed)?;
         announce_if_ambiguous_write_landed(write_error);
         return Ok(());
     }
@@ -600,6 +611,14 @@ async fn delete(raw_hostnames: &[String], dry_run: bool, globals: &Globals) -> R
     // path-bound check (rejects `?`/`#`/`%` in addition to control
     // characters; `*` stays legal — commands.md#input-hardening).
     let hostnames = canonicalize_hostnames(raw_hostnames, super::validate::validate_path_bound)?;
+    // Upfront, before any request and before the confirmation prompt: a
+    // delete emits no row, but `--fields` still names a field of `Rule` (the
+    // command's data schema) — a typo must fail before anything is deleted,
+    // not slip through as an unchecked flag that does nothing. A dry-run
+    // delete prints the plan instead, so the two flags still conflict
+    // outright, same as `create`/`update`.
+    validate_fields(globals.fields.as_deref(), Rule::FIELDS)?;
+    super::reject_fields_with_dry_run(dry_run, globals)?;
 
     let (client, _source, config) = super::authenticated_client(globals)?;
     let scope = super::scope::resolve_profile(&client, globals, config.default_profile()).await?;
@@ -616,8 +635,7 @@ async fn delete(raw_hostnames: &[String], dry_run: bool, globals: &Globals) -> R
                 .expect("intent serializes"),
             })
             .collect();
-        plan::print(globals, &Plan { requests });
-        return Ok(());
+        return plan::print(globals, &Plan { requests });
     }
 
     let prompt = delete_prompt(&hostnames, &scope.name);
@@ -1105,15 +1123,14 @@ fn render_rules_table(rules: &[Rule], plain: bool) -> comfy_table::Table {
     )
 }
 
-fn print_rules(globals: &Globals, rules: &[Rule]) {
+fn print_rules(globals: &Globals, rules: &[Rule]) -> Result<(), Error> {
     emit(globals.mode, globals.fields.as_deref(), &rules, || {
         println!("{}", render_rules_table(rules, globals.plain));
-    });
+    })
 }
 
 #[cfg(test)]
 mod tests {
-    use super::action_flags::tests::dead_client;
     use super::*;
     use crate::model::action::Action;
 
@@ -1133,7 +1150,7 @@ mod tests {
         }
     }
 
-    async fn spoof_spec(via: &str, via6: Option<&str>, enabled: Option<bool>) -> ActionSpec {
+    fn spoof_spec(via: &str, via6: Option<&str>, enabled: Option<bool>) -> ActionSpec {
         let flags = ActionFlags {
             action: Some(Action::Spoof),
             via: Some(via.to_owned()),
@@ -1148,9 +1165,7 @@ mod tests {
                 action_required: true,
                 default_enabled: true,
             },
-            &dead_client(),
         )
-        .await
         .expect("valid spoof spec")
     }
 
@@ -1227,9 +1242,9 @@ mod tests {
         check_hostname_cap(&canon).expect("500 distinct hostnames is within the cap");
     }
 
-    #[tokio::test]
-    async fn create_matches_checks_every_field() {
-        let spec = spoof_spec("192.0.2.1", Some("2001:db8::1"), None).await;
+    #[test]
+    fn create_matches_checks_every_field() {
+        let spec = spoof_spec("192.0.2.1", Some("2001:db8::1"), None);
         let rule = Rule {
             hostname: "a.example.com".into(),
             action: Action::Spoof,
@@ -1423,9 +1438,9 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn create_retry_argv_uses_resolved_ids_and_omits_the_default_enabled() {
-        let spec = spoof_spec("192.0.2.1", None, None).await;
+    #[test]
+    fn create_retry_argv_uses_resolved_ids_and_omits_the_default_enabled() {
+        let spec = spoof_spec("192.0.2.1", None, None);
         let argv = create_retry_argv("pk1", &spec, Some(7), &["a.example.com".to_owned()]);
         assert_eq!(
             argv,
@@ -1446,9 +1461,9 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn create_retry_argv_renders_disabled_explicitly() {
-        let spec = spoof_spec("192.0.2.1", None, Some(false)).await;
+    #[test]
+    fn create_retry_argv_renders_disabled_explicitly() {
+        let spec = spoof_spec("192.0.2.1", None, Some(false));
         let argv = create_retry_argv("pk1", &spec, None, &["a.example.com".to_owned()]);
         assert!(argv.contains(&"--disabled".to_owned()));
         assert!(!argv.contains(&"--folder".to_owned()));

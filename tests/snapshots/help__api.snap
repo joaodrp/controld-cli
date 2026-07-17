@@ -1,8 +1,8 @@
 ---
 source: tests/help.rs
-expression: help
+expression: "help_for(dir.path(), &[noun])"
 ---
-Raw request against the API origin (escape hatch; GET by default)
+Raw request against the API origin (escape hatch, GET by default)
 
 Usage: cdctl api [OPTIONS] <path>
 
@@ -10,17 +10,19 @@ Arguments:
   <path>  Path relative to the API origin, query string included (e.g. '/access?device_id=abc')
 
 Options:
-  -p, --profile <PK|name>  Profile to operate on (name or PK) [env: CONTROLD_PROFILE=]
-  -X, --method <METHOD>    HTTP method; non-GET also requires --yes [default: GET]
-  -F, --field <key=value>  Form field (repeatable); keys are sent literally — write 'hostnames[]=a'
+  -X, --method <METHOD>    HTTP method (non-GET also requires --yes) [default: GET]
+  -F, --field <key=value>  Form field (repeatable). Keys are sent literally — write 'hostnames[]=a'
                            yourself. Requires a non-GET -X
-      --json               Emit JSON (full document) instead of a table
-      --fields <a,b>       Comma-separated JSON fields to keep; implies --json
-      --input <->          Read a JSON body from stdin, sent verbatim; "-" is the only accepted
+      --input <->          Read a JSON body from stdin, sent verbatim. "-" is the only accepted
                            value. Requires a non-GET -X
+  -h, --help               Print help
+
+Global options:
+  -p, --profile <PK|name>  Profile to operate on (name or PK) [env: CONTROLD_PROFILE=]
+      --json               Emit JSON (full document) instead of a table
+      --fields <a,b>       Comma-separated JSON fields to keep (implies --json)
       --plain              Tables without borders, for awk/cut
   -y, --yes                Skip confirmation prompts (ignored when the target profile is implicit)
-      --no-retry           Disable automatic retries (GETs only ever retry)
+      --no-retry           Disable automatic retries
       --timeout <SECS>     Per-request timeout in seconds
-      --debug              Request/response trace on stderr; token always redacted
-  -h, --help               Print help
+      --debug              Request/response trace on stderr (token always redacted)

@@ -84,6 +84,23 @@ pub(crate) fn authenticated_client(
     Ok((build_client(Some(token), globals)?, source, config))
 }
 
+/// The `validate` -> `authenticated_client` -> `check_redirect_via`
+/// choreography shared by `rule`/`folder` `create`/`update`, in that fixed
+/// order: local usage errors must outrank auth errors
+/// (`tests/cli.rs local_flag_errors_outrank_a_missing_token` pins it), so
+/// `validate` runs first; `check_redirect_via` needs a live client, so it
+/// runs last.
+pub(crate) async fn validated_client(
+    flags: &action_flags::ActionFlags,
+    caps: action_flags::Caps,
+    globals: &Globals,
+) -> Result<(action_flags::ActionSpec, Client, Config), Error> {
+    let spec = action_flags::validate(flags, caps)?;
+    let (client, _source, config) = authenticated_client(globals)?;
+    spec.check_redirect_via(&client).await?;
+    Ok((spec, client, config))
+}
+
 /// Commands whose stdout is never JSON (`completions`, `reference`, `api`):
 /// an explicit `--json`/`--fields` is a usage error; ambient
 /// `CONTROLD_OUTPUT` never shapes their stdout (it still shapes error
@@ -97,6 +114,25 @@ pub(crate) fn reject_explicit_json(
         return Err(Error::usage(format!(
             "`cdctl {command}` emits {artifact}, not JSON; drop --json/--fields"
         )));
+    }
+    Ok(())
+}
+
+/// `--fields` conflicts with `--dry-run` in every mutating handler (rule/
+/// folder `create`/`update`/`delete`): a dry run prints the request plan, not
+/// data rows, so projecting row fields over it is meaningless, and the plan
+/// envelope's own keys (`method`/`path`/`intent`) are not the row-schema
+/// namespace `--fields` names either way. Every handler calls this
+/// immediately after its `output::validate_fields` fields-name check, so a
+/// genuine typo (`--fields bogus`) is still reported as that typo, not this
+/// conflict — this only fires once the requested field names are already
+/// known-good.
+pub(crate) fn reject_fields_with_dry_run(dry_run: bool, globals: &Globals) -> Result<(), Error> {
+    if dry_run && globals.fields.is_some() {
+        return Err(Error::usage(
+            "--fields selects data-row fields, but a dry run prints the request plan; drop \
+             --fields or run without --dry-run",
+        ));
     }
     Ok(())
 }

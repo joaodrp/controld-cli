@@ -7,7 +7,7 @@
 use clap::Subcommand;
 use reqwest::Method;
 
-use super::action_flags::{self, ActionFlags, Caps};
+use super::action_flags::{ActionFlags, Caps};
 use super::confirm::confirm;
 use super::plan::{
     self, DryRun, FolderCreateIntent, FolderDeleteIntent, FolderUpdateChanges, FolderUpdateIntent,
@@ -15,7 +15,7 @@ use super::plan::{
 use crate::cli::Globals;
 use crate::error::Error;
 use crate::model::folder::{ApiFolder, Folder};
-use crate::output::{emit, escape_controls, print_key_values, render_table};
+use crate::output::{emit, escape_controls, print_key_values, render_table, validate_fields};
 
 #[derive(Debug, Subcommand)]
 pub enum FolderCommand {
@@ -32,8 +32,8 @@ pub enum FolderCommand {
     },
     /// Rename a folder or change its action (sends only the flags given)
     Update {
-        /// Folder id or name (names resolve case-insensitively; ambiguity
-        /// is an error)
+        /// Folder id or name (case-insensitive, an ambiguous name is an
+        /// error)
         selector: String,
         /// New name
         #[arg(long)]
@@ -45,8 +45,8 @@ pub enum FolderCommand {
     },
     /// Delete a folder and its contained rules
     Delete {
-        /// Folder id or name (names resolve case-insensitively; ambiguity
-        /// is an error)
+        /// Folder id or name (case-insensitive, an ambiguous name is an
+        /// error)
         selector: String,
         #[command(flatten)]
         dry_run: DryRun,
@@ -74,6 +74,11 @@ pub async fn run(command: FolderCommand, globals: &Globals) -> Result<(), Error>
 }
 
 async fn list(globals: &Globals) -> Result<(), Error> {
+    // Upfront, before any request: `folder list`'s row shape is known
+    // (`Folder::FIELDS`), so a typo'd `--fields` is a usage error even when
+    // the eventual result is empty — `emit`'s own check alone would be
+    // vacuous on an empty profile and let the typo through with exit 0.
+    validate_fields(globals.fields.as_deref(), Folder::FIELDS)?;
     let (client, _source, config) = super::authenticated_client(globals)?;
     let scope = super::scope::resolve_profile(&client, globals, config.default_profile()).await?;
 
@@ -106,8 +111,7 @@ async fn list(globals: &Globals) -> Result<(), Error> {
                 globals.plain
             )
         );
-    });
-    Ok(())
+    })
 }
 
 async fn create(
@@ -117,16 +121,22 @@ async fn create(
     globals: &Globals,
 ) -> Result<(), Error> {
     super::validate::reject_control_chars(name, "the folder name")?;
-    let (client, _source, config) = super::authenticated_client(globals)?;
-
-    let spec = action_flags::validate(
+    // Before anything is written or planned, live or dry-run alike:
+    // `--fields` always names fields of `Folder`, the command's data schema —
+    // never the dry-run plan envelope's own keys (`method`/`path`/`intent`).
+    // A dry run prints the plan, not rows, so the two flags conflict outright
+    // (`reject_fields_with_dry_run`, checked once the field names themselves
+    // are known-good).
+    validate_fields(globals.fields.as_deref(), Folder::FIELDS)?;
+    super::reject_fields_with_dry_run(dry_run, globals)?;
+    let (spec, client, config) = super::validated_client(
         flags,
         Caps {
             via6_allowed: false,
             action_required: false,
             default_enabled: true,
         },
-        &client,
+        globals,
     )
     .await?;
 
@@ -140,8 +150,7 @@ async fn create(
             via: spec.via.clone(),
             enabled: spec.enabled.expect("create caps default enabled"),
         };
-        plan::print_one(globals, "POST", path, &intent);
-        return Ok(());
+        return plan::print_one(globals, "POST", path, &intent);
     }
 
     let mut form: Vec<(&str, String)> = vec![("name", name.to_owned())];
@@ -150,8 +159,7 @@ async fn create(
     let envelope = client.write(Method::POST, &path, &form, "folder").await?;
     let folder = single_folder_from(envelope, "create")
         .map_err(|e| super::landed_write_unverified(e, "folder"))?;
-    print_folder(globals, &folder);
-    Ok(())
+    print_folder(globals, &folder)
 }
 
 async fn update(
@@ -170,17 +178,18 @@ async fn update(
             "folder update needs at least one change: --name or an action flag",
         ));
     }
-
-    let (client, _source, config) = super::authenticated_client(globals)?;
-
-    let spec = action_flags::validate(
+    // Before anything is written or planned, live or dry-run alike; see
+    // `create`'s matching comment.
+    validate_fields(globals.fields.as_deref(), Folder::FIELDS)?;
+    super::reject_fields_with_dry_run(dry_run, globals)?;
+    let (spec, client, config) = super::validated_client(
         flags,
         Caps {
             via6_allowed: false,
             action_required: false,
             default_enabled: false,
         },
-        &client,
+        globals,
     )
     .await?;
 
@@ -196,8 +205,7 @@ async fn update(
             via: spec.via.clone(),
             enabled: spec.enabled,
         };
-        plan::print_one(globals, "PUT", path, &FolderUpdateIntent { changes });
-        return Ok(());
+        return plan::print_one(globals, "PUT", path, &FolderUpdateIntent { changes });
     }
 
     let mut form: Vec<(&str, String)> = Vec::new();
@@ -209,12 +217,19 @@ async fn update(
     let envelope = client.write(Method::PUT, &path, &form, "folder").await?;
     let folder = single_folder_from(envelope, "update")
         .map_err(|e| super::landed_write_unverified(e, "folder"))?;
-    print_folder(globals, &folder);
-    Ok(())
+    print_folder(globals, &folder)
 }
 
 async fn delete(selector: &str, dry_run: bool, globals: &Globals) -> Result<(), Error> {
     super::validate::reject_control_chars(selector, "the folder selector")?;
+    // Upfront, before any request and before the confirmation prompt: a
+    // delete emits no row, but `--fields` still names a field of `Folder`
+    // (the command's data schema) — a typo must fail before anything is
+    // deleted, not slip through as an unchecked flag that does nothing. A
+    // dry-run delete prints the plan instead, so the two flags still
+    // conflict outright, same as `create`/`update`.
+    validate_fields(globals.fields.as_deref(), Folder::FIELDS)?;
+    super::reject_fields_with_dry_run(dry_run, globals)?;
     let (client, _source, config) = super::authenticated_client(globals)?;
     let scope = super::scope::resolve_profile(&client, globals, config.default_profile()).await?;
 
@@ -228,8 +243,7 @@ async fn delete(selector: &str, dry_run: bool, globals: &Globals) -> Result<(), 
             name: folder.name.clone(),
             rules: folder.rules,
         };
-        plan::print_one(globals, "DELETE", path, &intent);
-        return Ok(());
+        return plan::print_one(globals, "DELETE", path, &intent);
     }
 
     let prompt = format!(
@@ -267,7 +281,7 @@ fn single_folder_from(
     }
 }
 
-fn print_folder(globals: &Globals, folder: &Folder) {
+fn print_folder(globals: &Globals, folder: &Folder) -> Result<(), Error> {
     emit(globals.mode, globals.fields.as_deref(), folder, || {
         print_key_values(&[
             ("id", folder.id.to_string()),
@@ -282,7 +296,7 @@ fn print_folder(globals: &Globals, folder: &Folder) {
             ("enabled", folder.enabled.to_string()),
             ("rules", folder.rules.to_string()),
         ]);
-    });
+    })
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 ---
 source: tests/help.rs
-expression: help
+expression: "help_for(dir.path(), &[noun])"
 ---
 Manage a profile's DNS rules
 
@@ -8,18 +8,20 @@ Usage: cdctl rule [OPTIONS] <COMMAND>
 
 Commands:
   list    List a profile's rules
-  create  Create rules (action required; at most 500 hostnames per invocation)
+  create  Create rules
   update  Update rules (sends only the flags given — `PUT /rules` merges)
   delete  Delete rules
   help    Print this message or the help of the given subcommand(s)
 
 Options:
+  -h, --help  Print help
+
+Global options:
   -p, --profile <PK|name>  Profile to operate on (name or PK) [env: CONTROLD_PROFILE=]
       --json               Emit JSON (full document) instead of a table
-      --fields <a,b>       Comma-separated JSON fields to keep; implies --json
+      --fields <a,b>       Comma-separated JSON fields to keep (implies --json)
       --plain              Tables without borders, for awk/cut
   -y, --yes                Skip confirmation prompts (ignored when the target profile is implicit)
-      --no-retry           Disable automatic retries (GETs only ever retry)
+      --no-retry           Disable automatic retries
       --timeout <SECS>     Per-request timeout in seconds
-      --debug              Request/response trace on stderr; token always redacted
-  -h, --help               Print help
+      --debug              Request/response trace on stderr (token always redacted)

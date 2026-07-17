@@ -25,7 +25,7 @@ pub struct ApiArgs {
     #[arg(value_name = "path")]
     pub path: String,
 
-    /// HTTP method; non-GET also requires --yes
+    /// HTTP method (non-GET also requires --yes)
     #[arg(
         short = 'X',
         long,
@@ -35,7 +35,7 @@ pub struct ApiArgs {
     )]
     pub method: Method,
 
-    /// Form field (repeatable); keys are sent literally — write
+    /// Form field (repeatable). Keys are sent literally — write
     /// 'hostnames[]=a' yourself. Requires a non-GET -X
     // Not named `fields`: a subcommand arg whose id matches a global flag's
     // is silently captured by the global's value lookup (guarded by
@@ -43,7 +43,7 @@ pub struct ApiArgs {
     #[arg(short = 'F', long = "field", value_name = "key=value")]
     pub form_fields: Vec<String>,
 
-    /// Read a JSON body from stdin, sent verbatim; "-" is the only accepted
+    /// Read a JSON body from stdin, sent verbatim. "-" is the only accepted
     /// value. Requires a non-GET -X
     #[arg(long, value_name = "-", conflicts_with = "form_fields")]
     pub input: Option<String>,
