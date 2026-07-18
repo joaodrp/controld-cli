@@ -24,6 +24,7 @@ use crate::config::{
     Config, ResolvedToken, Store, TOKEN_ENV_VAR, TokenSource, env_var, resolve_token,
 };
 use crate::error::{Error, Exit};
+use crate::output;
 use secrecy::SecretString;
 
 /// Load a config and surface its warnings — the pair is never split, so the
@@ -84,21 +85,41 @@ pub(crate) fn authenticated_client(
     Ok((build_client(Some(token), globals)?, source, config))
 }
 
-/// The `validate` -> `authenticated_client` -> `check_redirect_via`
-/// choreography shared by `rule`/`folder` `create`/`update`, in that fixed
-/// order: local usage errors must outrank auth errors
-/// (`tests/cli.rs local_flag_errors_outrank_a_missing_token` pins it), so
-/// `validate` runs first; `check_redirect_via` needs a live client, so it
-/// runs last.
+/// The `validate` -> `authenticated_client` -> overlapped
+/// via-check-and-profile-resolution choreography shared by `rule`/`folder`
+/// `create`/`update`, in that fixed order: local usage errors must outrank
+/// auth errors (`tests/cli.rs local_flag_errors_outrank_a_missing_token` pins
+/// it), so `validate` runs first. The redirect `--via` proxy check
+/// (`ActionSpec::check_redirect_via`) and `scope::resolve_profile` are two
+/// independent `GET`s once the client exists, so they run overlapped via
+/// `tokio::join!` rather than paying both round trips serially — `join!` over
+/// `try_join!` on purpose: when both fail, the proxy verdict wins
+/// deterministically (checked first below), so an exit code never flips
+/// between identical invocations on a network race. Folded into one function
+/// rather than left as two back-to-back calls: a caller that fetched the
+/// client and skipped this would silently skip the mandatory via check.
 pub(crate) async fn validated_client(
     flags: &action_flags::ActionFlags,
     caps: action_flags::Caps,
     globals: &Globals,
-) -> Result<(action_flags::ActionSpec, Client, Config), Error> {
+) -> Result<
+    (
+        action_flags::ActionSpec,
+        Client,
+        Config,
+        scope::ProfileScope,
+    ),
+    Error,
+> {
     let spec = action_flags::validate(flags, caps)?;
     let (client, _source, config) = authenticated_client(globals)?;
-    spec.check_redirect_via(&client).await?;
-    Ok((spec, client, config))
+    let (via_result, scope_result) = tokio::join!(
+        spec.check_redirect_via(&client),
+        scope::resolve_profile(&client, globals, config.default_profile())
+    );
+    via_result?;
+    let scope = scope_result?;
+    Ok((spec, client, config, scope))
 }
 
 /// Commands whose stdout is never JSON (`completions`, `reference`, `api`):
@@ -118,16 +139,25 @@ pub(crate) fn reject_explicit_json(
     Ok(())
 }
 
-/// `--fields` conflicts with `--dry-run` in every mutating handler (rule/
-/// folder `create`/`update`/`delete`): a dry run prints the request plan, not
-/// data rows, so projecting row fields over it is meaningless, and the plan
+/// The `--fields` preflight for every *mutating* handler (rule/folder
+/// `create`/`update`/`delete`): field-name validation first — `--fields`
+/// always names a field of the command's own data schema, so a typo'd field
+/// must be a usage error even when the eventual result would be empty
+/// (`output::emit`'s own check alone would be vacuous then, and would let the
+/// typo through with exit 0) — then the dry-run conflict, so a genuine typo
+/// (`--fields bogus`) is reported as that typo, never masked by it. `--fields`
+/// conflicts with `--dry-run`: a dry run prints the request plan, not data
+/// rows, so projecting row fields over it is meaningless, and the plan
 /// envelope's own keys (`method`/`path`/`intent`) are not the row-schema
-/// namespace `--fields` names either way. Every handler calls this
-/// immediately after its `output::validate_fields` fields-name check, so a
-/// genuine typo (`--fields bogus`) is still reported as that typo, not this
-/// conflict — this only fires once the requested field names are already
-/// known-good.
-pub(crate) fn reject_fields_with_dry_run(dry_run: bool, globals: &Globals) -> Result<(), Error> {
+/// namespace `--fields` names either way. Read-only handlers (`list`, `get`,
+/// `status`, `config list`) have no `--dry-run` flag to conflict with, so they
+/// call `output::validate_fields` directly instead of this.
+pub(crate) fn preflight_fields(
+    globals: &Globals,
+    fields: &[&str],
+    dry_run: bool,
+) -> Result<(), Error> {
+    output::validate_fields(globals.fields.as_deref(), fields)?;
     if dry_run && globals.fields.is_some() {
         return Err(Error::usage(
             "--fields selects data-row fields, but a dry run prints the request plan; drop \
@@ -164,4 +194,52 @@ pub(crate) fn landed_write_unverified(error: Error, noun: &'static str) -> Error
         remapped = remapped.with_debug_note(note);
     }
     remapped
+}
+
+/// Reads all of stdin to bytes, shared by `auth login --token-stdin` and
+/// `cdctl api --input -`. `what` names the thing being read (`"token"`,
+/// `"JSON body"`), for both the terminal notice below and the error mapping.
+///
+/// Off the runtime thread: a blocking read here would starve `main`'s select
+/// of its SIGINT branch and make Ctrl-C appear dead until the read completes
+/// — or, at a terminal, until Ctrl-D.
+pub(crate) async fn read_stdin(what: &str) -> Result<Vec<u8>, Error> {
+    use std::io::{IsTerminal, Read};
+
+    if std::io::stdin().is_terminal() {
+        eprintln!("info: reading the {what} from stdin; end with Ctrl-D");
+    }
+    tokio::task::spawn_blocking(|| {
+        let mut raw = Vec::new();
+        std::io::stdin().read_to_end(&mut raw).map(|_| raw)
+    })
+    .await
+    .map_err(|e| Error::generic(format!("the stdin reader task failed: {e}")))?
+    .map_err(|e| stdin_read_error(what, &e))
+}
+
+/// An I/O failure reading stdin is environmental, not a malformed invocation
+/// (the caller's flags already parsed correctly) — exit 1 (`Error::generic`),
+/// never the usage code (exit 2) scripts treat as "fix your argv". Separated
+/// from [`read_stdin`] so the mapping stays unit-testable without driving
+/// real stdin I/O.
+fn stdin_read_error(what: &str, e: &std::io::Error) -> Error {
+    Error::generic(format!("could not read the {what} from stdin: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::Exit;
+
+    /// A stdin I/O failure is environmental, not a malformed invocation —
+    /// exit 1, never the usage code (exit 2) scripts treat as "fix your
+    /// argv". Pins [`read_stdin`]'s mapping without driving real stdin I/O.
+    #[test]
+    fn stdin_read_failure_is_exit_1_not_usage() {
+        let io_error = std::io::Error::other("device disconnected");
+        let error = stdin_read_error("token", &io_error);
+        assert_eq!(error.exit(), Exit::Generic);
+        assert!(error.message.contains("device disconnected"));
+    }
 }

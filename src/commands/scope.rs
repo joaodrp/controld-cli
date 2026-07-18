@@ -59,10 +59,10 @@ pub(crate) struct ProfileScope {
 }
 
 /// Resolve the profile a command should operate on: `--profile`/
-/// `CONTROLD_PROFILE` (clap merges the env into `globals.profile`) wins as
-/// **explicit**; otherwise `config_default` (the config file's
-/// `default_profile`, loaded once by the caller) is **implicit** (D8);
-/// neither is exit 2, `usage.no_profile`.
+/// `CONTROLD_PROFILE` (`Globals::resolve` merges the env fallback into
+/// `globals.profile`, flag winning) wins as **explicit**; otherwise
+/// `config_default` (the config file's `default_profile`, loaded once by the
+/// caller) is **implicit** (D8); neither is exit 2, `usage.no_profile`.
 pub(crate) async fn resolve_profile(
     client: &Client,
     globals: &Globals,
@@ -120,6 +120,19 @@ fn hint_implicit_selector(error: Error, explicit: bool) -> Error {
     )
 }
 
+/// A profile's groups (API name for folders) listing/create path. Shared by
+/// [`fetch_folders`] and every `folder` handler that lists or creates.
+pub(crate) fn groups_path(profile_id: &str) -> String {
+    format!("/profiles/{profile_id}/groups")
+}
+
+/// One folder's path, for the `folder` handlers that update or delete a
+/// single resolved folder (its pk is always the path segment — a name in
+/// the path 404s upstream, folder.rs's module doc).
+pub(crate) fn group_path(profile_id: &str, folder_pk: i64) -> String {
+    format!("{}/{folder_pk}", groups_path(profile_id))
+}
+
 /// One `GET /profiles/{id}/groups` for the folder verbs that resolve or
 /// list folders (`list`, `update`, `delete` — `create` never calls it);
 /// resolution costs this extra GET (commands.md#name-resolution). Shared by
@@ -129,7 +142,7 @@ pub(crate) async fn fetch_folders(
     profile_id: &str,
 ) -> Result<Vec<ApiFolder>, Error> {
     client
-        .get(&format!("/profiles/{profile_id}/groups"), "folder")
+        .get(&groups_path(profile_id), "folder")
         .await?
         .keyed_as("groups")
 }

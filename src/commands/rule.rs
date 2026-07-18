@@ -18,12 +18,19 @@
 //! returns the original error verbatim (the retry exit 8 invites is now
 //! proven safe), and anything else attributes the still-missing targets to
 //! the write error itself (`resolve_ambiguous_write`). `delete` gets per-request
-//! outcomes instead — one `DELETE` per hostname, no read-back (D11): a
-//! retryable `DELETE` failure is genuinely ambiguous (it may have landed),
-//! so the aggregate hint leads with re-fetching state instead of advertising
-//! a blind `retry_argv` replay that could 404 on an already-gone rule.
+//! outcomes instead — one `DELETE` per hostname, no *post-write* read-back
+//! (D11): a retryable `DELETE` failure is genuinely ambiguous (it may have
+//! landed), so the aggregate hint leads with re-fetching state instead of
+//! advertising a blind `retry_argv` replay that could 404 on an already-gone
+//! rule. `delete` does still fetch beforehand, though: a `DELETE`'s ack
+//! proves nothing either way (a hostname matching no rule acks identically,
+//! write-verification.md), so every target's existence is checked against a
+//! profile-wide read-back before any deletion is attempted
+//! (`verify_targets_exist`, shared with `update`'s own pre-write check).
 //! [`super::multi::aggregate`] turns any gap or failure into one D4
 //! `write.partial_failure` error.
+
+use std::future::Future;
 
 use clap::Subcommand;
 use futures_util::future::try_join_all;
@@ -40,9 +47,10 @@ use super::scope::ProfileScope;
 use crate::api::client::{Client, encode_path_segment};
 use crate::cli::Globals;
 use crate::error::{Error, Exit};
+use crate::model::action::Action;
 use crate::model::folder::ApiFolder;
 use crate::model::rule::{ApiRule, Rule};
-use crate::output::{emit, escape_controls, render_table, validate_fields};
+use crate::output::{self, emit, escape_controls, render_table};
 
 /// The import chunk size, comfortably inside the server's silent
 /// ~1001-form-var ceiling (D11, write-verification.md) — the cap binds
@@ -70,10 +78,20 @@ fn folder_rules_path(profile_id: &str, folder_id: i64) -> String {
 /// hostnames, so a site that forgets to encode can't reintroduce the
 /// `*`-in-path hazard (write-verification.md).
 fn rule_path(profile_id: &str, hostname: &str) -> String {
-    format!(
-        "/profiles/{profile_id}/rules/{}",
-        encode_path_segment(hostname)
-    )
+    let encoded = encode_path_segment(hostname);
+    let path = format!("/profiles/{profile_id}/rules/{encoded}");
+    // Belt-and-suspenders against a future encoding regression misrouting a
+    // `DELETE`: the path must still end with the encoded segment verbatim —
+    // if it doesn't, something upstream (an empty `encoded`, an unexpected
+    // `/` surviving encoding) could make this resolve to a different
+    // resource entirely (fix for the `.`/`..` dot-segment hazard,
+    // `canonicalize_hostnames`). Debug-only: cheap enough to always run, but
+    // a release build should not pay for it on a hot path.
+    debug_assert!(
+        !encoded.is_empty() && path.ends_with(encoded.as_str()),
+        "rule_path built {path:?} that does not end with its own encoded segment {encoded:?}"
+    );
+    path
 }
 
 /// Shared by list/create/update: a given `--folder` is control-character
@@ -83,6 +101,34 @@ fn validate_folder_selector(selector: Option<&String>) -> Result<(), Error> {
         super::validate::reject_control_chars(selector, "the folder selector")?;
     }
     Ok(())
+}
+
+/// The `client.write` -> verify resolution shared by `create` and `update`
+/// (module doc): a successful write always confirms via read-back
+/// (`verify(None)`, the ordinary path); a *terminal* write error propagates
+/// unresolved — the server rejected the write outright, so nothing landed;
+/// a *retryable* write error is ambiguous (D12's "may still have landed"
+/// hint) and resolves through that same read-back rather than guessing
+/// (`verify(Some(e))`). `verify` is `verify_create`/`verify_update` partially
+/// applied over everything but the write error, so both call sites share one
+/// expression here — only the error argument differs between the two arms.
+/// Takes the write error by value: a generic `Fut` type can't express a
+/// per-call borrow of a value living only inside this function without a
+/// higher-ranked bound `FnOnce` can't carry here, and ownership is cheap
+/// (`Error` clones already flow through this module's other retry paths).
+async fn resolve_write<T, Verify, Fut>(
+    write_result: Result<T, Error>,
+    verify: Verify,
+) -> Result<(), Error>
+where
+    Verify: FnOnce(Option<Error>) -> Fut,
+    Fut: Future<Output = Result<(), Error>>,
+{
+    match write_result {
+        Ok(_envelope) => verify(None).await,
+        Err(e) if !e.retryable() => Err(e),
+        Err(e) => verify(Some(e)).await,
+    }
 }
 
 #[derive(Debug, Subcommand)]
@@ -156,11 +202,7 @@ pub async fn run(command: RuleCommand, globals: &Globals) -> Result<(), Error> {
 
 async fn list(folder_selector: Option<String>, globals: &Globals) -> Result<(), Error> {
     validate_folder_selector(folder_selector.as_ref())?;
-    // Upfront, before any request: `rule list`'s row shape is known
-    // (`Rule::FIELDS`), so a typo'd `--fields` is a usage error even when
-    // the eventual result is empty — `emit`'s own check alone would be
-    // vacuous on an empty profile and let the typo through with exit 0.
-    validate_fields(globals.fields.as_deref(), Rule::FIELDS)?;
+    output::validate_fields(globals.fields.as_deref(), Rule::FIELDS)?;
     let (client, _source, config) = super::authenticated_client(globals)?;
     let scope = super::scope::resolve_profile(&client, globals, config.default_profile()).await?;
 
@@ -186,6 +228,35 @@ async fn list(folder_selector: Option<String>, globals: &Globals) -> Result<(), 
     print_rules(globals, &rules)
 }
 
+/// The profile-wide folder listing `create`/`update`'s live path needs,
+/// skipped on the one case that needs no lookup at all: a dry run naming no
+/// `--folder`. `create`'s read-back needs every folder regardless of
+/// `--folder` — the created rule could land in the wrong folder (or root)
+/// rather than the desired one, and distinguishing that `state_mismatch` from
+/// a plain `write_dropped` absence needs to see it wherever it landed, not
+/// just the target folder (module doc). `update`'s targets can likewise live
+/// in any folder, and a root-only read-back would misreport a converged
+/// update as dropped; `--folder` also resolves its pk from this list, and the
+/// read-back's `folder` display must stay accurate profile-wide for a rule an
+/// untouched update (or `--root`) leaves inside — or moves out of — an
+/// existing folder (commands.md#rule). `--root` needs no lookup either
+/// (`FolderPatch::Root` carries no pk), so only a dry run with neither
+/// `--folder` nor a live path skips the GET: the intent then has no pk to
+/// resolve and the read-back (or, for `update`, the pre-write existence
+/// check) never runs.
+async fn fetch_folders_unless_dry_run_without_selector(
+    client: &Client,
+    profile_id: &str,
+    dry_run: bool,
+    folder_selector: Option<&String>,
+) -> Result<Vec<ApiFolder>, Error> {
+    if dry_run && folder_selector.is_none() {
+        Ok(Vec::new())
+    } else {
+        super::scope::fetch_folders(client, profile_id).await
+    }
+}
+
 async fn create(
     raw_hostnames: &[String],
     flags: &ActionFlags,
@@ -196,15 +267,8 @@ async fn create(
     validate_folder_selector(folder_selector.as_ref())?;
     let hostnames = canonicalize_hostnames(raw_hostnames, super::validate::reject_control_chars)?;
     check_hostname_cap(&hostnames)?;
-    // Before anything is written or planned, live or dry-run alike:
-    // `--fields` always names fields of `Rule`, the command's data schema —
-    // never the dry-run plan envelope's own keys (`method`/`path`/`intent`).
-    // A dry run prints the plan, not rows, so the two flags conflict outright
-    // (`reject_fields_with_dry_run`, checked once the field names themselves
-    // are known-good).
-    validate_fields(globals.fields.as_deref(), Rule::FIELDS)?;
-    super::reject_fields_with_dry_run(dry_run, globals)?;
-    let (spec, client, config) = super::validated_client(
+    super::preflight_fields(globals, Rule::FIELDS, dry_run)?;
+    let (spec, client, _config, scope) = super::validated_client(
         flags,
         Caps {
             via6_allowed: true,
@@ -215,15 +279,13 @@ async fn create(
     )
     .await?;
 
-    let scope = super::scope::resolve_profile(&client, globals, config.default_profile()).await?;
-
-    // Fetched once, unconditionally: the dry-run intent needs `--folder`
-    // resolved to a pk, and the read-back needs every folder in the profile
-    // regardless of `--folder` — the created rule could land in the wrong
-    // folder (or root) rather than the desired one, and distinguishing that
-    // `state_mismatch` from a plain `write_dropped` absence needs to see it
-    // wherever it landed, not just the target folder (module doc).
-    let api_folders = super::scope::fetch_folders(&client, &scope.id).await?;
+    let api_folders = fetch_folders_unless_dry_run_without_selector(
+        &client,
+        &scope.id,
+        dry_run,
+        folder_selector.as_ref(),
+    )
+    .await?;
     let folder_id = match &folder_selector {
         Some(selector) => Some(super::scope::find_folder(&api_folders, selector)?.pk),
         None => None,
@@ -252,8 +314,9 @@ async fn create(
 
     // The 2xx envelope's `body` is a hostname-less one-entry summary; only
     // its `success` is meaningful here (write-verification.md).
-    match client.write(Method::POST, &path, &form, "rule").await {
-        Ok(_envelope) => {
+    resolve_write(
+        client.write(Method::POST, &path, &form, "rule").await,
+        |write_error| {
             verify_create(
                 &client,
                 &scope,
@@ -262,29 +325,11 @@ async fn create(
                 folder_id,
                 &api_folders,
                 globals,
-                None,
+                write_error,
             )
-            .await
-        }
-        // Terminal: the server rejected the write outright, so nothing landed.
-        Err(e) if !e.retryable() => Err(e),
-        // Retryable and therefore ambiguous (D12's "may still have landed"
-        // hint) — resolve it with the same read-back the success path runs,
-        // rather than guessing (module doc).
-        Err(e) => {
-            verify_create(
-                &client,
-                &scope,
-                &hostnames,
-                &spec,
-                folder_id,
-                &api_folders,
-                globals,
-                Some(&e),
-            )
-            .await
-        }
-    }
+        },
+    )
+    .await
 }
 
 /// The mandatory read-back verification for `rule create`: re-fetch the
@@ -308,9 +353,13 @@ async fn verify_create(
     folder_id: Option<i64>,
     api_folders: &[ApiFolder],
     globals: &Globals,
-    write_error: Option<&Error>,
+    // By value, not `&Error`: `resolve_write` (the shared caller) hands this
+    // in owned — see that function's doc for why a borrow can't cross its
+    // closure boundary.
+    write_error: Option<Error>,
 ) -> Result<(), Error> {
-    let api_rules = read_back_for_verification(client, &scope.id, api_folders, write_error).await?;
+    let api_rules =
+        read_back_for_verification(client, &scope.id, api_folders, write_error.as_ref()).await?;
     let mut reconciled = reconcile(
         hostnames,
         &api_rules,
@@ -321,10 +370,10 @@ async fn verify_create(
 
     if reconciled.absent.is_empty() && reconciled.mismatched.is_empty() {
         print_rules(globals, &reconciled.landed)?;
-        announce_if_ambiguous_write_landed(write_error);
+        announce_if_ambiguous_write_landed(write_error.as_ref());
         return Ok(());
     }
-    if let Some(original) = resolve_ambiguous_write(&mut reconciled, write_error) {
+    if let Some(original) = resolve_ambiguous_write(&mut reconciled, write_error.as_ref()) {
         return Err(original);
     }
     let Reconciled {
@@ -424,10 +473,30 @@ fn create_mismatch_hint(
     })
 }
 
+/// `Some`/`None` structure must always match exactly. The string comparison
+/// depends on what a via IS under the action: a spoof via is a DNS name or
+/// IP (ASCII-case-insensitive), a redirect via is a proxy PK — an exact
+/// identifier (`validate_redirect_via` matches the proxy list exactly), so a
+/// read-back `lhr` must not satisfy a requested `LHR`. Callers pass the
+/// read-back rule's action, which the action clause has already matched
+/// against the desired one before any via clause runs.
+fn via_matches(action: Action, live: Option<&str>, desired: Option<&str>) -> bool {
+    match (live, desired) {
+        (Some(live), Some(desired)) if action == Action::Redirect => live == desired,
+        (Some(live), Some(desired)) => live.eq_ignore_ascii_case(desired),
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+/// The server preserves `via`/`via6` case verbatim (write-verification.md,
+/// probed live), but DNS names are case-insensitive and the API is
+/// unversioned — the comparison itself does not lean on that preservation
+/// continuing.
 fn create_matches(rule: &Rule, spec: &ActionSpec, folder_id: Option<i64>) -> bool {
     Some(rule.action) == spec.action
-        && rule.via.as_deref() == spec.via.as_deref()
-        && rule.via6.as_deref() == spec.via6.as_deref()
+        && via_matches(rule.action, rule.via.as_deref(), spec.via.as_deref())
+        && via_matches(rule.action, rule.via6.as_deref(), spec.via6.as_deref())
         && Some(rule.enabled) == spec.enabled
         && rule.folder_id == folder_id
 }
@@ -448,11 +517,8 @@ async fn update(
             "rule update needs at least one change: an action flag, --folder, or --root",
         ));
     }
-    // Before anything is written or planned, live or dry-run alike; see
-    // `create`'s matching comment.
-    validate_fields(globals.fields.as_deref(), Rule::FIELDS)?;
-    super::reject_fields_with_dry_run(dry_run, globals)?;
-    let (spec, client, config) = super::validated_client(
+    super::preflight_fields(globals, Rule::FIELDS, dry_run)?;
+    let (spec, client, _config, scope) = super::validated_client(
         flags,
         Caps {
             via6_allowed: true,
@@ -463,15 +529,13 @@ async fn update(
     )
     .await?;
 
-    let scope = super::scope::resolve_profile(&client, globals, config.default_profile()).await?;
-
-    // Fetched once, unconditionally, like `create`: a plain update's targets
-    // can live in any folder, and a root-only read-back would misreport a
-    // converged update as dropped (module doc) — `--folder` also resolves
-    // its pk from this list, and the read-back's `folder` display must stay
-    // accurate profile-wide for a rule an untouched update (or `--root`)
-    // leaves inside — or moves out of — an existing folder (commands.md#rule).
-    let api_folders = super::scope::fetch_folders(&client, &scope.id).await?;
+    let api_folders = fetch_folders_unless_dry_run_without_selector(
+        &client,
+        &scope.id,
+        dry_run,
+        folder_selector.as_ref(),
+    )
+    .await?;
     let folder_change = if root {
         Some(FolderPatch::Root)
     } else if let Some(selector) = &folder_selector {
@@ -497,6 +561,23 @@ async fn update(
         );
     }
 
+    // Live path only, before anything is written: `PUT /rules` does not
+    // upsert (write-verification.md, probed live — a hostname with no
+    // existing rule 400s "Custom Rule does not exist" and nothing lands), so
+    // a typo'd target must be caught here, not surfaced as a generic exit 1
+    // from a failed write — and a multi-target update would otherwise learn
+    // of only the server's first complaint. This costs a second profile-wide
+    // fetch beyond `verify_update`'s own post-write read-back, but the two
+    // can't share one call: this one must run before the mutation.
+    verify_targets_exist(
+        &client,
+        &scope.id,
+        &api_folders,
+        &hostnames,
+        "check the hostname with `cdctl rule list`; `rule update` never creates a rule",
+    )
+    .await?;
+
     let mut form: Vec<(&str, String)> = spec.form_pairs();
     match folder_change {
         Some(FolderPatch::To(id)) => form.push(("group", id.to_string())),
@@ -507,8 +588,9 @@ async fn update(
         form.push(("hostnames[]", hostname.clone()));
     }
 
-    match client.write(Method::PUT, &path, &form, "rule").await {
-        Ok(_envelope) => {
+    resolve_write(
+        client.write(Method::PUT, &path, &form, "rule").await,
+        |write_error| {
             verify_update(
                 &client,
                 &scope,
@@ -516,27 +598,11 @@ async fn update(
                 &changes,
                 &api_folders,
                 globals,
-                None,
+                write_error,
             )
-            .await
-        }
-        // Terminal: the server rejected the write outright, so nothing landed.
-        Err(e) if !e.retryable() => Err(e),
-        // Retryable and therefore ambiguous — same resolution as `create`
-        // (module doc).
-        Err(e) => {
-            verify_update(
-                &client,
-                &scope,
-                &hostnames,
-                &changes,
-                &api_folders,
-                globals,
-                Some(&e),
-            )
-            .await
-        }
-    }
+        },
+    )
+    .await
 }
 
 /// Same read-back contract as [`verify_create`], but asserts only the
@@ -551,9 +617,11 @@ async fn verify_update(
     changes: &RuleUpdateChanges,
     api_folders: &[ApiFolder],
     globals: &Globals,
-    write_error: Option<&Error>,
+    // By value: see `verify_create`'s matching comment.
+    write_error: Option<Error>,
 ) -> Result<(), Error> {
-    let api_rules = read_back_for_verification(client, &scope.id, api_folders, write_error).await?;
+    let api_rules =
+        read_back_for_verification(client, &scope.id, api_folders, write_error.as_ref()).await?;
     // A re-run of `rule update` converges either kind of gap (the merge is
     // idempotent), unlike create's mismatch, which would duplicate-POST —
     // both feed one retry_argv.
@@ -567,10 +635,10 @@ async fn verify_update(
 
     if reconciled.absent.is_empty() && reconciled.mismatched.is_empty() {
         print_rules(globals, &reconciled.landed)?;
-        announce_if_ambiguous_write_landed(write_error);
+        announce_if_ambiguous_write_landed(write_error.as_ref());
         return Ok(());
     }
-    if let Some(original) = resolve_ambiguous_write(&mut reconciled, write_error) {
+    if let Some(original) = resolve_ambiguous_write(&mut reconciled, write_error.as_ref()) {
         return Err(original);
     }
     let results = reconciled.results;
@@ -587,16 +655,17 @@ async fn verify_update(
     Err(multi::aggregate("rule", &results, retry_argv))
 }
 
+/// Case-insensitivity rationale: [`via_matches`]'s doc.
 fn update_matches(rule: &Rule, changes: &RuleUpdateChanges) -> bool {
     changes.action.is_none_or(|action| rule.action == action)
         && changes
             .via
             .as_deref()
-            .is_none_or(|via| rule.via.as_deref() == Some(via))
+            .is_none_or(|via| via_matches(rule.action, rule.via.as_deref(), Some(via)))
         && changes
             .via6
             .as_deref()
-            .is_none_or(|via6| rule.via6.as_deref() == Some(via6))
+            .is_none_or(|via6| via_matches(rule.action, rule.via6.as_deref(), Some(via6)))
         && changes
             .enabled
             .is_none_or(|enabled| rule.enabled == enabled)
@@ -607,18 +676,23 @@ fn update_matches(rule: &Rule, changes: &RuleUpdateChanges) -> bool {
 }
 
 async fn delete(raw_hostnames: &[String], dry_run: bool, globals: &Globals) -> Result<(), Error> {
-    // Hostnames are percent-encoded into the DELETE path, so they need the
-    // path-bound check (rejects `?`/`#`/`%` in addition to control
-    // characters; `*` stays legal — commands.md#input-hardening).
-    let hostnames = canonicalize_hostnames(raw_hostnames, super::validate::validate_path_bound)?;
-    // Upfront, before any request and before the confirmation prompt: a
-    // delete emits no row, but `--fields` still names a field of `Rule` (the
-    // command's data schema) — a typo must fail before anything is deleted,
-    // not slip through as an unchecked flag that does nothing. A dry-run
-    // delete prints the plan instead, so the two flags still conflict
-    // outright, same as `create`/`update`.
-    validate_fields(globals.fields.as_deref(), Rule::FIELDS)?;
-    super::reject_fields_with_dry_run(dry_run, globals)?;
+    // Same control-character-only check as create/update, not the stricter
+    // path-bound one: `encode_path_segment` percent-encodes any hostname
+    // into the DELETE path regardless of its characters (`rule_path`), so
+    // the path-bound check would only buy an asymmetry with create/update —
+    // a live probe shows the API itself 400s a `?`/`#`/`%` hostname at
+    // create (write-verification.md), so the rationale rests on symmetry
+    // with create/update plus `encode_path_segment` handling the encoding,
+    // with the API being unversioned as the softened residual justification
+    // (such a rule could exist via another surface or a past server
+    // version). A canonical `.` or `..`, though, is the one class encoding
+    // cannot make safe — WHATWG normalizes `%2e`/`%2e%2e` as dot segments
+    // too — so those are rejected outright by `canonicalize_hostnames`
+    // before ever reaching `encode_path_segment`.
+    let hostnames = canonicalize_hostnames(raw_hostnames, super::validate::reject_control_chars)?;
+    // Before the confirmation prompt too: a delete emits no row, but a
+    // typo'd `--fields` must fail before anything is deleted.
+    super::preflight_fields(globals, Rule::FIELDS, dry_run)?;
 
     let (client, _source, config) = super::authenticated_client(globals)?;
     let scope = super::scope::resolve_profile(&client, globals, config.default_profile()).await?;
@@ -637,6 +711,26 @@ async fn delete(raw_hostnames: &[String], dry_run: bool, globals: &Globals) -> R
             .collect();
         return plan::print(globals, &Plan { requests });
     }
+
+    // Live path only, before the confirmation prompt and before anything is
+    // written: a `DELETE`'s own `success: true` ack proves nothing — a
+    // hostname matching no rule acks identically, "Custom rule(s) deleted",
+    // a silent no-op (write-verification.md, probed live) — so existence is
+    // checked upfront against a fresh profile-wide read-back, exactly like
+    // `update`'s pre-write check (`verify_targets_exist`, reused as-is).
+    // Matching is case-sensitive on purpose: the server's own target
+    // matching is case-sensitive too (the `PUT` probe), so a client-side
+    // case fold here would just accept a target the server would then
+    // silently no-op on.
+    let api_folders = super::scope::fetch_folders(&client, &scope.id).await?;
+    verify_targets_exist(
+        &client,
+        &scope.id,
+        &api_folders,
+        &hostnames,
+        "check the hostname with `cdctl rule list`; nothing was deleted",
+    )
+    .await?;
 
     let prompt = delete_prompt(&hostnames, &scope.name);
     confirm(&prompt, globals.yes, &scope).await?;
@@ -678,9 +772,7 @@ async fn delete(raw_hostnames: &[String], dry_run: bool, globals: &Globals) -> R
         .filter(|(_, result)| !matches!(result, TargetResult::Landed))
         .map(|(target, _)| target.clone())
         .collect();
-    let mut retry_argv = retry_argv_base("delete", &scope.id);
-    retry_argv.push("--yes".to_owned());
-    retry_argv.extend(retry_targets);
+    let retry_argv = delete_retry_argv(&scope.id, &retry_targets);
 
     let mut error = multi::aggregate("rule", &results, retry_argv);
     // `delete` has no read-back (D11): a retryable failure is genuinely
@@ -755,11 +847,33 @@ async fn fetch_all_rules(
         ),
     )?;
 
-    let mut rules: Vec<ApiRule> = root_envelope.keyed_as("rules")?;
-    for folder_rules in folder_rule_lists {
-        rules.extend(folder_rules);
+    // Deduped by PK, root first, folders overriding: a rule moved between
+    // folders during this concurrent fetch can appear in two listings (or
+    // in none — unfixable client-side, not attempted here), and a caller
+    // like `list` (unlike `reconcile`'s own `HashMap`) would otherwise print
+    // it twice. A duplicate keeps its first-seen position with the
+    // last-seen (folder) copy's data, so the returned order stays
+    // deterministic — `list`'s stable sort by `order` uses this as the
+    // tie-break between equal-`order` rules; there is no way to know which
+    // listing is fresher.
+    let root_rules: Vec<ApiRule> = root_envelope.keyed_as("rules")?;
+    let capacity = root_rules.len() + folder_rule_lists.iter().map(Vec::len).sum::<usize>();
+    let mut position: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::with_capacity(capacity);
+    let mut deduped: Vec<ApiRule> = Vec::with_capacity(capacity);
+    for rule in root_rules
+        .into_iter()
+        .chain(folder_rule_lists.into_iter().flatten())
+    {
+        match position.entry(rule.pk.clone()) {
+            std::collections::hash_map::Entry::Occupied(seen) => deduped[*seen.get()] = rule,
+            std::collections::hash_map::Entry::Vacant(slot) => {
+                slot.insert(deduped.len());
+                deduped.push(rule);
+            }
+        }
     }
-    Ok(rules)
+    Ok(deduped)
 }
 
 /// One folder's rules, tolerating exactly the not-found classification: the
@@ -778,6 +892,50 @@ async fn fetch_folder_rules(client: &Client, path: &str) -> Result<Vec<ApiRule>,
         Err(e) if e.exit() == Exit::NotFound => Ok(Vec::new()),
         Err(e) => Err(e),
     }
+}
+
+/// `update`'s pre-write existence check (probe-informed: `PUT /rules` does
+/// not upsert, write-verification.md), reused as-is by `delete`'s pre-check
+/// (its `DELETE` acks `success: true` even on a hostname matching no rule —
+/// a silent no-op, write-verification.md): every target must already exist
+/// in the profile-wide listing, or nothing is written at all. Exit 3
+/// (`rule.not_found`), naming every missing hostname — not just the first,
+/// unlike the server's own complaint on a multi-target `PUT`. The match is
+/// case-sensitive by design, not an oversight: the server's own `PUT`
+/// target matching is case-sensitive too (write-verification.md, probed
+/// live), so folding case here would only accept a target the write itself
+/// would then reject or silently no-op on.
+async fn verify_targets_exist(
+    client: &Client,
+    profile_id: &str,
+    folders: &[ApiFolder],
+    hostnames: &[String],
+    hint: &str,
+) -> Result<(), Error> {
+    let api_rules = fetch_all_rules(client, profile_id, folders).await?;
+    let known: std::collections::HashSet<&str> =
+        api_rules.iter().map(|rule| rule.pk.as_str()).collect();
+    let missing: Vec<&str> = hostnames
+        .iter()
+        .map(String::as_str)
+        .filter(|hostname| !known.contains(hostname))
+        .collect();
+    if missing.is_empty() {
+        return Ok(());
+    }
+    Err(Error::new(
+        "rule.not_found",
+        format!(
+            "no rule matches {}",
+            missing
+                .iter()
+                .map(|hostname| format!("{hostname:?}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Exit::NotFound,
+    )
+    .with_hint(hint))
 }
 
 /// The re-fetch every read-back verification shares: profile-wide (module
@@ -882,6 +1040,11 @@ fn announce_if_ambiguous_write_landed(write_error: Option<&Error>) {
 }
 
 /// A target absent from the read-back never landed — resending it is safe.
+/// For `update` specifically, this can only mean a dropped write, never a
+/// nonexistent target: `verify_targets_exist` already confirmed every target
+/// existed before the `PUT` was sent, and the probe that motivated it proved
+/// `PUT /rules` never upserts (write-verification.md) — so an absent target
+/// here genuinely landed nowhere, and retrying is safe.
 fn write_dropped(hostname: &str) -> Error {
     Error::new(
         "rule.write_dropped",
@@ -1008,6 +1171,11 @@ fn create_retry_argv(
         argv.push("--folder".to_owned());
         argv.push(id.to_string());
     }
+    // `--` before the hostname block: a hostname beginning with `-` is legal
+    // (a foreign client can create one, and `cdctl rule create` itself
+    // accepts it after `--`), and without this separator clap would try to
+    // parse it as a flag it doesn't recognize.
+    argv.push("--".to_owned());
     argv.extend(hostnames.iter().cloned());
     argv
 }
@@ -1036,6 +1204,17 @@ fn update_retry_argv(
         Some(FolderPatch::Root) => argv.push("--root".to_owned()),
         None => {}
     }
+    // `--`: see `create_retry_argv`'s matching comment.
+    argv.push("--".to_owned());
+    argv.extend(hostnames.iter().cloned());
+    argv
+}
+
+fn delete_retry_argv(profile_id: &str, hostnames: &[String]) -> Vec<String> {
+    let mut argv = retry_argv_base("delete", profile_id);
+    argv.push("--yes".to_owned());
+    // `--`: see `create_retry_argv`'s matching comment.
+    argv.push("--".to_owned());
     argv.extend(hostnames.iter().cloned());
     argv
 }
@@ -1043,9 +1222,22 @@ fn update_retry_argv(
 /// Lowercase, strip one trailing dot, then dedup preserving first
 /// occurrence (commands.md#rule) — a duplicate inside a `POST` chunk
 /// atomically fails the whole chunk upstream (commands.md#rule-import-semantics),
-/// so `cdctl` never sends one. `validate_one` lets callers choose the
-/// control-character-only check (create/update, form-bound) or the
-/// path-bound check (delete, which percent-encodes the hostname into a URL).
+/// so `cdctl` never sends one. Every caller — create, update, and delete
+/// alike — validates with `reject_control_chars`: delete's hostname reaches
+/// the wire through `encode_path_segment` (`rule_path`), which
+/// percent-encodes it into the DELETE path regardless of its characters, so
+/// the stricter path-bound check (`validate_path_bound`) would only buy an
+/// asymmetry with create/update — a live probe shows the API itself 400s a
+/// `?`/`#`/`%` hostname at create (write-verification.md), so the rationale
+/// rests on symmetry with create/update plus `encode_path_segment` handling
+/// the encoding, with the API being unversioned as the softened residual
+/// justification (such a rule could exist via another surface or a past
+/// server version). A canonical `.` or `..`, though, is the one class
+/// encoding cannot make safe — WHATWG normalizes `%2e`/`%2e%2e` as dot
+/// segments too — so those are rejected outright below, never reaching
+/// `encode_path_segment` at all. Takes `validate_one` as a parameter — not
+/// every future caller of this function is guaranteed to be URL-bound the
+/// same way.
 fn canonicalize_hostnames(
     raw: &[String],
     validate_one: impl Fn(&str, &str) -> Result<(), Error>,
@@ -1061,6 +1253,19 @@ fn canonicalize_hostnames(
             return Err(Error::usage(format!(
                 "hostname {hostname:?} is empty after canonicalization (lowercase, one \
                  trailing dot stripped)"
+            )));
+        }
+        // `.` and `..` are the one input encoding can never make safe: a
+        // path-routing gateway prefix aside, `DELETE /profiles/{id}/rules/..`
+        // resolves (WHATWG join) to `/profiles/{id}/`, the profile resource
+        // itself, and `.` similarly collapses a segment away — no hostname
+        // can legitimately canonicalize to either, so both are rejected here
+        // rather than ever reaching `encode_path_segment`, which keeps `.`
+        // unencoded as RFC 3986 unreserved and so cannot help.
+        if canon == "." || canon == ".." {
+            return Err(Error::usage(format!(
+                "hostname {hostname:?} canonicalizes to {canon:?}, a path dot-segment that can \
+                 never be a valid DNS name"
             )));
         }
         if seen.insert(canon.clone()) {
@@ -1132,7 +1337,7 @@ fn print_rules(globals: &Globals, rules: &[Rule]) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::action::Action;
+    use clap::Parser as _;
 
     /// A minimal landed rule for tests that only need a `mismatched` entry
     /// to exist, not its content — `via6` is the one field the via6-clear
@@ -1197,6 +1402,38 @@ mod tests {
         assert_eq!(error.exit(), Exit::Usage);
     }
 
+    /// The dot-segment hazard this guards: `".."` canonicalizes (lowercase,
+    /// strip one trailing dot) to `"."`, and `"..."` to `".."` — both are
+    /// path dot-segments that `DELETE /profiles/{id}/rules/{segment}` would
+    /// resolve away (WHATWG join), landing on the profile resource or the
+    /// rules collection instead of a 404 on a bogus hostname.
+    /// `encode_path_segment` cannot help here — it deliberately keeps `.`
+    /// unencoded as RFC 3986 unreserved — so all three inputs must be
+    /// rejected before ever reaching a request path.
+    #[test]
+    fn dot_segments_are_rejected_at_every_length_that_collapses_to_one() {
+        for raw in [".", "..", "..."] {
+            let error = canonicalize_hostnames(
+                &[raw.to_owned()],
+                super::super::validate::reject_control_chars,
+            )
+            .unwrap_err();
+            assert_eq!(error.exit(), Exit::Usage, "input {raw:?} must be rejected");
+        }
+    }
+
+    /// A normal trailing-dot FQDN is unaffected by the dot-segment carve-out
+    /// above — only a canonical form of exactly `.`/`..` is rejected.
+    #[test]
+    fn a_normal_trailing_dot_fqdn_still_canonicalizes_fine() {
+        let out = canonicalize_hostnames(
+            &["example.com.".to_owned()],
+            super::super::validate::reject_control_chars,
+        )
+        .expect("a real FQDN with a trailing dot is fine");
+        assert_eq!(out, vec!["example.com"]);
+    }
+
     #[test]
     fn non_ascii_hostnames_are_rejected_with_a_punycode_hint() {
         let raw = vec!["café.example.com".to_owned()];
@@ -1207,12 +1444,15 @@ mod tests {
         assert!(hint.contains("xn--"), "got: {hint}");
     }
 
+    /// `delete` validates with `reject_control_chars`, same as create/update
+    /// — not `validate_path_bound` — since `encode_path_segment` handles the
+    /// percent-encoding regardless of which characters the hostname carries.
     #[test]
-    fn delete_canonicalization_rejects_path_metacharacters() {
+    fn delete_canonicalization_allows_path_metacharacters() {
         let raw = vec!["a?b.example.com".to_owned()];
-        let error = canonicalize_hostnames(&raw, super::super::validate::validate_path_bound)
-            .expect_err("rejected");
-        assert_eq!(error.exit(), Exit::Usage);
+        let out = canonicalize_hostnames(&raw, super::super::validate::reject_control_chars)
+            .expect("allowed: encode_path_segment handles it");
+        assert_eq!(out, vec!["a?b.example.com"]);
     }
 
     #[test]
@@ -1266,6 +1506,80 @@ mod tests {
         assert!(!create_matches(&wrong_via, &spec, Some(2)));
     }
 
+    /// The server preserves `via`/`via6` case verbatim (write-verification.md,
+    /// probed live), but DNS names are case-insensitive and the API is
+    /// unversioned, so the comparison itself does not depend on that
+    /// preservation continuing.
+    #[test]
+    fn create_matches_compares_via_and_via6_case_insensitively() {
+        let spec = spoof_spec("MiXeD-CaSe.example.com", Some("2001:DB8::1"), None);
+        let rule = Rule {
+            hostname: "a.example.com".into(),
+            action: Action::Spoof,
+            via: Some("mixed-case.EXAMPLE.com".into()),
+            via6: Some("2001:db8::1".into()),
+            enabled: true,
+            folder: None,
+            folder_id: None,
+            order: 1,
+        };
+        assert!(create_matches(&rule, &spec, None));
+    }
+
+    /// A redirect via is a proxy PK — an exact identifier, not a DNS name —
+    /// so a read-back differing only in case must NOT verify as converged.
+    #[test]
+    fn create_matches_compares_a_redirect_via_case_sensitively() {
+        let flags = ActionFlags {
+            action: Some(Action::Redirect),
+            via: Some("LHR".to_owned()),
+            via6: None,
+            enabled: false,
+            disabled: false,
+        };
+        let spec = action_flags::validate(
+            &flags,
+            Caps {
+                via6_allowed: true,
+                action_required: true,
+                default_enabled: true,
+            },
+        )
+        .expect("valid redirect flags");
+        let rule = Rule {
+            hostname: "a.example.com".into(),
+            action: Action::Redirect,
+            via: Some("lhr".into()),
+            via6: None,
+            enabled: true,
+            folder: None,
+            folder_id: None,
+            order: 1,
+        };
+        assert!(!create_matches(&rule, &spec, None));
+    }
+
+    /// Same exact-identifier rule for `update`'s sent-field comparison.
+    #[test]
+    fn update_matches_compares_a_redirect_via_case_sensitively() {
+        let changes = RuleUpdateChanges {
+            action: Some(Action::Redirect),
+            via: Some("LHR".into()),
+            ..RuleUpdateChanges::default()
+        };
+        let rule = Rule {
+            hostname: "a.example.com".into(),
+            action: Action::Redirect,
+            via: Some("lhr".into()),
+            via6: None,
+            enabled: true,
+            folder: None,
+            folder_id: None,
+            order: 1,
+        };
+        assert!(!update_matches(&rule, &changes));
+    }
+
     #[tokio::test]
     async fn update_matches_checks_only_sent_fields() {
         let changes = RuleUpdateChanges {
@@ -1291,6 +1605,27 @@ mod tests {
             ..rule.clone()
         };
         assert!(!update_matches(&still_enabled, &changes));
+    }
+
+    /// Same case-insensitivity rationale as `create_matches`'s matching test.
+    #[test]
+    fn update_matches_compares_via_and_via6_case_insensitively() {
+        let changes = RuleUpdateChanges {
+            via: Some("MiXeD-CaSe.example.com".into()),
+            via6: Some("2001:DB8::1".into()),
+            ..RuleUpdateChanges::default()
+        };
+        let rule = Rule {
+            hostname: "a.example.com".into(),
+            action: Action::Spoof,
+            via: Some("mixed-case.EXAMPLE.com".into()),
+            via6: Some("2001:db8::1".into()),
+            enabled: true,
+            folder: None,
+            folder_id: None,
+            order: 1,
+        };
+        assert!(update_matches(&rule, &changes));
     }
 
     #[test]
@@ -1456,6 +1791,7 @@ mod tests {
                 "192.0.2.1",
                 "--folder",
                 "7",
+                "--",
                 "a.example.com",
             ]
         );
@@ -1467,6 +1803,33 @@ mod tests {
         let argv = create_retry_argv("pk1", &spec, None, &["a.example.com".to_owned()]);
         assert!(argv.contains(&"--disabled".to_owned()));
         assert!(!argv.contains(&"--folder".to_owned()));
+    }
+
+    /// A hostname beginning with `-` is legal (a foreign client can create
+    /// one; `cdctl rule create` itself accepts it after `--`), so `--` must
+    /// separate the flags from the hostname block or clap parses the retry
+    /// as a flag it doesn't recognize (D4's replay-verbatim hint would then
+    /// hand an agent a `retry_argv` that fails before it even reaches the
+    /// network).
+    #[test]
+    fn create_retry_argv_places_a_double_dash_immediately_before_the_first_hostname() {
+        let spec = spoof_spec("192.0.2.1", None, None);
+        let argv = create_retry_argv(
+            "pk1",
+            &spec,
+            None,
+            &["a.example.com".to_owned(), "b.example.com".to_owned()],
+        );
+        let dash = argv.iter().position(|a| a == "--").expect("-- present");
+        assert_eq!(argv[dash + 1], "a.example.com");
+    }
+
+    #[test]
+    fn create_retry_argv_with_a_leading_hyphen_hostname_round_trips_through_clap() {
+        let spec = spoof_spec("192.0.2.1", None, None);
+        let argv = create_retry_argv("pk1", &spec, None, &["-ads.example.com".to_owned()]);
+        crate::cli::Cli::try_parse_from(&argv)
+            .expect("-- shields the leading-hyphen hostname from clap");
     }
 
     #[test]
@@ -1487,9 +1850,65 @@ mod tests {
                 "pk1",
                 "--enabled",
                 "--root",
+                "--",
                 "a.example.com",
             ]
         );
+    }
+
+    #[test]
+    fn update_retry_argv_places_a_double_dash_immediately_before_the_first_hostname() {
+        let changes = RuleUpdateChanges {
+            enabled: Some(true),
+            ..RuleUpdateChanges::default()
+        };
+        let argv = update_retry_argv(
+            "pk1",
+            &changes,
+            &["a.example.com".to_owned(), "b.example.com".to_owned()],
+        );
+        let dash = argv.iter().position(|a| a == "--").expect("-- present");
+        assert_eq!(argv[dash + 1], "a.example.com");
+    }
+
+    #[test]
+    fn update_retry_argv_with_a_leading_hyphen_hostname_round_trips_through_clap() {
+        let changes = RuleUpdateChanges {
+            enabled: Some(true),
+            ..RuleUpdateChanges::default()
+        };
+        let argv = update_retry_argv("pk1", &changes, &["-ads.example.com".to_owned()]);
+        crate::cli::Cli::try_parse_from(&argv)
+            .expect("-- shields the leading-hyphen hostname from clap");
+    }
+
+    #[test]
+    fn delete_retry_argv_places_a_double_dash_immediately_before_the_first_hostname() {
+        let argv = delete_retry_argv(
+            "pk1",
+            &["a.example.com".to_owned(), "b.example.com".to_owned()],
+        );
+        assert_eq!(
+            argv,
+            vec![
+                "cdctl",
+                "rule",
+                "delete",
+                "--profile",
+                "pk1",
+                "--yes",
+                "--",
+                "a.example.com",
+                "b.example.com",
+            ]
+        );
+    }
+
+    #[test]
+    fn delete_retry_argv_with_a_leading_hyphen_hostname_round_trips_through_clap() {
+        let argv = delete_retry_argv("pk1", &["-ads.example.com".to_owned()]);
+        crate::cli::Cli::try_parse_from(&argv)
+            .expect("-- shields the leading-hyphen hostname from clap");
     }
 
     #[test]

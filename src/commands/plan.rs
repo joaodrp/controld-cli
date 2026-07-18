@@ -163,7 +163,7 @@ pub struct RuleDeleteIntent {
 /// Print the plan and let the caller `return print(...)` — dry runs always
 /// exit 0 (a `--fields` typo is already caught upfront, before the plan is
 /// even built, and `--fields` together with `--dry-run` is rejected outright
-/// as a conflict — `commands::reject_fields_with_dry_run` — so `globals.fields`
+/// as a conflict — `commands::preflight_fields` — so `globals.fields`
 /// is always `None` by the time a handler reaches here), and confirmation is
 /// skipped (nothing mutates).
 pub fn print(globals: &Globals, plan: &Plan) -> Result<(), Error> {

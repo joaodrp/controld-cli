@@ -31,6 +31,7 @@ expression: stderr
         "--profile",
         "pk4cada1c5",
         "--yes",
+        "--",
         "a.example.com"
       ]
     },

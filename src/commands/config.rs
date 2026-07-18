@@ -8,7 +8,7 @@ use serde_json::json;
 use crate::cli::Globals;
 use crate::config::{Store, TOKEN_ENV_VAR, env_var, resolve_token};
 use crate::error::Error;
-use crate::output::{emit, print_key_values, validate_fields};
+use crate::output::{self, emit, print_key_values};
 
 #[derive(Debug, Subcommand)]
 pub enum ConfigCommand {
@@ -124,10 +124,7 @@ fn document(
 }
 
 fn list(store: &Store, globals: &Globals) -> Result<(), Error> {
-    // Upfront: `config list`'s document shape is known (`FIELDS`), so a
-    // typo'd `--fields` is a usage error rather than a check deferred to the
-    // post-build `emit` call.
-    validate_fields(globals.fields.as_deref(), FIELDS)?;
+    output::validate_fields(globals.fields.as_deref(), FIELDS)?;
     let config = super::load_config(store)?;
 
     let current_context = Annotated {

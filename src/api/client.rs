@@ -46,11 +46,13 @@ impl Default for RetryPolicy {
     }
 }
 
-/// A request body in one of the two D9b encodings — form pairs with literal
-/// keys, or bytes sent verbatim as JSON. Nothing is ever sniffed (D16).
+/// A request body in one of the two D9b encodings — a form body, pre-encoded
+/// once by [`encode_form`] wherever the pairs are first known (literal keys,
+/// percent-encoded values), or bytes sent verbatim as JSON. Nothing is ever
+/// sniffed (D16).
 #[derive(Debug)]
 pub enum RawBody {
-    Form(Vec<(String, String)>),
+    Form(String),
     Json(Vec<u8>),
 }
 
@@ -64,6 +66,10 @@ struct WireResponse {
 
 #[derive(Debug)]
 pub struct ClientConfig {
+    /// Invariant: the path always ends in `/` — [`base_url_from_raw`] (the
+    /// sole production source of this field) enforces it once, so
+    /// [`join_pinned_to_origin`] can join a single-leading-slash path
+    /// directly, with no per-call check.
     pub base_url: Url,
     pub token: Option<SecretString>,
     pub timeout: Duration,
@@ -84,11 +90,7 @@ impl ClientConfig {
         no_retry: bool,
         debug: bool,
     ) -> Result<Self, Error> {
-        let base_url = match crate::config::env_var("CONTROLD_API_URL")? {
-            Some(raw) => Url::parse(&raw)
-                .map_err(|e| Error::usage(format!("CONTROLD_API_URL is not a valid URL: {e}")))?,
-            None => Url::parse(DEFAULT_BASE_URL).expect("the default base URL is valid"),
-        };
+        let base_url = base_url_from_raw(crate::config::env_var("CONTROLD_API_URL")?)?;
 
         Ok(Self {
             base_url,
@@ -104,6 +106,53 @@ impl ClientConfig {
                 .is_some_and(|v| v == "1"),
         })
     }
+}
+
+/// `raw` (`CONTROLD_API_URL`, already [`env_var`](crate::config::env_var)-policy)
+/// parsed, or the default base when absent — either way, normalized so the
+/// path ends in `/` before it becomes [`ClientConfig::base_url`]. Every
+/// command path is absolute (`/profiles`, ...), and WHATWG's plain
+/// `Url::join` treats a single leading `/` as replacing the base's whole
+/// path — without the trailing slash a path-routing gateway's prefix (e.g.
+/// `https://gw.example/controld`) would be dropped, not extended as a
+/// directory ([`join_pinned_to_origin`]). Normalizing here, once, at the
+/// base URL's sole production constructor, means every later join can rely on
+/// the invariant instead of re-deriving it per call. Touches only the path,
+/// never the origin, so this cannot weaken D9's origin pin; [`DEFAULT_BASE_URL`]
+/// already parses with path `/`, so the default (and every existing e2e URL
+/// built from it) is unchanged by this normalization.
+fn base_url_from_raw(raw: Option<String>) -> Result<Url, Error> {
+    let mut url = match raw {
+        Some(raw) => {
+            let url = Url::parse(&raw)
+                .map_err(|e| Error::usage(format!("CONTROLD_API_URL is not a valid URL: {e}")))?;
+            validate_base_url_scheme(&url, &raw)?;
+            url
+        }
+        None => Url::parse(DEFAULT_BASE_URL).expect("the default base URL is valid"),
+    };
+    if !url.path().ends_with('/') {
+        let with_trailing_slash = format!("{}/", url.path());
+        url.set_path(&with_trailing_slash);
+    }
+    Ok(url)
+}
+
+/// A URL can parse and still be unusable as a request origin — `mailto:x` or
+/// a typo'd `foo://host/` both parse fine but carry no scheme this client
+/// could ever send a request over, and `Url::join`/`origin()` degrade
+/// silently rather than erroring on them (a cannot-be-a-base URL has no
+/// `host_str` at all). Left unchecked, every later request would fail, but
+/// misattributed to the request path rather than to `CONTROLD_API_URL`,
+/// which is the actual problem. Caught once, here, at construction.
+fn validate_base_url_scheme(url: &Url, raw: &str) -> Result<(), Error> {
+    let scheme_ok = matches!(url.scheme(), "http" | "https");
+    if scheme_ok && url.host_str().is_some() {
+        return Ok(());
+    }
+    Err(Error::usage(format!(
+        "CONTROLD_API_URL must be an http or https URL with a host, got {raw:?}"
+    )))
 }
 
 // Debug is safe: secrecy renders the token as REDACTED.
@@ -207,13 +256,9 @@ impl Client {
         form: &[(&str, String)],
         resource: &'static str,
     ) -> Result<Envelope, Error> {
-        let body = (!form.is_empty()).then(|| {
-            RawBody::Form(
-                form.iter()
-                    .map(|(key, value)| ((*key).to_owned(), value.clone()))
-                    .collect(),
-            )
-        });
+        // Encoded directly from the borrowed pairs — no intermediate owned
+        // copy that `encode_form` would only re-walk a second time.
+        let body = (!form.is_empty()).then(|| RawBody::Form(encode_form(form)));
         self.write_with(method, path, body, |wire| {
             interpret_response(wire, resource)
         })
@@ -286,13 +331,13 @@ impl Client {
             request = request.bearer_auth(token.expose_secret());
         }
         match body {
-            Some(RawBody::Form(pairs)) => {
+            Some(RawBody::Form(encoded)) => {
                 request = request
                     .header(
                         reqwest::header::CONTENT_TYPE,
                         "application/x-www-form-urlencoded",
                     )
-                    .body(encode_form(&pairs));
+                    .body(encoded);
             }
             Some(RawBody::Json(bytes)) => {
                 request = request
@@ -339,6 +384,7 @@ impl Client {
 /// Why [`join_pinned_to_origin`] refused a path. Callers word the
 /// off-origin message for their own audience (the choke point names the
 /// real origin; `validate_path` must not leak its probe base).
+#[derive(Debug)]
 #[expect(
     clippy::large_enum_variant,
     reason = "rejection paths are cold; matches the crate-wide result_large_err allowance"
@@ -350,18 +396,60 @@ pub(crate) enum JoinRejection {
 }
 
 /// Join `path` onto `base`, refusing any result that leaves `base`'s origin
-/// (D9). WHATWG parsing treats `\` like `/` and lets absolute or
-/// scheme-relative input replace the host — so the joined result is checked,
-/// never the input's shape. `cdctl api` runs the same algorithm pre-auth.
+/// (D9), and preserving any path prefix `base` carries (a path-routing
+/// gateway, e.g. `https://gw.example/controld`) — every command's path is
+/// absolute (`/profiles`, ...), and WHATWG's plain `base.join` treats a
+/// single leading `/` as replacing the base's whole path, dropping the
+/// prefix. A single-leading-slash `path` is therefore joined as relative
+/// against `base` instead, so the prefix is kept as a directory rather than a
+/// replaced last segment; the query string travels with it since the
+/// relative reference carries it. This relies on `base`'s path already
+/// ending in `/` — [`base_url_from_raw`]'s invariant, guaranteed once at
+/// construction, so this join needs no per-call clone or check to uphold it.
+/// Every other shape (relative paths, `//host/x`, full URLs, backslash forms)
+/// keeps the plain `base.join` behavior unchanged — those are exactly the
+/// shapes D9 relies on to detect an origin escape (a normalized-to-two-slashes
+/// prefix must still resolve as a network-path reference and replace the
+/// host). Either way the joined result is checked against `base`'s origin,
+/// never the input's shape. `cdctl api` runs the same algorithm pre-auth,
+/// against a sentinel base that is itself already normalized (a bare
+/// `Url::parse` with no path).
 pub(crate) fn join_pinned_to_origin(base: &Url, path: &str) -> Result<Url, JoinRejection> {
-    let url = base.join(path).map_err(|e| {
+    // Two leading slash-equivalents (`//`, `/\`, `\\`) are a network-path
+    // reference even after stripping one `/` — those must keep falling
+    // through to the plain join below so the origin check still catches them.
+    let is_single_leading_slash =
+        path.starts_with('/') && !matches!(path.as_bytes().get(1), Some(b'/' | b'\\'));
+
+    let url = if is_single_leading_slash {
+        // `./` is RFC 3986's disambiguation for a relative reference whose
+        // first segment contains `:` (or reads as a URL): without it,
+        // stripping the slash from `/https://example/x` or `/mailto:x`
+        // would hand the remainder to scheme parsing and reject a
+        // perfectly on-origin path as an origin escape.
+        base.join(&format!("./{}", &path[1..]))
+    } else {
+        base.join(path)
+    }
+    .map_err(|e| {
         JoinRejection::Malformed(Error::usage(format!("invalid request path {path:?}: {e}")))
     })?;
-    if url.origin() == base.origin() {
-        Ok(url)
-    } else {
-        Err(JoinRejection::OffOrigin)
+    if url.origin() != base.origin() {
+        return Err(JoinRejection::OffOrigin);
     }
+    // The base's path prefix is part of the pinned target, not a default a
+    // path may opt out of: dot segments (literal or `%2e` — WHATWG
+    // normalizes both before this point) could otherwise stay on-origin yet
+    // route around a gateway prefix. Checked on the joined result, so no
+    // input shape can dodge it; the default base's prefix is `/`, which no
+    // normalized path can escape.
+    if !url.path().starts_with(base.path()) {
+        return Err(JoinRejection::Malformed(Error::usage(format!(
+            "request path {path:?} resolves outside the base URL's path {:?}",
+            base.path()
+        ))));
+    }
+    Ok(url)
 }
 
 /// Form body with **literal keys**: live verification proved bracketed keys
@@ -369,15 +457,20 @@ pub(crate) fn join_pinned_to_origin(base: &Url, path: &str) -> Result<Url, JoinR
 /// stock encoder emits was never proven, and this API earns no benefit of the
 /// doubt (Open item 9, resolved). Values still percent-encode — framing
 /// (`&`, `=`) must survive any value; the server decodes them back.
-fn encode_form(pairs: &[(String, String)]) -> String {
+///
+/// Generic over the pair type so both callers encode straight from what they
+/// already hold — [`Client::write`]'s borrowed `&[(&str, String)]` and
+/// `cdctl api`'s owned `Vec<(String, String)>` — without first copying either
+/// into the other's shape just to call this.
+pub(crate) fn encode_form<K: AsRef<str>, V: AsRef<str>>(pairs: &[(K, V)]) -> String {
     let mut body = String::new();
     for (key, value) in pairs {
         if !body.is_empty() {
             body.push('&');
         }
-        body.push_str(key);
+        body.push_str(key.as_ref());
         body.push('=');
-        body.extend(form_urlencoded::byte_serialize(value.as_bytes()));
+        body.extend(form_urlencoded::byte_serialize(value.as_ref().as_bytes()));
     }
     body
 }
@@ -586,9 +679,9 @@ mod tests {
     #[test]
     fn form_keys_stay_verbatim_while_values_encode() {
         let body = encode_form(&[
-            ("hostnames[]".into(), "*.example.com".into()),
-            ("name".into(), "a&b=c d".into()),
-            ("note".into(), "café".into()),
+            ("hostnames[]", "*.example.com"),
+            ("name", "a&b=c d"),
+            ("note", "café"),
         ]);
         assert_eq!(
             body,
@@ -598,7 +691,7 @@ mod tests {
 
     #[test]
     fn empty_form_encodes_to_an_empty_body() {
-        assert_eq!(encode_form(&[]), "");
+        assert_eq!(encode_form::<&str, &str>(&[]), "");
     }
 
     #[test]
@@ -609,6 +702,143 @@ mod tests {
             "plain-host_1.example~"
         );
         assert_eq!(encode_path_segment("a/b?c#d%e"), "a%2Fb%3Fc%23d%25e");
+    }
+
+    /// A `CONTROLD_API_URL` naming a path-routing gateway (e.g.
+    /// `https://gw.example/controld`) must keep that path prefix on every
+    /// request — `base.join("/profiles")` alone replaces the whole path and
+    /// silently drops it.
+    #[test]
+    fn join_preserves_a_base_path_prefix() {
+        let base = Url::parse("https://gw.example/controld/").expect("base");
+        let joined = join_pinned_to_origin(&base, "/profiles").expect("same-origin");
+        assert_eq!(joined.as_str(), "https://gw.example/controld/profiles");
+    }
+
+    /// A slash-prefixed path whose remainder happens to parse as an absolute
+    /// URL or opaque URI (`/https://example/x`, `/mailto:x`) is still a path
+    /// under the API origin — the `./` disambiguation must keep it out of
+    /// scheme parsing rather than rejecting it off-origin.
+    /// Dot segments (literal or percent-encoded — WHATWG normalizes both)
+    /// must not escape a configured base path prefix while staying
+    /// on-origin: the prefix is part of the pinned target, not a default.
+    #[test]
+    fn join_rejects_a_dot_segment_escape_of_the_base_path_prefix() {
+        let base = Url::parse("https://gw.example/controld/").expect("base");
+        for path in ["/../users", "/%2e%2e/users", "/a/../../users"] {
+            assert!(
+                join_pinned_to_origin(&base, path).is_err(),
+                "{path:?} must not escape the /controld/ prefix"
+            );
+        }
+        // Dot segments that stay inside the prefix keep resolving.
+        let inside = join_pinned_to_origin(&base, "/a/../users").expect("inside the prefix");
+        assert_eq!(inside.as_str(), "https://gw.example/controld/users");
+        // With the default base the prefix is `/`, which nothing can escape.
+        let default_base = Url::parse("https://api.controld.com/").expect("base");
+        let joined = join_pinned_to_origin(&default_base, "/../users").expect("still under /");
+        assert_eq!(joined.as_str(), "https://api.controld.com/users");
+    }
+
+    #[test]
+    fn join_keeps_a_url_shaped_path_on_the_api_origin() {
+        let base = Url::parse("https://api.controld.com").expect("base");
+        let joined =
+            join_pinned_to_origin(&base, "/https://example/x").expect("still a same-origin path");
+        assert_eq!(
+            joined.as_str(),
+            "https://api.controld.com/https://example/x"
+        );
+        let joined = join_pinned_to_origin(&base, "/mailto:x").expect("still a same-origin path");
+        assert_eq!(joined.as_str(), "https://api.controld.com/mailto:x");
+    }
+
+    /// The trailing-slash normalization lives at construction
+    /// ([`base_url_from_raw`]), not in `join_pinned_to_origin` itself — so
+    /// this pins it through the real construction path a `CONTROLD_API_URL`
+    /// without a trailing slash takes, rather than hand-building an
+    /// already-normalized `Url` and only testing the join.
+    #[test]
+    fn join_preserves_a_base_path_prefix_without_a_trailing_slash() {
+        let base = base_url_from_raw(Some("https://gw.example/controld".to_owned()))
+            .expect("constructs and normalizes");
+        let joined = join_pinned_to_origin(&base, "/profiles").expect("same-origin");
+        assert_eq!(joined.as_str(), "https://gw.example/controld/profiles");
+    }
+
+    #[test]
+    fn base_url_from_raw_normalizes_a_missing_trailing_slash() {
+        let base =
+            base_url_from_raw(Some("https://gw.example/controld".to_owned())).expect("constructs");
+        assert_eq!(base.path(), "/controld/");
+    }
+
+    #[test]
+    fn base_url_from_raw_leaves_the_normalized_default_unchanged() {
+        let base = base_url_from_raw(None).expect("default base");
+        assert_eq!(base.as_str(), "https://api.controld.com/");
+    }
+
+    /// A URL that parses but carries no usable request scheme (a
+    /// cannot-be-a-base `mailto:` URI) must be rejected at construction, not
+    /// left to fail every later request misattributed to the request path.
+    #[test]
+    fn base_url_from_raw_rejects_a_non_http_scheme() {
+        let error = base_url_from_raw(Some("mailto:x".to_owned())).expect_err("mailto is not http");
+        assert_eq!(error.exit(), Exit::Usage);
+        assert!(
+            error.message.contains("CONTROLD_API_URL"),
+            "got: {}",
+            error.message
+        );
+    }
+
+    /// Same gate, a bogus scheme with a host — parses fine as a `Url`, still
+    /// unusable as an HTTP(S) origin.
+    #[test]
+    fn base_url_from_raw_rejects_an_unknown_scheme_with_a_host() {
+        let error =
+            base_url_from_raw(Some("foo://host/".to_owned())).expect_err("foo is not http(s)");
+        assert_eq!(error.exit(), Exit::Usage);
+        assert!(
+            error.message.contains("CONTROLD_API_URL"),
+            "got: {}",
+            error.message
+        );
+    }
+
+    /// The gate must not reject what it exists to allow: a plain `https://`
+    /// base still constructs.
+    #[test]
+    fn base_url_from_raw_still_accepts_an_https_base() {
+        base_url_from_raw(Some("https://gw.example/controld".to_owned()))
+            .expect("https base is fine");
+    }
+
+    #[test]
+    fn join_with_a_base_path_prefix_keeps_the_query_string() {
+        let base = Url::parse("https://gw.example/controld/").expect("base");
+        let joined = join_pinned_to_origin(&base, "/x?y=%2A").expect("same-origin");
+        assert_eq!(joined.path(), "/controld/x");
+        assert_eq!(joined.query(), Some("y=%2A"));
+    }
+
+    #[test]
+    fn join_with_the_default_base_is_unchanged() {
+        let base = Url::parse(DEFAULT_BASE_URL).expect("default base");
+        let joined = join_pinned_to_origin(&base, "/profiles").expect("same-origin");
+        assert_eq!(joined.as_str(), "https://api.controld.com/profiles");
+    }
+
+    /// A base path prefix must never weaken the D9 origin pin: a
+    /// scheme-relative path still replaces the host and is rejected.
+    #[test]
+    fn join_still_rejects_a_scheme_relative_path_with_a_base_prefix() {
+        let base = Url::parse("https://gw.example/controld").expect("base");
+        assert!(matches!(
+            join_pinned_to_origin(&base, "//evil.example/x"),
+            Err(JoinRejection::OffOrigin)
+        ));
     }
 
     #[tokio::test]
@@ -1125,7 +1355,7 @@ mod tests {
             .write_raw(
                 Method::POST,
                 "/profiles",
-                Some(RawBody::Form(vec![("name".into(), "x".into())])),
+                Some(RawBody::Form(encode_form(&[("name", "x")]))),
                 "resource",
             )
             .await

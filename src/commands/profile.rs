@@ -6,7 +6,7 @@ use clap::Subcommand;
 use crate::cli::Globals;
 use crate::error::Error;
 use crate::model::profile::Profile;
-use crate::output::{emit, print_key_values, render_table, time, validate_fields};
+use crate::output::{self, emit, print_key_values, render_table, time};
 
 #[derive(Debug, Subcommand)]
 pub enum ProfileCommand {
@@ -28,11 +28,7 @@ pub async fn run(command: ProfileCommand, globals: &Globals) -> Result<(), Error
 }
 
 async fn list(globals: &Globals) -> Result<(), Error> {
-    // Upfront, before any request: `profile list`'s row shape is known
-    // (`Profile::FIELDS`), so a typo'd `--fields` is a usage error even when
-    // the eventual result is empty — `emit`'s own check alone would be
-    // vacuous on a zero-profile account and let the typo through with exit 0.
-    validate_fields(globals.fields.as_deref(), Profile::FIELDS)?;
+    output::validate_fields(globals.fields.as_deref(), Profile::FIELDS)?;
     let (client, _source, _config) = super::authenticated_client(globals)?;
     let api_profiles = super::scope::fetch_profiles(&client).await?;
     let profiles = api_profiles
@@ -62,8 +58,7 @@ async fn list(globals: &Globals) -> Result<(), Error> {
 
 async fn get(selector: &str, globals: &Globals) -> Result<(), Error> {
     super::validate::reject_control_chars(selector, "the profile selector")?;
-    // Upfront, before any request; see `list`'s matching comment.
-    validate_fields(globals.fields.as_deref(), Profile::FIELDS)?;
+    output::validate_fields(globals.fields.as_deref(), Profile::FIELDS)?;
     let (client, _source, _config) = super::authenticated_client(globals)?;
     let api_profiles = super::scope::fetch_profiles(&client).await?;
     let profile = Profile::from_api(super::scope::find_profile(&api_profiles, selector)?)?;
@@ -81,7 +76,10 @@ async fn get(selector: &str, globals: &Globals) -> Result<(), Error> {
             ("enabled", profile.enabled.to_string()),
             (
                 "disabled_until",
-                profile.disabled_until.clone().unwrap_or_default(),
+                profile
+                    .disabled_until
+                    .clone()
+                    .unwrap_or_else(|| "-".to_owned()),
             ),
             ("updated", profile.updated.clone()),
         ]);

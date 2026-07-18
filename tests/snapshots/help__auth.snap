@@ -16,7 +16,7 @@ Options:
   -h, --help  Print help
 
 Global options:
-  -p, --profile <PK|name>  Profile to operate on (name or PK) [env: CONTROLD_PROFILE=]
+  -p, --profile <PK|name>  Profile to operate on (name or PK) [env: CONTROLD_PROFILE]
       --json               Emit JSON (full document) instead of a table
       --fields <a,b>       Comma-separated JSON fields to keep (implies --json)
       --plain              Tables without borders, for awk/cut

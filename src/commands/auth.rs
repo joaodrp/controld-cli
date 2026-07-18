@@ -1,8 +1,6 @@
 //! `cdctl auth`: tokens are dashboard-issued and arrive on stdin only —
 //! argv is world-readable (D6).
 
-use std::io::Read;
-
 use clap::{Args, Subcommand};
 use secrecy::SecretString;
 use serde::Serialize;
@@ -10,7 +8,7 @@ use serde::Serialize;
 use crate::cli::Globals;
 use crate::config::Store;
 use crate::error::Error;
-use crate::output::{emit, print_key_values, validate_fields};
+use crate::output::{self, emit, print_key_values};
 
 #[derive(Debug, Subcommand)]
 pub enum AuthCommand {
@@ -31,13 +29,13 @@ pub struct LoginArgs {
 
 pub async fn run(command: AuthCommand, globals: &Globals) -> Result<(), Error> {
     match command {
-        AuthCommand::Login(args) => login(&args, globals),
+        AuthCommand::Login(args) => login(&args, globals).await,
         AuthCommand::Status => status(globals).await,
         AuthCommand::Logout => logout(globals),
     }
 }
 
-fn login(args: &LoginArgs, globals: &Globals) -> Result<(), Error> {
+async fn login(args: &LoginArgs, globals: &Globals) -> Result<(), Error> {
     super::reject_explicit_json(globals, "auth login", "nothing on stdout")?;
     if !args.token_stdin {
         return Err(
@@ -47,10 +45,15 @@ fn login(args: &LoginArgs, globals: &Globals) -> Result<(), Error> {
         );
     }
 
-    let mut raw = String::new();
-    std::io::stdin()
-        .read_to_string(&mut raw)
-        .map_err(|e| Error::usage(format!("could not read the token from stdin: {e}")))?;
+    let raw_bytes = super::read_stdin("token").await?;
+    // Not `read_stdin`'s job: an invalid-UTF-8 token is still the same
+    // environmental, argv-innocent failure ("stdin carried no token" and the
+    // control-character rejection below stay usage errors; only I/O and
+    // encoding failures take this mapping) — the shared helper only knows
+    // bytes, so the conversion (and its exit-1 mapping) lives at this call
+    // site instead.
+    let raw = String::from_utf8(raw_bytes)
+        .map_err(|e| Error::generic(format!("could not read the token from stdin: {e}")))?;
     let token = raw.trim();
     if token.is_empty() {
         return Err(Error::usage("stdin carried no token"));
@@ -92,10 +95,7 @@ impl AuthStatus {
 }
 
 async fn status(globals: &Globals) -> Result<(), Error> {
-    // Upfront, before any request: `auth status`'s row shape is known
-    // (`AuthStatus::FIELDS`), so a typo'd `--fields` is a usage error rather
-    // than a check deferred to the post-request `emit` call.
-    validate_fields(globals.fields.as_deref(), AuthStatus::FIELDS)?;
+    output::validate_fields(globals.fields.as_deref(), AuthStatus::FIELDS)?;
     let (client, source, _config) = super::authenticated_client(globals)?;
     let user = client.get("/users", "account").await?.flat()?;
 

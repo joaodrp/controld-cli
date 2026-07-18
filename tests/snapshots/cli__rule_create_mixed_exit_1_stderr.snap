@@ -35,6 +35,7 @@ expression: stderr
         "pk4cada1c5",
         "--action",
         "block",
+        "--",
         "a.example.com"
       ]
     },

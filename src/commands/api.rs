@@ -5,12 +5,12 @@
 //! pairs are forwarded raw by design — the escape hatch must not reshape
 //! what it carries.
 
-use std::io::{IsTerminal, Read, Write};
+use std::io::Write;
 
 use clap::Args;
 use reqwest::{Method, Url};
 
-use crate::api::client::RawBody;
+use crate::api::client::{RawBody, encode_form};
 use crate::cli::Globals;
 use crate::error::{Error, Exit};
 
@@ -97,21 +97,7 @@ async fn read_body(body: PendingBody) -> Result<RawBody, Error> {
     match body {
         PendingBody::Ready(body) => Ok(body),
         PendingBody::Stdin => {
-            if std::io::stdin().is_terminal() {
-                eprintln!("info: reading the JSON body from stdin; end with Ctrl-D");
-            }
-            // Off the runtime thread: a blocking read here would starve
-            // main's select of its SIGINT branch and make Ctrl-C appear
-            // dead for the whole read. An I/O failure is environmental,
-            // not a malformed invocation — exit 1, not the usage code
-            // scripts treat as "fix your argv".
-            let raw = tokio::task::spawn_blocking(|| {
-                let mut raw = Vec::new();
-                std::io::stdin().read_to_end(&mut raw).map(|_| raw)
-            })
-            .await
-            .map_err(|e| Error::generic(format!("the stdin reader task failed: {e}")))?
-            .map_err(|e| Error::generic(format!("could not read the body from stdin: {e}")))?;
+            let raw = super::read_stdin("JSON body").await?;
             // Emptiness is the absence of a body, not a body to forward
             // verbatim (D9b) — the classic cause is a failed upstream
             // pipeline stage, and firing the mutation anyway could exit 0
@@ -180,7 +166,9 @@ fn validate_body(args: &ApiArgs) -> Result<Option<PendingBody>, Error> {
                 .ok_or_else(|| Error::usage(format!("-F expects key=value, got {field:?}")))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(Some(PendingBody::Ready(RawBody::Form(pairs))))
+    // Encoded once, here, where the pairs are first known — `send` uses the
+    // wire body as-is (`Client::write`'s callers share this same encoder).
+    Ok(Some(PendingBody::Ready(RawBody::Form(encode_form(&pairs)))))
 }
 
 fn parse_method(raw: &str) -> Result<Method, String> {
@@ -252,16 +240,13 @@ mod tests {
         let body = validate_body(&parse(&["/x", "-X", "POST", "-F", "name=a=b", "-F", "k="]))
             .expect("valid")
             .expect("present");
-        let PendingBody::Ready(RawBody::Form(pairs)) = body else {
+        let PendingBody::Ready(RawBody::Form(encoded)) = body else {
             panic!("form body expected");
         };
-        assert_eq!(
-            pairs,
-            vec![
-                ("name".to_owned(), "a=b".to_owned()),
-                ("k".to_owned(), String::new())
-            ]
-        );
+        // Splitting on the first `=` only: "name=a=b" is key "name", value
+        // "a=b" (which then percent-encodes its own `=` as %3D); "k=" is key
+        // "k", empty value.
+        assert_eq!(encoded, "name=a%3Db&k=");
 
         let error = validate_body(&parse(&["/x", "-X", "POST", "-F", "no-equals"]))
             .expect_err("k=v required");

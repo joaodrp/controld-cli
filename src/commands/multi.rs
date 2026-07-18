@@ -21,6 +21,11 @@ pub enum TargetResult {
     Skipped,
 }
 
+/// Shared by `aggregate`'s and `aggregate_exit`'s `.expect` — both assume
+/// the same precondition, so the release-build panic message names it once.
+const REQUIRES_A_FAILURE: &str = "aggregate requires at least one failed target; a debug_assert in aggregate \
+     enforces this in debug builds, this expect enforces it in release";
+
 /// Fold per-target outcomes into one D4 `details.multi_target` error.
 /// `results` must be in the original target order — `targets` preserves it
 /// verbatim. Callers build `retry_argv` themselves: only they know the verb
@@ -36,25 +41,35 @@ pub fn aggregate(
     results: &[(String, TargetResult)],
     retry_argv: Vec<String>,
 ) -> Error {
-    let landed = results
-        .iter()
-        .filter(|(_, r)| matches!(r, TargetResult::Landed))
-        .count();
-    let skipped = results
-        .iter()
-        .filter(|(_, r)| matches!(r, TargetResult::Skipped))
-        .count();
-    let failed: Vec<&Error> = results
-        .iter()
-        .filter_map(|(_, r)| match r {
-            TargetResult::Failed(error) => Some(error.as_ref()),
-            TargetResult::Landed | TargetResult::Skipped => None,
-        })
-        .collect();
-    debug_assert!(
-        !failed.is_empty(),
-        "aggregate is only called when at least one target failed"
-    );
+    let mut landed = 0u32;
+    let mut skipped = 0u32;
+    let mut failed: Vec<&Error> = Vec::new();
+    // The first failure's own message, so human mode (counts only otherwise)
+    // says *why* without a `--json` round trip; `collapse_to_single_line`
+    // applies at render, so a multi-line upstream dump is still safe here.
+    let mut first_failure: Option<(&str, &Error)> = None;
+    let mut targets = Vec::with_capacity(results.len());
+
+    for (target, result) in results {
+        match result {
+            TargetResult::Landed => {
+                landed += 1;
+                targets.push(TargetOutcome::landed(target.clone()));
+            }
+            TargetResult::Skipped => {
+                skipped += 1;
+                targets.push(TargetOutcome::skipped(target.clone()));
+            }
+            TargetResult::Failed(error) => {
+                failed.push(error);
+                if first_failure.is_none() {
+                    first_failure = Some((target.as_str(), error));
+                }
+                targets.push(TargetOutcome::failed(target.clone(), error));
+            }
+        }
+    }
+    debug_assert!(!failed.is_empty(), "{REQUIRES_A_FAILURE}");
     // The dangerous direction only: a landed hostname in `retry_argv` would
     // duplicate-POST it on retry and fail the whole chunk upstream. The
     // converse — every failed target present — is *not* asserted: a caller
@@ -73,33 +88,13 @@ pub fn aggregate(
     // The max, not the first or the sum: D4 promises agents never re-derive
     // backoff, so the aggregate must wait out the longest-lived target.
     let retry_after = failed.iter().filter_map(|error| error.retry_after).max();
-    // The first failure's own message, so human mode (counts only otherwise)
-    // says *why* without a `--json` round trip; `collapse_to_single_line`
-    // applies at render, so a multi-line upstream dump is still safe here.
-    let (first_target, first_error) = results
-        .iter()
-        .find_map(|(target, result)| match result {
-            TargetResult::Failed(error) => Some((target, error)),
-            TargetResult::Landed | TargetResult::Skipped => None,
-        })
-        .expect(
-            "aggregate requires at least one failed target; a debug_assert above enforces \
-             this in debug builds, this expect enforces it in release",
-        );
+    let (first_target, first_error) = first_failure.expect(REQUIRES_A_FAILURE);
     let message = format!(
         "{} of {} {resource}s failed (first: {first_target}: {}); {landed} landed, {skipped} skipped",
         failed.len(),
         results.len(),
         first_error.message,
     );
-    let targets = results
-        .iter()
-        .map(|(target, result)| match result {
-            TargetResult::Landed => TargetOutcome::landed(target.clone()),
-            TargetResult::Skipped => TargetOutcome::skipped(target.clone()),
-            TargetResult::Failed(error) => TargetOutcome::failed(target.clone(), error),
-        })
-        .collect();
 
     // A blind re-run only makes sense when every failure is retryable
     // (exit 8) — a terminal aggregate (e.g. delete's 404) would fail
@@ -139,10 +134,7 @@ pub fn aggregate(
 /// already a disagreement, so it falls to 1 too, not the terminal code.
 fn aggregate_exit(failed: &[&Error]) -> Exit {
     let mut exits = failed.iter().map(|error| error.exit());
-    let first = exits.next().expect(
-        "aggregate requires at least one failed target; a debug_assert above enforces \
-             this in debug builds, this expect enforces it in release",
-    );
+    let first = exits.next().expect(REQUIRES_A_FAILURE);
     if exits.all(|exit| exit == first) {
         first
     } else {

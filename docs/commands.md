@@ -366,6 +366,12 @@ key of its map). :warning: The dropdown write is **unprobed** — verify before 
 - **A missing `action.do` is an error, not a default.** Never coerce to `0` (= BLOCK).
 - `rule update` sends only the flags given — **`PUT /rules` merges**, preserving omitted fields
   (verified live), so `rule update x.com --disabled` needs no `--action`.
+- **`rule update` never creates a rule** — `PUT /rules` does not upsert (probed live: an unknown
+  hostname 400s `Custom Rule does not exist`,
+  [write-verification](reference/write-verification.md)). A target hostname absent from the
+  profile is checked for and rejected — exit `3`, `rule.not_found`, naming every missing
+  hostname — before anything is written, rather than surfacing whatever generic error the failed
+  `PUT` would otherwise produce.
 - **`via6` cannot be cleared** while the spoof action persists — probed: omission preserves it,
   empty string and `0` are rejected atomically, and only an action flip clears it (an unprotected
   window `cdctl` never enters implicitly —
@@ -384,7 +390,11 @@ key of its map). :warning: The dropdown write is **unprobed** — verify before 
   **read back and verify** every target landed in the desired state before printing it — the
   write response is a one-entry summary that cannot reveal a dropped hostname. The read-back is
   the same profile-wide aggregation `rule list` does (root plus every folder), never just the root
-  listing — a rule that landed in a folder must still be found.
+  listing — a rule that landed in a folder must still be found. A spoof `via`/`via6` compares
+  case-insensitively against the desired state — DNS names are case-insensitive and the API is
+  unversioned, so the comparison does not lean on the server's case-preserving storage continuing
+  ([write-verification](reference/write-verification.md)). A redirect `via` is a proxy PK, an
+  exact identifier, and compares case-sensitively.
 - **Partial failure is per-target, inside the error envelope.** When a multi-target
   `create`/`update`/`delete` fails partway, or verification finds a gap, the [D4](decisions.md)
   `details` (`kind: "multi_target"`) carries ordered per-target entries and a shell-neutral
@@ -469,8 +479,10 @@ add/converge/delete plan and exits `0`.
   **full-state diff, not by hostname**: a manifest entry is skipped only when the live rule
   already matches the entire desired tuple; a hostname present with any difference **converges via
   `PUT`** (the verified merge — a user may have recreated, moved, or edited it since the manifest
-  was written), and missing hostnames are added. Chunked at 500 with the same per-chunk and final
-  full-state verification as import.
+  was written); a missing hostname is **created via `POST`**, never `PUT` — `PUT` does not upsert
+  ([write-verification.md](reference/write-verification.md): an unknown hostname 400s `Custom Rule
+  does not exist` and nothing lands). Chunked at 500 with the same per-chunk and final full-state
+  verification as import.
 - **Chunks of 500, scalar params first, verify the full desired state.** After each chunk,
   re-fetch and assert the chunk's hostnames are present with the intended **action, enabled state,
   `via`, `via6`, and folder** — membership alone can miss a dropped trailing scalar (a truncated

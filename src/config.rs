@@ -268,11 +268,15 @@ pub fn env_var(name: &str) -> Result<Option<String>, Error> {
 }
 
 /// D6 precedence: `CONTROLD_API_TOKEN` beats the active context's stored
-/// token; an empty env value counts as unset. `None` is not an error here —
-/// auth is resolved lazily (D7), so only handlers that make requests turn it
-/// into `auth.missing_token`.
+/// token. `None` is not an error here — auth is resolved lazily (D7), so only
+/// handlers that make requests turn it into `auth.missing_token`.
+///
+/// `env_token` must be an [`env_var`]-policy value: both production callers
+/// pass its output straight through, so `Some("")` never reaches here —
+/// empty-means-unset is already enforced there, once, rather than re-checked
+/// on every read.
 pub fn resolve_token(env_token: Option<String>, config: &Config) -> Option<ResolvedToken> {
-    if let Some(token) = env_token.filter(|t| !t.is_empty()) {
+    if let Some(token) = env_token {
         return Some(ResolvedToken {
             token: SecretString::from(token),
             source: TokenSource::Env,
@@ -422,9 +426,12 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_env_token_is_unset_and_falls_back_to_config() {
+    fn no_env_token_falls_back_to_config() {
+        // `resolve_token`'s precondition: an unset env token arrives as
+        // `None` (`env_var` already turned an empty `CONTROLD_API_TOKEN`
+        // into `None` before this ever runs), not as `Some("")`.
         let config = config_with_token("api.from-config");
-        let resolved = resolve_token(Some(String::new()), &config).expect("falls back");
+        let resolved = resolve_token(None, &config).expect("falls back");
         assert_eq!(resolved.source, TokenSource::Config);
         assert_eq!(resolved.token.expose_secret(), "api.from-config");
     }

@@ -88,7 +88,6 @@ impl Envelope {
     /// Keyed with siblings: `/network` — `{"network": [...], "time": ...,
     /// "current_pop": ...}`. Returns the keyed payload and the remaining
     /// sibling members.
-    #[allow(dead_code, reason = "first caller is Phase 6 (`network`)")]
     pub fn keyed_with_siblings(self, key: &str) -> Result<(Value, Map<String, Value>), Error> {
         let Some(Value::Object(mut object)) = self.body else {
             return Err(shape_error(&format!("an object body holding \"{key}\"")));

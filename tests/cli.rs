@@ -539,6 +539,52 @@ async fn auth_lifecycle_roundtrips() {
     .expect("lifecycle runs");
 }
 
+/// `config::env_var`'s empty-means-unset policy, pinned at the refactor-proof
+/// level: an exported-but-empty `CONTROLD_API_TOKEN` must not shadow a
+/// stored config token — `token_source` still reports `"config"`, not
+/// `"env"`, and authentication still succeeds.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_empty_controld_api_token_env_falls_back_to_the_config_token() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/users"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(fixture("users.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl(dir.path())
+            .env("CONTROLD_API_URL", &uri)
+            .env("CONTROLD_UNSAFE_BASE_URL", "1")
+            .args(["auth", "login", "--token-stdin"])
+            .write_stdin("api.stored-token\n")
+            .assert()
+            .success();
+
+        let assert = cdctl(dir.path())
+            .env("CONTROLD_API_URL", &uri)
+            .env("CONTROLD_UNSAFE_BASE_URL", "1")
+            .env("CONTROLD_API_TOKEN", "")
+            .args(["auth", "status", "--json"])
+            .assert()
+            .success();
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stdout).expect("data");
+        assert_eq!(doc["authenticated"], true);
+        assert_eq!(
+            doc["token_source"], "config",
+            "an empty CONTROLD_API_TOKEN must mean unset, not override the stored token"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
 #[test]
 fn config_lifecycle_roundtrips() {
     let dir = tempdir();
@@ -665,6 +711,24 @@ fn an_invalid_api_url_is_a_usage_error() {
         .stdout(predicates::str::is_empty());
 }
 
+/// A `CONTROLD_API_URL` that parses but carries no usable HTTP(S) origin
+/// (`mailto:x`, a cannot-be-a-base URL) must be rejected at construction,
+/// same as an unparseable one — not left to fail every later request
+/// misattributed to the request path.
+#[test]
+fn a_non_http_api_url_is_a_usage_error() {
+    let dir = tempdir();
+    let assert = cdctl(dir.path())
+        .env("CONTROLD_API_URL", "mailto:x")
+        .env("CONTROLD_API_TOKEN", "api.test-token")
+        .args(["auth", "status"])
+        .assert()
+        .code(2)
+        .stdout(predicates::str::is_empty());
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(stderr.contains("CONTROLD_API_URL"), "got: {stderr}");
+}
+
 // --- auth login validation (D6) ---
 
 #[test]
@@ -699,6 +763,29 @@ fn auth_login_rejects_bad_input_and_writes_nothing() {
     assert!(
         !config_file.exists(),
         "no rejected login may create a config file"
+    );
+}
+
+/// Invalid UTF-8 on stdin is an environmental failure, not a malformed
+/// invocation: the flags parsed fine, the bytes just aren't a token `cdctl`
+/// can use, so this is exit 1 (`Error::generic`), never usage's exit 2 —
+/// unlike every case in the test above, which is a bad *value*, not a bad
+/// *encoding*.
+#[test]
+fn auth_login_invalid_utf8_stdin_is_exit_1_and_writes_nothing() {
+    let dir = tempdir();
+    let config_file = dir.path().join("cdctl").join("config.toml");
+
+    cdctl(dir.path())
+        .args(["auth", "login", "--token-stdin"])
+        .write_stdin(&[0xff, 0xfe, 0x00, 0x01][..])
+        .assert()
+        .code(1)
+        .stdout(predicates::str::is_empty());
+
+    assert!(
+        !config_file.exists(),
+        "invalid UTF-8 on stdin must not create a config file"
     );
 }
 
@@ -897,15 +984,15 @@ async fn folder_create_fields_typo_is_exit_2_before_any_write() {
     .expect("command runs");
 }
 
-/// Item 2: unified dry-run `--fields` semantics — the upfront check
-/// (`Rule::FIELDS`) now runs unconditionally, live or dry-run, so a typo
-/// exits 2 before the plan is even built, same as the live path.
-/// `mount_no_requests`'s `.expect(0)` proves it: no request, not even a
-/// validation GET, ever leaves. Check order (Codex round-2): the fields-name
-/// check runs before the `--fields`/`--dry-run` conflict check
-/// (`commands::reject_fields_with_dry_run`), so a typo still wins here even
-/// though this invocation also carries `--dry-run` — pinned by the message
-/// asserting "no such field", not the conflict wording.
+/// Unified dry-run `--fields` semantics — the upfront check (`Rule::FIELDS`)
+/// runs unconditionally, live or dry-run, so a typo exits 2 before the plan
+/// is even built, same as the live path. `mount_no_requests`'s `.expect(0)`
+/// proves it: no request, not even a validation GET, ever leaves. Check
+/// order: the fields-name check runs before the `--fields`/`--dry-run`
+/// conflict check (both inside `commands::preflight_fields`), so a typo
+/// still wins here even though this invocation also carries `--dry-run` —
+/// pinned by the message asserting "no such field", not the conflict
+/// wording.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rule_create_fields_typo_is_exit_2_before_any_request_on_a_dry_run() {
     let server = MockServer::start().await;
@@ -1560,6 +1647,54 @@ async fn sigint_while_reading_stdin_exits_130() {
     );
 }
 
+/// Same contract as `sigint_while_reading_stdin_exits_130`, for `auth login
+/// --token-stdin`'s own `read_stdin` call: Ctrl-C during the blocked read
+/// exits 130 without waiting for it, and — the property specific to this
+/// command — no token is ever written.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sigint_during_auth_login_token_stdin_exits_130_and_writes_nothing() {
+    use nix::sys::signal::{Signal, kill};
+    use nix::unistd::Pid;
+
+    let dir = tempdir();
+    let status = tokio::task::spawn_blocking(move || {
+        let mut child = std::process::Command::new(assert_cmd::cargo::cargo_bin("cdctl"))
+            .env_clear()
+            .env("XDG_CONFIG_HOME", dir.path())
+            .args(["auth", "login", "--token-stdin"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawns");
+        // Keep the write end open: dropping it would EOF the read and turn
+        // this into the empty-stdin rejection instead of a blocked read.
+        let stdin = child.stdin.take();
+
+        std::thread::sleep(Duration::from_millis(800));
+        kill(
+            Pid::from_raw(i32::try_from(child.id()).expect("pid fits")),
+            Signal::SIGINT,
+        )
+        .expect("signal delivered");
+        let status = child.wait().expect("wait");
+        drop(stdin);
+
+        let config_file = dir.path().join("cdctl").join("config.toml");
+        assert!(!config_file.exists(), "SIGINT must not write a token");
+        status
+    })
+    .await
+    .expect("task runs");
+
+    assert_eq!(
+        status.code(),
+        Some(130),
+        "SIGINT contract holds during stdin reads"
+    );
+}
+
 #[test]
 fn api_rejects_explicit_json_flags() {
     let dir = tempdir();
@@ -2143,9 +2278,9 @@ async fn mount_proxies(server: &MockServer, expect: u64) {
 }
 
 /// `GET /profiles/{AGGRESSIVE_PK}/rules` — the profile-wide (no folder
-/// segment) GET plain `rule list` renders and `rule create`/`update`'s
-/// read-back re-fetches. `rule delete` never reads back (per-request
-/// outcomes instead, D11), so it never mounts this.
+/// segment) GET plain `rule list` renders, `rule create`/`update`'s
+/// read-back re-fetches, and `rule update`/`rule delete`'s pre-write
+/// existence check (`verify_targets_exist`) fetches too.
 async fn mount_rules(server: &MockServer, fixture_name: &str, expect: u64) {
     Mock::given(method("GET"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
@@ -2165,6 +2300,37 @@ fn empty_rules_response() -> ResponseTemplate {
         "body": {"rules": []},
         "success": true
     }))
+}
+
+/// `rule delete`'s pre-write existence check (`verify_targets_exist`, reused
+/// from `update`): mounts an empty `GET /groups` (no folders in these tests)
+/// and a `GET /rules` root listing whose `PK`s are exactly `existing`, so the
+/// pre-check passes and the deletes proceed. Every hostname-bearing `rule
+/// delete` e2e test needs this ahead of its `DELETE` mocks — the pre-check
+/// runs before the confirmation prompt, let alone the deletes themselves.
+async fn mount_rule_delete_precheck(server: &MockServer, existing: &[&str]) {
+    mount_groups_fixture(server, "p_groups.json", 1).await;
+    let rules: Vec<serde_json::Value> = existing
+        .iter()
+        .enumerate()
+        .map(|(i, pk)| {
+            serde_json::json!({
+                "PK": pk,
+                "order": i64::try_from(i).expect("small test fixture") + 1,
+                "group": 0,
+                "action": {"do": 0, "status": 1}
+            })
+        })
+        .collect();
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": rules},
+            "success": true
+        })))
+        .expect(1)
+        .mount(server)
+        .await;
 }
 
 /// Mounted with `.expect(0)` in tests that must prove no mutation was
@@ -2533,8 +2699,19 @@ async fn folder_create_via6_is_rejected() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn folder_create_redirect_unknown_proxy_hints_nearest_matches() {
     let server = MockServer::start().await;
-    // Action-flag validation (including the redirect --via proxy check)
-    // runs before profile resolution, so /profiles is never called here.
+    // The redirect --via proxy check and profile resolution run
+    // concurrently (`commands::validated_client`'s doc): whether /profiles
+    // is reached before the proxy check errors and the join cancels it is a
+    // genuine race, so it is mounted with no `.expect()` — unlike /proxies,
+    // which the proxy check always awaits to completion before it can even
+    // decide LON is unknown.
+    Mock::given(method("GET"))
+        .and(path("/profiles"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(fixture("profiles.json"), "application/json"),
+        )
+        .mount(&server)
+        .await;
     mount_proxies(&server, 1).await;
     mount_no_writes(&server).await;
 
@@ -2558,6 +2735,54 @@ async fn folder_create_redirect_unknown_proxy_hints_nearest_matches() {
             .stdout(predicates::str::is_empty());
         let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
         assert!(stderr.contains("LHR"), "got: {stderr}");
+    })
+    .await
+    .expect("command runs");
+}
+
+/// `validated_client`'s two concurrent checks (`commands::validated_client`'s
+/// doc) can both fail at once — here, `/profiles` 500s (a retryable error)
+/// while `--via` names an unknown proxy (a usage error). The outcome must be
+/// deterministic, not whichever future happens to finish first: the code
+/// checks `via_result?` before `scope_result?`, so the usage error (exit 2)
+/// always wins, never the retryable exit 8 the profile failure alone would
+/// produce. `--no-retry` keeps the 500 to a single attempt so the test stays
+/// fast.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn validated_client_both_checks_failing_is_deterministically_the_usage_error() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/profiles"))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&server)
+        .await;
+    mount_proxies(&server, 1).await;
+    mount_no_writes(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "folder",
+                "create",
+                "X",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--action",
+                "redirect",
+                "--via",
+                "ZZZ",
+                "--no-retry",
+            ])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            stderr.contains("not a known proxy"),
+            "the usage error must win over the profile 500: got {stderr}"
+        );
     })
     .await
     .expect("command runs");
@@ -2877,6 +3102,39 @@ async fn folder_delete_honors_the_controld_profile_env_as_explicit() {
     .expect("command runs");
 }
 
+/// D8/clap precedence: `--profile` wins over `CONTROLD_PROFILE` when both
+/// name *different*, non-empty profiles — not just in principle
+/// (`Globals::resolve`'s doc), but at the wire level: the request must hit
+/// the flag's profile, never the env's. `mount_groups`'s `.expect(1)` proves
+/// `AGGRESSIVE_PK` (the flag) was resolved; the zero-`.expect()` mock on
+/// "Hardened"'s (the env's) own groups path proves it never was.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn profile_flag_beats_a_non_empty_controld_profile_env() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups(&server, 1).await;
+    Mock::given(method("GET"))
+        .and(path("/profiles/pkae1060cf/groups"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(fixture("p_groups.json"), "application/json"),
+        )
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl_against(&uri, dir.path())
+            .env("CONTROLD_PROFILE", "Hardened")
+            .args(["folder", "list", "--profile", AGGRESSIVE_PK])
+            .assert()
+            .success();
+    })
+    .await
+    .expect("command runs");
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn folder_delete_with_yes_and_an_explicit_profile_succeeds() {
     let server = MockServer::start().await;
@@ -3002,6 +3260,42 @@ async fn folder_list_with_an_implicit_default_profile_prints_an_info_line() {
                 "using default profile \"{AGGRESSIVE_NAME}\" ({AGGRESSIVE_PK}) from config"
             )),
             "got: {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+/// Guards a regression from `--profile` no longer carrying clap's own `env`
+/// plumbing (D8's fallback is resolved manually in `Globals::resolve`
+/// instead, via `config::env_var`): an exported-but-empty `CONTROLD_PROFILE`
+/// must still fall back to the config's `default_profile`, never be treated
+/// as an explicit empty selector that shadows it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_empty_controld_profile_env_falls_back_to_the_default_profile() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups(&server, 1).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl(dir.path())
+            .args(["config", "set", "default_profile", AGGRESSIVE_PK])
+            .assert()
+            .success();
+
+        let assert = cdctl_against(&uri, dir.path())
+            .env("CONTROLD_PROFILE", "")
+            .args(["folder", "list"])
+            .assert()
+            .success();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            stderr.contains(&format!(
+                "using default profile \"{AGGRESSIVE_NAME}\" ({AGGRESSIVE_PK}) from config"
+            )),
+            "an empty CONTROLD_PROFILE must mean unset, falling back to the default: {stderr}"
         );
     })
     .await
@@ -3257,6 +3551,60 @@ async fn rule_list_root_aggregates_rules_from_every_folder() {
         assert_eq!(rules[1]["hostname"], "host.example.com");
         assert_eq!(rules[1]["folder"], serde_json::Value::Null);
         assert_eq!(rules[1]["order"], 2);
+    })
+    .await
+    .expect("command runs");
+}
+
+/// A rule moved between folders during the concurrent root/per-folder fetch
+/// window can appear in both listings (`fetch_all_rules`, rule.rs); `rule
+/// list` must still print it exactly once, with the folder listing's copy
+/// winning — it is fetched after root in `fetch_all_rules`'s dedup order and
+/// is the more likely destination if the move landed mid-fetch.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_list_dedups_a_rule_present_in_both_root_and_a_folder_listing() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups_one.json", 1).await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "dup.example.com", "order": 1, "group": 0, "action": {"do": 0, "status": 1}}
+            ]},
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules/2")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "dup.example.com", "order": 1, "group": 2, "action": {"do": 1, "status": 0}}
+            ]},
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["rule", "list", "--profile", AGGRESSIVE_PK, "--json"])
+            .assert()
+            .success();
+        let json = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        let rules = doc.as_array().expect("array of rules");
+        assert_eq!(rules.len(), 1, "the duplicate PK must collapse to one row");
+        assert_eq!(rules[0]["hostname"], "dup.example.com");
+        assert_eq!(
+            rules[0]["folder"], "Spoofed",
+            "the folder listing's copy wins over the root's"
+        );
     })
     .await
     .expect("command runs");
@@ -4576,6 +4924,7 @@ async fn rule_create_retryable_write_error_and_read_back_failure_is_write_unveri
 async fn rule_delete_upstream_429_is_exit_8() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_rule_delete_precheck(&server, &["a.example.com"]).await;
     Mock::given(method("DELETE"))
         .and(path(format!(
             "/profiles/{AGGRESSIVE_PK}/rules/a.example.com"
@@ -4627,6 +4976,7 @@ async fn rule_delete_upstream_429_is_exit_8() {
 async fn rule_delete_upstream_404_is_exit_3() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_rule_delete_precheck(&server, &["a.example.com"]).await;
     Mock::given(method("DELETE"))
         .and(path(format!(
             "/profiles/{AGGRESSIVE_PK}/rules/a.example.com"
@@ -4671,6 +5021,109 @@ async fn rule_delete_upstream_404_is_exit_3() {
     .expect("command runs");
 }
 
+/// `DELETE`'s own ack proves nothing — a hostname matching no rule acks
+/// `success: true` too (write-verification.md, probed live) — so `rule
+/// delete` must check existence upfront: exit 3, naming the target, and no
+/// `DELETE` ever leaves (`.expect(0)`).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_delete_of_a_nonexistent_hostname_is_exit_3_before_any_delete() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
+    mount_rules(&server, "rules_converged.json", 1).await;
+    Mock::given(method("DELETE"))
+        .and(path(format!(
+            "/profiles/{AGGRESSIVE_PK}/rules/ghost.example.com"
+        )))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_delete_ack.json"), "application/json"),
+        )
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "delete",
+                "ghost.example.com",
+                "--yes",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .code(3)
+            .stdout(predicates::str::is_empty());
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "rule.not_found");
+        assert!(
+            doc["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("ghost.example.com"),
+            "got: {}",
+            doc["error"]["message"]
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+/// A multi-target delete names only the actually-missing hostname — the
+/// existing one is never mentioned in the error, and nothing is deleted for
+/// either.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_delete_multi_target_with_one_missing_names_only_the_missing_one() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
+    mount_rules(&server, "rules_converged.json", 1).await;
+    Mock::given(method("DELETE"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_delete_ack.json"), "application/json"),
+        )
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "delete",
+                "x.example.com",
+                "ghost.example.com",
+                "--yes",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .code(3)
+            .stdout(predicates::str::is_empty());
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "rule.not_found");
+        let message = doc["error"]["message"].as_str().unwrap();
+        assert!(message.contains("ghost.example.com"), "got: {message}");
+        assert!(
+            !message.contains("x.example.com"),
+            "the existing target must not be named: got: {message}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
 /// `--disabled` alone sends `status=0` plus the hostnames only — no `do` —
 /// and the merge preserves everything else (write-verification.md); the
 /// read-back asserts only `enabled`, never the untouched action/via.
@@ -4689,7 +5142,10 @@ async fn rule_update_disabled_alone_sends_status_and_hostnames_only() {
         .expect(1)
         .mount(&server)
         .await;
-    mount_rules(&server, "rules_converged.json", 1).await;
+    // Fetched twice: `update`'s pre-write existence check
+    // (`verify_targets_exist`) and `verify_update`'s post-write read-back
+    // each run their own profile-wide `fetch_all_rules` (rule.rs).
+    mount_rules(&server, "rules_converged.json", 2).await;
 
     let uri = server.uri();
     let dir = tempdir();
@@ -4742,10 +5198,12 @@ async fn rule_update_finds_a_foldered_target_with_no_folder_flag() {
         .expect(1)
         .mount(&server)
         .await;
+    // Fetched twice: the pre-write existence check and the post-write
+    // read-back each run their own `fetch_all_rules` (rule.rs).
     Mock::given(method("GET"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .respond_with(empty_rules_response())
-        .expect(1)
+        .expect(2)
         .mount(&server)
         .await;
     Mock::given(method("GET"))
@@ -4756,7 +5214,7 @@ async fn rule_update_finds_a_foldered_target_with_no_folder_flag() {
             ]},
             "success": true
         })))
-        .expect(1)
+        .expect(2)
         .mount(&server)
         .await;
 
@@ -4804,7 +5262,9 @@ async fn rule_update_root_sends_group_zero_and_clears_folder_id() {
         .expect(1)
         .mount(&server)
         .await;
-    mount_rules(&server, "rules_converged.json", 1).await;
+    // Fetched twice: the pre-write existence check and the post-write
+    // read-back each run their own `fetch_all_rules` (rule.rs).
+    mount_rules(&server, "rules_converged.json", 2).await;
 
     let uri = server.uri();
     let dir = tempdir();
@@ -4848,10 +5308,12 @@ async fn rule_update_root_target_still_in_a_folder_is_a_state_mismatch_not_write
         .expect(1)
         .mount(&server)
         .await;
+    // Fetched twice: the pre-write existence check and the post-write
+    // read-back each run their own `fetch_all_rules` (rule.rs).
     Mock::given(method("GET"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .respond_with(empty_rules_response())
-        .expect(1)
+        .expect(2)
         .mount(&server)
         .await;
     Mock::given(method("GET"))
@@ -4862,7 +5324,7 @@ async fn rule_update_root_target_still_in_a_folder_is_a_state_mismatch_not_write
             ]},
             "success": true
         })))
-        .expect(1)
+        .expect(2)
         .mount(&server)
         .await;
 
@@ -4919,6 +5381,10 @@ async fn rule_update_verification_gap_is_retryable_with_a_convergent_retry_argv(
         .expect(1)
         .mount(&server)
         .await;
+    // Fetched twice: the pre-write existence check and the post-write
+    // read-back each run their own `fetch_all_rules` (rule.rs). Both targets
+    // exist here (only their state, not their presence, differs from
+    // desired), so the pre-check passes and the write proceeds.
     Mock::given(method("GET"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
@@ -4928,7 +5394,7 @@ async fn rule_update_verification_gap_is_retryable_with_a_convergent_retry_argv(
             ]},
             "success": true
         })))
-        .expect(1)
+        .expect(2)
         .mount(&server)
         .await;
 
@@ -4968,6 +5434,7 @@ async fn rule_update_verification_gap_is_retryable_with_a_convergent_retry_argv(
                 "--profile",
                 AGGRESSIVE_PK,
                 "--disabled",
+                "--",
                 "y.example.com",
             ]
         );
@@ -4991,7 +5458,10 @@ async fn rule_update_retryable_write_error_all_converged_succeeds_with_an_info_l
         .expect(1)
         .mount(&server)
         .await;
-    mount_rules(&server, "rules_converged.json", 1).await;
+    // Fetched twice: the pre-write existence check and the post-write
+    // read-back (resolving the retryable write error) each run their own
+    // `fetch_all_rules` (rule.rs).
+    mount_rules(&server, "rules_converged.json", 2).await;
 
     let uri = server.uri();
     let dir = tempdir();
@@ -5280,10 +5750,12 @@ async fn rule_update_folder_sends_the_resolved_group_pk() {
         .expect(1)
         .mount(&server)
         .await;
+    // Fetched twice: the pre-write existence check and the post-write
+    // read-back each run their own `fetch_all_rules` (rule.rs).
     Mock::given(method("GET"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
         .respond_with(empty_rules_response())
-        .expect(1)
+        .expect(2)
         .mount(&server)
         .await;
     Mock::given(method("GET"))
@@ -5294,7 +5766,7 @@ async fn rule_update_folder_sends_the_resolved_group_pk() {
             ]},
             "success": true
         })))
-        .expect(1)
+        .expect(2)
         .mount(&server)
         .await;
 
@@ -5313,6 +5785,155 @@ async fn rule_update_folder_sends_the_resolved_group_pk() {
             ])
             .assert()
             .success();
+    })
+    .await
+    .expect("command runs");
+}
+
+/// `PUT /rules` does not upsert (write-verification.md, probed live): a
+/// typo'd hostname 400s with "Custom Rule does not exist" and nothing lands.
+/// `update` pre-checks existence against the profile-wide read-back before
+/// ever writing, so a missing target is the documented exit 3
+/// (`rule.not_found`), not a generic exit 1 surfaced from a failed `PUT`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_update_of_a_nonexistent_hostname_is_exit_3_before_any_write() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
+    mount_rules(&server, "rules_converged.json", 1).await;
+    Mock::given(method("PUT"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_ack.json"), "application/json"),
+        )
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "update",
+                "ghost.example.com",
+                "--disabled",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .code(3)
+            .stdout(predicates::str::is_empty());
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "rule.not_found");
+        assert!(
+            doc["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("ghost.example.com"),
+            "got: {}",
+            doc["error"]["message"]
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+/// A multi-target update names only the actually-missing hostname — the
+/// existing one is never mentioned in the error, and nothing is written for
+/// either.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_update_multi_target_with_one_missing_names_only_the_missing_one() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
+    mount_rules(&server, "rules_converged.json", 1).await;
+    Mock::given(method("PUT"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_ack.json"), "application/json"),
+        )
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "update",
+                "x.example.com",
+                "ghost.example.com",
+                "--disabled",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .code(3)
+            .stdout(predicates::str::is_empty());
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "rule.not_found");
+        let message = doc["error"]["message"].as_str().unwrap();
+        assert!(message.contains("ghost.example.com"), "got: {message}");
+        assert!(
+            !message.contains("x.example.com"),
+            "the existing target must not be named: got: {message}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+/// Two missing targets, not one: both must be named in the exit-3 message —
+/// `verify_targets_exist` joins every missing hostname, not just the first.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_update_of_two_missing_hostnames_names_both() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
+    mount_rules(&server, "rules_converged.json", 1).await;
+    Mock::given(method("PUT"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_ack.json"), "application/json"),
+        )
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "update",
+                "ghost1.example.com",
+                "ghost2.example.com",
+                "--disabled",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .code(3)
+            .stdout(predicates::str::is_empty());
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "rule.not_found");
+        let message = doc["error"]["message"].as_str().unwrap();
+        assert!(message.contains("ghost1.example.com"), "got: {message}");
+        assert!(message.contains("ghost2.example.com"), "got: {message}");
     })
     .await
     .expect("command runs");
@@ -5593,6 +6214,7 @@ async fn rule_create_dedups_duplicate_argv_hostnames() {
 async fn rule_delete_happy_path_percent_encodes_wildcards() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_rule_delete_precheck(&server, &["a.example.com", "*.wild.example.com"]).await;
     Mock::given(method("DELETE"))
         .and(path(format!(
             "/profiles/{AGGRESSIVE_PK}/rules/a.example.com"
@@ -5639,12 +6261,88 @@ async fn rule_delete_happy_path_percent_encodes_wildcards() {
     .expect("command runs");
 }
 
+/// `delete` validates like `create`/`update` (control characters only), not
+/// the stricter path-bound check: `encode_path_segment` percent-encodes any
+/// hostname into the DELETE path regardless of its characters, so a hostname
+/// a foreign client wrote with `%`/`?` is still deletable via the typed CLI —
+/// symmetry with create/update, and the API being unversioned, is the
+/// rationale (a live probe shows the API itself 400s such hostnames at
+/// create today, write-verification.md); canonical `.`/`..` are the one
+/// carve-out encoding can't make safe and are rejected before this ever runs.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_delete_hostile_hostname_reaches_the_wire_percent_encoded() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_rule_delete_precheck(&server, &["a%b.example.com"]).await;
+    Mock::given(method("DELETE"))
+        .and(path(format!(
+            "/profiles/{AGGRESSIVE_PK}/rules/a%25b.example.com"
+        )))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_delete_ack.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "delete",
+                "a%b.example.com",
+                "--yes",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .success();
+    })
+    .await
+    .expect("command runs");
+}
+
+/// The dot-segment hazard: `"..."` canonicalizes (lowercase, strip one
+/// trailing dot) to `".."`, which `DELETE /profiles/{id}/rules/..` would
+/// otherwise resolve (WHATWG join normalization) to `/profiles/{id}/` — the
+/// profile resource itself — rather than 404 on a bogus hostname.
+/// `encode_path_segment` cannot help (it keeps `.` unencoded as RFC 3986
+/// unreserved), so `canonicalize_hostnames` rejects it outright: exit 2,
+/// nothing ever reaches the wire (`mount_no_requests`'s `.expect(0)`).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_delete_of_a_dot_segment_hostname_is_exit_2_before_any_request() {
+    let server = MockServer::start().await;
+    mount_no_requests(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["rule", "delete", "...", "--yes", "--profile", AGGRESSIVE_PK])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(stderr.contains("dot-segment"), "got: {stderr}");
+    })
+    .await
+    .expect("command runs");
+}
+
 /// Sequential, abort-on-first-failure: the third target is never attempted
 /// (`.expect(0)`), and it shows up `skipped`, not `failed`, in the aggregate.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rule_delete_aborts_after_the_first_failure_and_skips_the_rest() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_rule_delete_precheck(
+        &server,
+        &["a.example.com", "b.example.com", "c.example.com"],
+    )
+    .await;
     Mock::given(method("DELETE"))
         .and(path(format!(
             "/profiles/{AGGRESSIVE_PK}/rules/a.example.com"
@@ -5719,6 +6417,10 @@ async fn rule_delete_aborts_after_the_first_failure_and_skips_the_rest() {
 async fn rule_delete_without_yes_is_exit_7_non_interactively() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    // The pre-write existence check runs before the confirmation prompt, so
+    // it must still see the target as existing for this to reach (and fail
+    // at) the prompt rather than exit 3 first.
+    mount_rule_delete_precheck(&server, &["a.example.com"]).await;
     mount_no_writes(&server).await;
 
     let uri = server.uri();
@@ -5744,6 +6446,9 @@ async fn rule_delete_without_yes_is_exit_7_non_interactively() {
 async fn rule_delete_yes_is_ignored_for_an_implicit_default_profile() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    // Same as the non-interactive test above: the pre-write existence check
+    // runs before confirmation is even considered.
+    mount_rule_delete_precheck(&server, &["a.example.com"]).await;
     mount_no_writes(&server).await;
 
     let uri = server.uri();
@@ -5770,6 +6475,7 @@ async fn rule_delete_yes_is_ignored_for_an_implicit_default_profile() {
 async fn rule_delete_with_yes_and_an_explicit_profile_succeeds() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_rule_delete_precheck(&server, &["a.example.com"]).await;
     Mock::given(method("DELETE"))
         .and(path(format!(
             "/profiles/{AGGRESSIVE_PK}/rules/a.example.com"
@@ -5853,6 +6559,7 @@ async fn rule_delete_fields_typo_is_exit_2_before_any_request_or_delete() {
 async fn rule_delete_with_a_valid_fields_name_still_deletes() {
     let server = MockServer::start().await;
     mount_profiles(&server, 1).await;
+    mount_rule_delete_precheck(&server, &["a.example.com"]).await;
     Mock::given(method("DELETE"))
         .and(path(format!(
             "/profiles/{AGGRESSIVE_PK}/rules/a.example.com"
@@ -5887,14 +6594,12 @@ async fn rule_delete_with_a_valid_fields_name_still_deletes() {
     .expect("command runs");
 }
 
-/// Item 2's behavioral fix, and item 3(c)'s live end-to-end coverage in one
-/// test: `--fields hostname` names a field of `Rule` (the command's data
-/// schema), so a live create succeeds and projects normally. Superseded
-/// (Codex round-2) on the dry-run half: `--fields` and `--dry-run` now
-/// conflict outright — a dry run prints the request plan, not data rows, so
-/// projecting row fields over it is meaningless — checked upfront via
-/// `commands::reject_fields_with_dry_run`, before any request, so the mock
-/// server sees nothing at all (`mount_no_requests`).
+/// `--fields hostname` names a field of `Rule` (the command's data schema),
+/// so a live create succeeds and projects normally. On the dry-run half,
+/// `--fields` and `--dry-run` conflict outright — a dry run prints the
+/// request plan, not data rows, so projecting row fields over it is
+/// meaningless — checked upfront via `commands::preflight_fields`, before
+/// any request, so the mock server sees nothing at all (`mount_no_requests`).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rule_create_fields_hostname_succeeds_live_and_conflicts_with_dry_run() {
     let live = MockServer::start().await;
@@ -5990,11 +6695,17 @@ async fn rule_create_fields_hostname_succeeds_live_and_conflicts_with_dry_run() 
 async fn rule_create_dry_run_prints_the_intent_and_writes_nothing() {
     let server = MockServer::start().await;
     mount_profiles(&server, 2).await;
-    // Folders are fetched unconditionally, even on the dry-run path
-    // (module doc, src/commands/rule.rs) — cost accepted for one uniform
-    // read-back contract; no `--folder` is given, so the fixture's content
-    // never surfaces.
-    mount_groups_fixture(&server, "p_groups.json", 2).await;
+    // No `--folder`: the groups GET is skipped entirely on the dry-run path
+    // (rule.rs) — its only dry-run use is resolving `--folder` to a pk, and
+    // the live-only read-back never runs here.
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/groups")))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(fixture("p_groups.json"), "application/json"),
+        )
+        .expect(0)
+        .mount(&server)
+        .await;
     mount_no_writes(&server).await;
 
     let uri = server.uri();
@@ -6052,13 +6763,57 @@ async fn rule_create_dry_run_prints_the_intent_and_writes_nothing() {
     .expect("command runs");
 }
 
+/// `--folder` on a dry run still needs the groups list to resolve the
+/// selector to a pk, unlike the no-`--folder` case above.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_create_dry_run_with_folder_still_fetches_groups() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups_one.json", 1).await;
+    mount_no_writes(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "create",
+                "a.example.com",
+                "--action",
+                "block",
+                "--folder",
+                "Spoofed",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--dry-run",
+                "--json",
+            ])
+            .assert()
+            .success();
+        let json = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(doc["requests"][0]["intent"]["folder_id"], 2);
+    })
+    .await
+    .expect("command runs");
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rule_update_dry_run_prints_a_sparse_patch_including_root() {
     let server = MockServer::start().await;
     mount_profiles(&server, 2).await;
-    // Folders are fetched unconditionally, even on the dry-run path and
-    // for `--root` (module doc, src/commands/rule.rs).
-    mount_groups_fixture(&server, "p_groups.json", 2).await;
+    // `--root` needs no folder lookup (`FolderPatch::Root` carries no pk to
+    // resolve) and no `--folder` is given either, so the groups GET is
+    // skipped entirely on this dry-run path (rule.rs).
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/groups")))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(fixture("p_groups.json"), "application/json"),
+        )
+        .expect(0)
+        .mount(&server)
+        .await;
     mount_no_writes(&server).await;
 
     let uri = server.uri();
@@ -6100,6 +6855,40 @@ async fn rule_update_dry_run_prints_a_sparse_patch_including_root() {
 
         insta::assert_snapshot!("rule_update_dry_run_human", human);
         insta::assert_snapshot!("rule_update_dry_run_json", json);
+    })
+    .await
+    .expect("command runs");
+}
+
+/// `--folder` on a dry run still needs the groups list to resolve the
+/// selector to a pk, unlike `--root`'s no-lookup case above.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_update_dry_run_with_folder_still_fetches_groups() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups_one.json", 1).await;
+    mount_no_writes(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "update",
+                "x.example.com",
+                "--folder",
+                "Spoofed",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--dry-run",
+                "--json",
+            ])
+            .assert()
+            .success();
+        let json = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(doc["requests"][0]["intent"]["changes"]["folder_id"], 2);
     })
     .await
     .expect("command runs");

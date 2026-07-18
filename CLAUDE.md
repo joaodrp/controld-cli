@@ -74,6 +74,8 @@ contradicts this list, update the reference doc and this index.**
   hostnames into DELETE paths (`*` -> `%2A`).
 - **`body: []` is not an error marker** — successful deletes return it too. Branch on
   `success`/`error` only.
+- **`DELETE` of a non-matching hostname returns `success: true`** (`"Custom rule(s) deleted"`) — a
+  silent no-op. Delete success proves nothing; check existence before, not after.
 
 ## Contracts that are public API
 

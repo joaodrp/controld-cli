@@ -34,14 +34,12 @@ pub struct Cli {
     reason = "CLI flags are boolean by nature"
 )]
 pub struct GlobalArgs {
-    /// Profile to operate on (name or PK)
-    #[arg(
-        short = 'p',
-        long,
-        global = true,
-        env = "CONTROLD_PROFILE",
-        value_name = "PK|name"
+    /// Profile to operate on (name or PK) [env: CONTROLD_PROFILE]
+    #[expect(
+        clippy::doc_markdown,
+        reason = "doc comments are clap help text; backticks would render literally"
     )]
+    #[arg(short = 'p', long, global = true, value_name = "PK|name")]
     pub profile: Option<String>,
 
     /// Emit JSON (full document) instead of a table
@@ -71,6 +69,16 @@ pub struct GlobalArgs {
     /// Request/response trace on stderr (token always redacted)
     #[arg(long, global = true)]
     pub debug: bool,
+}
+
+impl GlobalArgs {
+    /// Whether the invocation asked for JSON explicitly (`--json`/`--fields`),
+    /// as opposed to via ambient `CONTROLD_OUTPUT=json`. Needed both before
+    /// [`Globals::resolve`] runs (`main`'s early-error rendering, which has
+    /// only the raw parsed args) and inside it — one derivation, not two.
+    pub fn json_explicit(&self) -> bool {
+        self.json || self.fields.is_some()
+    }
 }
 
 /// `--timeout`'s value parser: a plain message on `0` instead of clap's
@@ -145,7 +153,7 @@ impl Globals {
     /// A malformed `CONTROLD_OUTPUT` is an error, not silently human mode —
     /// an agent whose env said "give me JSON" must never get tables instead.
     pub fn resolve(args: GlobalArgs) -> Result<Self, Error> {
-        let json_explicit = args.json || args.fields.is_some();
+        let json_explicit = args.json_explicit();
         let json_env = match crate::config::env_var("CONTROLD_OUTPUT")? {
             Some(value) if value == "json" => true,
             Some(other) => {
@@ -156,7 +164,18 @@ impl Globals {
             None => false,
         };
         Ok(Self {
-            profile: args.profile,
+            // The flag wins over the environment — clap's own precedence,
+            // kept even though `--profile` carries no clap-level `env` (D8's
+            // fallback is resolved here instead). Routing `CONTROLD_PROFILE`
+            // through `config::env_var` — the one policy every other
+            // `CONTROLD_*` read already uses — means an empty value falls
+            // back like any other unset variable; a non-UTF-8 value errors
+            // loudly instead (`env_var`'s own contract), with no separate
+            // filter to keep in sync.
+            profile: match args.profile {
+                Some(profile) => Some(profile),
+                None => crate::config::env_var("CONTROLD_PROFILE")?,
+            },
             mode: if json_explicit || json_env {
                 Mode::Json
             } else {

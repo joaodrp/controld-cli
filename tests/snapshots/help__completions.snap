@@ -16,9 +16,7 @@ Options:
 
 Global options:
   -p, --profile <PK|name>
-          Profile to operate on (name or PK)
-          
-          [env: CONTROLD_PROFILE=]
+          Profile to operate on (name or PK) [env: CONTROLD_PROFILE]
 
       --json
           Emit JSON (full document) instead of a table

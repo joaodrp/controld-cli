@@ -39,7 +39,7 @@ fn reset_sigpipe() {
 #[tokio::main(flavor = "current_thread")]
 async fn run() -> ExitCode {
     let cli = Cli::parse(); // usage errors exit 2 here, from clap
-    let json_explicit = cli.globals.json || cli.globals.fields.is_some();
+    let json_explicit = cli.globals.json_explicit();
     let globals = match Globals::resolve(cli.globals) {
         Ok(globals) => globals,
         Err(err) => {
