@@ -13,6 +13,7 @@ CLI for the [Control D](https://controld.com) REST API. For humans, scripts, and
 
 > [!IMPORTANT]
 > Not [`ctrld`](https://github.com/Control-D-Inc/ctrld) — that daemon runs your DNS; `cdctl` manages your account.
+> An independent project, not affiliated with Control D.
 
 ## Install
 
@@ -140,8 +141,6 @@ network-free.
 
 `tests/fixtures/api/` holds real API responses (sanitized), covering every deserialization hazard
 the live API throws — catalogued in [`docs/reference/`](docs/reference/).
-
-cdctl is an independent project, not affiliated with or endorsed by Control D.
 
 ## License
 
