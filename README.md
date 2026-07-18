@@ -49,35 +49,35 @@ $ cargo install controld-cli
 
 ### Shell completions and man pages
 
-Prebuilt archives ship generated completions and man pages. To generate a completion script
-yourself:
+Prebuilt archives ship generated completions and man pages. To generate a script yourself:
 
 ```console
-$ cdctl completions zsh > _cdctl
+$ cdctl completions zsh
 ```
 
-Supported shells: `bash`, `elvish`, `fish`, `powershell`, `zsh`.
+The script goes to stdout; `cdctl completions --help` shows each shell's install path. Supported:
+`bash`, `elvish`, `fish`, `powershell`, `zsh`.
 
 ## Quickstart
 
-**Set up.** Create an API token in the [Control D dashboard](https://controld.com/dashboard/api),
-store it, and verify it reaches the API:
+Create an API token in the [Control D dashboard](https://controld.com/dashboard/api), store it,
+and check it reaches the API:
 
 ```console
 $ echo -n "$CONTROLD_API_TOKEN" | cdctl auth login --token-stdin
 $ cdctl auth status
 ```
 
-**Pick a profile.** Most commands operate on one; set a default once instead of passing
-`--profile` every time:
+Most commands operate on one profile; set a default once instead of passing `--profile` every
+time:
 
 ```console
 $ cdctl profile list
 $ cdctl config set default_profile Home
 ```
 
-**Do something real.** Block a domain, see the rule, remove it — the delete asks for
-confirmation first (`--yes` can skip that, but only alongside an explicit `--profile`):
+Block a domain, list the rules, then delete it again. The delete prompts for confirmation
+(`--yes` skips the prompt, but only alongside an explicit `--profile`):
 
 ```console
 $ cdctl rule create ads.example.com --action block
@@ -85,9 +85,9 @@ $ cdctl rule list
 $ cdctl rule delete ads.example.com
 ```
 
-**Learn the rest.** Every command answers `--help`; `cdctl reference` prints the whole surface
-as one document; [commands.md](docs/commands.md) specifies each flag, output column, and exit
-code. Scripting or driving an agent? Add `--json` (stdout is data-only) and branch on the
+From here, every command answers `--help`, `cdctl reference` prints the whole surface as one
+document, and [commands.md](docs/commands.md) specifies each flag, output column, and exit code.
+Scripts and agents get `--json` (stdout is data-only) and the
 [documented exit codes](docs/decisions.md#d5--nine-exit-codes-exactly-one-retryable).
 
 ## For agents as well as humans
