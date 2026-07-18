@@ -7,14 +7,12 @@
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 [![MSRV 1.85](https://img.shields.io/badge/MSRV-1.85-orange.svg?logo=rust)](Cargo.toml)
 
-CLI for the [Control D](https://controld.com) **REST API** — profiles, rules, filters, services,
-devices. For humans, scripts, and AI agents.
+CLI for the [Control D](https://controld.com) **REST API**. For humans, scripts, and AI agents.
 
 </div>
 
 > [!IMPORTANT]
-> **Not [`ctrld`](https://github.com/Control-D-Inc/ctrld)**, Control D's DNS proxy **daemon**. That runs
-> DNS on your machine; this manages your Control D **account**.
+> **Not [`ctrld`](https://github.com/Control-D-Inc/ctrld)** — that daemon runs your DNS; `cdctl` manages your **account**.
 
 ## Install
 
