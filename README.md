@@ -77,10 +77,6 @@ $ cdctl rule delete ads.example.com --profile Home --yes
 **Personal accounts.** Organization endpoints are deferred ([D15](docs/decisions.md)) — untestable on a
 personal account, and untested commands are worse than none. The design keeps them additive.
 
-**v0.1** ships `profile list/get`, `rule`/`folder` CRUD, and `cdctl api` (the escape hatch for
-everything else). `rule import`/`restore` land in v0.2; the full roadmap is in
-[`docs/roadmap.md`](docs/roadmap.md).
-
 ## Docs
 
 | | |
