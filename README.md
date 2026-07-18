@@ -60,15 +60,35 @@ Supported shells: `bash`, `elvish`, `fish`, `powershell`, `zsh`.
 
 ## Quickstart
 
-Create an API token in the [Control D dashboard](https://controld.com/dashboard/api), then:
+**Set up.** Create an API token in the [Control D dashboard](https://controld.com/dashboard/api),
+store it, and verify it reaches the API:
 
 ```console
 $ echo -n "$CONTROLD_API_TOKEN" | cdctl auth login --token-stdin
-$ cdctl profile list
-$ cdctl rule create ads.example.com --action block --profile Home
-$ cdctl rule list --profile Home
-$ cdctl rule delete ads.example.com --profile Home --yes
+$ cdctl auth status
 ```
+
+**Pick a profile.** Most commands operate on one; set a default once instead of passing
+`--profile` every time:
+
+```console
+$ cdctl profile list
+$ cdctl config set default_profile Home
+```
+
+**Do something real.** Block a domain, see the rule, remove it — the delete asks for
+confirmation first (`--yes` can skip that, but only alongside an explicit `--profile`):
+
+```console
+$ cdctl rule create ads.example.com --action block
+$ cdctl rule list
+$ cdctl rule delete ads.example.com
+```
+
+**Learn the rest.** Every command answers `--help`; `cdctl reference` prints the whole surface
+as one document; [commands.md](docs/commands.md) specifies each flag, output column, and exit
+code. Scripting or driving an agent? Add `--json` (stdout is data-only) and branch on the
+[documented exit codes](docs/decisions.md#d5--nine-exit-codes-exactly-one-retryable).
 
 ## For agents as well as humans
 
