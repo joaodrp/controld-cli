@@ -77,7 +77,7 @@ personal account, and untested commands are worse than none. The design keeps th
 
 **v0.1** ships `profile list/get`, `rule`/`folder` CRUD, and `cdctl api` (the escape hatch for
 everything else). `rule import`/`restore` land in v0.2; the full roadmap is in
-[`docs/plan.md`](docs/plan.md).
+[`docs/roadmap.md`](docs/roadmap.md).
 
 ## Docs
 
@@ -86,7 +86,7 @@ everything else). `rule import`/`restore` land in v0.2; the full roadmap is in
 | [design.md](docs/design.md) | Command surface |
 | [commands.md](docs/commands.md) | Per-command flags, columns, JSON fields |
 | [decisions.md](docs/decisions.md) | What was decided, why, what it cost |
-| [plan.md](docs/plan.md) | Implementation phases |
+| [roadmap.md](docs/roadmap.md) | What ships next, and its test gates |
 | [reference/](docs/reference/) | OpenAPI spec + provenance, live/write verification, error codes |
 | [AGENTS.md](AGENTS.md) | Instructions for coding agents (any agent, not just Claude Code) |
 
@@ -114,7 +114,7 @@ $ cargo fmt --check
 ```
 
 Live tests confine their writes to a temporary `cdctl-test-*` profile they create and delete
-([plan.md](docs/plan.md)); manual probes mutate whatever you point them at. A free trial account is
+([AGENTS.md](AGENTS.md)); manual probes mutate whatever you point them at. A free trial account is
 the safe default.
 
 `tests/fixtures/api/` holds **real API responses** (sanitized), covering every deserialization hazard

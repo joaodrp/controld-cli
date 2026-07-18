@@ -386,7 +386,7 @@ with the first colored output.
 Dev: `wiremock`, `assert_cmd`, `insta`, `predicates`, `nix` (the SIGINT test).
 
 Latest stable versions at implementation time; exact pins live in `Cargo.toml`, and the
-edition/MSRV choice in [plan.md](plan.md) Phase 1.
+edition/MSRV choice in [AGENTS.md](../AGENTS.md).
 
 `reqwest::blocking` is *not* tokio-free (it spawns a runtime thread), so "blocking to avoid tokio" is a
 myth — hence async.
@@ -466,7 +466,7 @@ Four releases, each independently useful; anything not yet typed is reachable vi
 
 **Cost accepted:** four release cycles instead of one; users of deferred families type raw
 `cdctl api` paths for a while; the delivery table above must stay in sync with
-[plan.md](plan.md).
+[roadmap.md](roadmap.md).
 
 ## D18 — Single crate, binary-only, one module per noun
 

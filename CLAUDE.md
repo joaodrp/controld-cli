@@ -9,8 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 daemon is already `ctrld`, and a trailing `-d` reads as daemon). `cdctl` manages the *account* over
 REST; [`ctrld`](https://github.com/Control-D-Inc/ctrld) runs DNS on the machine. They coexist.
 
-Delivery is sliced per [`docs/plan.md`](docs/plan.md): v0.1 ships profiles, rules, folders, and
-the `cdctl api` escape hatch; `rule import`/`restore` follow in v0.2.
+Delivery is sliced per [`docs/roadmap.md`](docs/roadmap.md): v0.1 ships profiles, rules, folders,
+and the `cdctl api` escape hatch; `rule import`/`restore` follow in v0.2.
 
 ## Doc map
 
@@ -24,7 +24,7 @@ amending that file, never by drifting.
 | [`docs/decisions.md`](docs/decisions.md) | D1-D19. Authoritative. |
 | [`docs/design.md`](docs/design.md) | Command surface, all API operations mapped |
 | [`docs/commands.md`](docs/commands.md) | Per-command flags, table columns, JSON field names |
-| [`docs/plan.md`](docs/plan.md) | Release slices (v0.1-1.0), phases, test gates |
+| [`docs/roadmap.md`](docs/roadmap.md) | What ships next (v0.2-1.0) and each slice's test gates |
 | [`docs/reference/`](docs/reference/) | OpenAPI spec + provenance; how the live API departs from it |
 
 ## Commands
@@ -35,14 +35,14 @@ cp .env.example .env             # then add a CONTROLD_API_TOKEN
 ```
 
 `cargo build` / `cargo test` / `cargo clippy --all-targets`. Toolchain and dependency choices
-(and their gotchas) are pinned in [`docs/plan.md`](docs/plan.md) Phase 1.
+are pinned in `Cargo.toml`; the edition/MSRV rationale is in [`AGENTS.md`](AGENTS.md).
 
 ### The account behind `.env`
 
 **Never assume it is disposable.** It may be someone's real account, and mutating it rewrites live
 DNS behavior — some contributors will knowingly test against their own account, and that's their
 call, not yours. Confine live probes to a temporary `cdctl-test-<timestamp>-<nonce>` profile and
-delete it afterwards (isolation rules: [`docs/plan.md`](docs/plan.md), section Testing). Never touch
+delete it afterwards (isolation rules: [`AGENTS.md`](AGENTS.md), section Live-test isolation). Never touch
 pre-existing profiles without the user saying so.
 
 Never pass the token on a command line (`-H "Authorization: Bearer ..."`); argv is world-readable via

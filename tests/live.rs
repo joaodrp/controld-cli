@@ -1,7 +1,7 @@
 //! Opt-in end-to-end suite against the REAL Control D API — no wiremock.
 //!
 //! Skipped unless `CONTROLD_LIVE_TESTS=1` (plain `cargo test` and CI never
-//! run it). The profile is the isolation boundary (docs/plan.md "Live-test
+//! run it). The profile is the isolation boundary (AGENTS.md "Live-test
 //! isolation"): every mutation happens inside a fresh `cdctl-test-<ts>-<nonce>`
 //! profile, pre-existing profiles are never mutated and their contents never
 //! read, and a startup sweep reaps stale leftovers from crashed runs by
@@ -601,6 +601,6 @@ fn live_smoke() {
     drive_profile_lifecycle(config_home, &token, &guard.pk, &guard.name);
 
     // No devices were created, so the devices-before-profile ordering rule
-    // (docs/plan.md) is satisfied vacuously.
+    // (AGENTS.md) is satisfied vacuously.
     guard.teardown();
 }

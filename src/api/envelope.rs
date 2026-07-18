@@ -8,7 +8,7 @@
 //!
 //! In test builds the envelope types deny unknown fields, so an API field
 //! addition fails the fixture tests instead of passing silently — the drift
-//! tripwire for an unversioned API ([plan.md](../../docs/plan.md), Testing).
+//! tripwire for an unversioned API (AGENTS.md, Test layers).
 
 use serde::Deserialize;
 use serde_json::{Map, Value};

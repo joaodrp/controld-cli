@@ -1104,7 +1104,7 @@ async fn retries_are_logged_to_stderr() {
     .expect("command runs");
 }
 
-// --- cdctl api: the D9 escape hatch (plan.md Phase 2 gate) ---
+// --- cdctl api: the D9 escape hatch (decisions.md D9) ---
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn api_get_prints_the_body_verbatim_and_query_rides_the_path() {

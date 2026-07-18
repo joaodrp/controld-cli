@@ -316,4 +316,4 @@ with exit `5` — never a silently filtered result.
 
 Deserialization hazards: [reference/read-verification.md](reference/read-verification.md).
 Write constraints (batch ceiling, no bulk delete, encoding): [reference/write-verification.md](reference/write-verification.md).
-Phasing: [plan.md](plan.md).
+Phasing: [roadmap.md](roadmap.md).
