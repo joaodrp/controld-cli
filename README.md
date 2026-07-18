@@ -140,7 +140,7 @@ network-free.
 
 > [!WARNING]
 > Live tests confine their writes to a temporary `cdctl-test-*` profile they create and delete
-> ([docs/testing.md, Live-test isolation](docs/testing.md#live-test-isolation)); manual probes
+> ([Live-test isolation](docs/testing.md#live-test-isolation)); manual probes
 > mutate whatever you point them at. A free trial account is the safe default.
 
 `tests/fixtures/api/` holds **real API responses** (sanitized), covering every deserialization hazard

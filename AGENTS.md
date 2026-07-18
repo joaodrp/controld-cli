@@ -44,7 +44,7 @@ re-fetches the OpenAPI spec and fails if the 46 docs pages disagree. `.env` supp
 `CONTROLD_API_TOKEN`, needed only for the live suite and manual probes.
 
 Toolchain: pins live in `Cargo.toml`; the edition/MSRV choice and stack rationale in
-[decisions.md, D13](docs/decisions.md#d13--rust-stack-compile-verified-july-2026).
+[D13](docs/decisions.md#d13--rust-stack-compile-verified-july-2026).
 
 ### The account behind `.env`
 
