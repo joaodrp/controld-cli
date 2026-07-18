@@ -368,10 +368,19 @@ key of its map). :warning: The dropdown write is **unprobed** — verify before 
   (verified live), so `rule update x.com --disabled` needs no `--action`.
 - **`rule update` never creates a rule** — `PUT /rules` does not upsert (probed live: an unknown
   hostname 400s `Custom Rule does not exist`,
-  [write-verification](reference/write-verification.md)). A target hostname absent from the
-  profile is checked for and rejected — exit `3`, `rule.not_found`, naming every missing
-  hostname — before anything is written, rather than surfacing whatever generic error the failed
-  `PUT` would otherwise produce.
+  [write-verification](reference/write-verification.md)). Every `update`/`delete` target is
+  resolved against a fresh profile-wide listing before anything is written, never a bare
+  existence check: an **exact case-sensitive match wins outright** — the server matches
+  `PUT`/`DELETE` targets case-sensitively too, and case variants can coexist as distinct rules
+  ([write-verification](reference/write-verification.md)) — else a **unique case-insensitive
+  match** is accepted, with an `info:` line naming the substitution (human mode only — the JSON
+  document already carries the stored PK, and JSON-mode stderr stays envelope-only), else **2+ case-insensitive
+  matches with no exact one** is a usage error (exit `2`) naming every variant, with a hint to
+  retype the target with its exact stored case from `rule list`, else the target **doesn't exist
+  at all** — exit `3`, `rule.not_found`, naming every missing hostname, not just the first, rather
+  than surfacing whatever generic error the failed `PUT` would otherwise produce. Two different
+  inputs that resolve to the same stored PK is a usage error too (exit `2`, naming both inputs and
+  the PK) — an explicit ambiguity beats a silent duplicate write against one rule.
 - **`via6` cannot be cleared** while the spoof action persists — probed: omission preserves it,
   empty string and `0` are rejected atomically, and only an action flip clears it (an unprotected
   window `cdctl` never enters implicitly —
@@ -381,9 +390,13 @@ key of its map). :warning: The dropdown write is **unprobed** — verify before 
   shells) — is rejected as an **attempted unsupported clear**: exit `2`, hint carrying the
   delete + recreate remedy, never forwarded upstream (where it 400s anyway — fixture
   `err_via6_clear.json`).
-- **Argv hostnames are canonicalized** (lowercased, one trailing dot stripped) **and
-  deduplicated** before any request — same rule as `rule import`'s file lines, applied to
-  `create`/`update`/`delete` positional hostnames too.
+- **Argv hostnames are canonicalized** (one trailing dot stripped) **and deduplicated** before any
+  request — same rule as `rule import`'s file lines, applied to `create`/`update`/`delete`
+  positional hostnames too. **`create` also lowercases** — canonical creation, so every later
+  `cdctl`-issued lowercase target keeps matching the rule it just made. `update`/`delete` do
+  not — the server stores and matches those targets case-sensitively, so lowercasing here would
+  make a foreign client's mixed-case rule unreachable; the resolution above is what still lets a
+  lowercase *input* reach such a rule.
 - **Multi-target cap: 500 hostnames** per `rule create`/`rule update` invocation — the import
   chunk size, safely inside the server's silent ~1001-form-var ceiling ([D11](decisions.md)).
   More is exit `2` with a hint to `rule import` (resumable, quota-aware). Whatever the count,

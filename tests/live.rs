@@ -310,7 +310,12 @@ fn list_rules(config_home: &Path, token: &str, pk: &str, what: &str) -> Vec<serd
         .clone()
 }
 
-/// Steps a-g: the folder + rule lifecycle inside the isolated profile.
+/// Steps a-h: the folder + rule lifecycle inside the isolated profile.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one flow, one profile, one teardown — splitting further would just move the \
+              narrative across files without reducing what a reader must hold at once"
+)]
 fn drive_profile_lifecycle(config_home: &Path, token: &str, pk: &str, profile_name: &str) {
     // a. profile list --json
     let assert = live_cdctl(config_home, token)
@@ -427,6 +432,139 @@ fn drive_profile_lifecycle(config_home: &Path, token: &str, pk: &str, profile_na
     assert!(
         after_folder.is_empty(),
         "folder delete cascades to its rules"
+    );
+    // h. case-aware target resolution, split out (below) to fit clippy's cap.
+    drive_mixed_case_resolution(config_home, token, pk);
+}
+
+/// A second, differently-cased variant of `mixed`, created via the same
+/// `api` escape hatch as its own distinct rule: the resolution flow in
+/// [`drive_mixed_case_resolution`] rests entirely on the server storing (and
+/// matching) hostnames case-sensitively, never folding case variants onto
+/// one rule (write-verification.md "coexist as two distinct rules").
+/// Re-probing that live here, not just in the unit/e2e suites, means a
+/// server-side fold shows up as a failed coexistence assertion, not a
+/// confusing resolution mismatch further down. Cleaned up before returning:
+/// the resolution flow that follows targets `mixed`'s all-lowercase form and
+/// requires it to resolve unambiguously to `mixed` alone.
+fn probe_case_coexistence(config_home: &Path, token: &str, pk: &str, mixed: &str) {
+    let coexisting_variant = mixed.to_ascii_uppercase();
+    let rules_path = format!("/profiles/{pk}/rules");
+    live_cdctl(config_home, token)
+        .args([
+            "api",
+            &rules_path,
+            "-X",
+            "POST",
+            "-F",
+            "do=0",
+            "-F",
+            "status=1",
+            "-F",
+            &format!("hostnames[]={coexisting_variant}"),
+            "--yes",
+        ])
+        .assert()
+        .success();
+    let coexisting = list_rules(
+        config_home,
+        token,
+        pk,
+        "rule list --json (case coexistence probe)",
+    );
+    assert!(
+        coexisting.iter().any(|r| r["hostname"] == mixed),
+        "the mixed-case rule must be present"
+    );
+    assert!(
+        coexisting
+            .iter()
+            .any(|r| r["hostname"] == coexisting_variant),
+        "the second case variant must coexist as its own distinct rule, not fold onto the first"
+    );
+    live_cdctl(config_home, token)
+        .args([
+            "api",
+            &format!("{rules_path}/{coexisting_variant}"),
+            "-X",
+            "DELETE",
+            "--yes",
+        ])
+        .assert()
+        .success();
+}
+
+/// Step h: case-aware target resolution (commands.md#rule,
+/// write-verification.md "coexist as two distinct rules"): `rule create`
+/// always lowercases, so a mixed-case rule is created raw via the `api`
+/// escape hatch, then exercised through the typed CLI with a lowercase
+/// target — proving `rule update`/`rule delete` resolve it by stored PK
+/// rather than by a client-side case fold that would 400/no-op upstream.
+fn drive_mixed_case_resolution(config_home: &Path, token: &str, pk: &str) {
+    let mixed = "MiXeD.cdctl-smoke.example.com";
+    let rules_path = format!("/profiles/{pk}/rules");
+    live_cdctl(config_home, token)
+        .args([
+            "api",
+            &rules_path,
+            "-X",
+            "POST",
+            "-F",
+            "do=0",
+            "-F",
+            "status=1",
+            "-F",
+            &format!("hostnames[]={mixed}"),
+            "--yes",
+        ])
+        .assert()
+        .success();
+    probe_case_coexistence(config_home, token, pk, mixed);
+
+    let assert = live_cdctl(config_home, token)
+        .args([
+            "rule",
+            "update",
+            &mixed.to_ascii_lowercase(),
+            "--disabled",
+            "--profile",
+            pk,
+            "--json",
+        ])
+        .assert()
+        .success();
+    let updated = json_stdout(
+        assert.get_output(),
+        "rule update (mixed-case target) --json",
+    );
+    let updated = updated.as_array().expect("array");
+    assert_eq!(updated.len(), 1);
+    assert_eq!(
+        updated[0]["hostname"], mixed,
+        "the resolved stored PK keeps its original mixed case"
+    );
+    assert_eq!(updated[0]["enabled"], false);
+
+    live_cdctl(config_home, token)
+        .args([
+            "rule",
+            "delete",
+            &mixed.to_ascii_lowercase(),
+            "--profile",
+            pk,
+            "--yes",
+        ])
+        .assert()
+        .success();
+    let after_mixed_delete = list_rules(
+        config_home,
+        token,
+        pk,
+        "rule list --json (after mixed-case delete)",
+    );
+    assert!(
+        !after_mixed_delete.iter().any(|r| r["hostname"] == mixed),
+        "the mixed-case rule must be gone"
     );
 }
 

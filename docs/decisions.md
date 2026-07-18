@@ -298,10 +298,12 @@ So: a **distinct verb** (sandboxes can deny `Bash(cdctl api:*)` while allowing `
 **Origin rules — the token never leaves the pinned origin.** `cdctl api` accepts **relative paths
 only**: absolute URLs, scheme-relative forms, and authority/userinfo components are rejected at
 parse time. Redirects are followed same-origin only; `Authorization` is never forwarded across
-origins. The base-URL override (`CONTROLD_API_URL`) exists for tests — when it points anywhere but
-the real origin, `cdctl` refuses to attach a stored token unless `CONTROLD_UNSAFE_BASE_URL=1` is
-also set. Non-2xx responses classify through the standard error rules; GET retries apply, writes
-never retry.
+origins. The base-URL override (`CONTROLD_API_URL`) serves tests and path-routing gateways: it
+must be an http(s) URL with a host (rejected at construction otherwise), a path prefix on it is
+part of the pinned target — preserved on every request, with dot-segment escapes rejected — and
+when it points anywhere but the real origin, `cdctl` refuses to attach a stored token unless
+`CONTROLD_UNSAFE_BASE_URL=1` is also set. Non-2xx responses classify through the standard error
+rules; GET retries apply, writes never retry.
 
 **Encoding is explicit, never sniffed** (D16): repeated `-F k=v` builds a form body with **literal
 keys** (`hostnames[]=` works as typed); `--input -` sends stdin verbatim as JSON; **both body

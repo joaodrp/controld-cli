@@ -254,20 +254,30 @@ distinguish outcomes.
 | `POST /profiles/{id}/rules` with `hostnames[]=MiXeD.Example.COM` | :white_check_mark: 200 — read back `PK: "MiXeD.Example.COM"`, **case-preserved** exactly like `via` above |
 | `PUT /profiles/{id}/rules` with `hostnames[]=mixed.example.com` against that same rule | :x: 400 `Custom Rule does not exist` — **target matching is case-SENSITIVE**, not just storage |
 | `DELETE /profiles/{id}/rules/{hostname}` with a hostname matching no rule | :white_check_mark: 200 `success: true`, `"Custom rule(s) deleted"` — a **silent no-op**; the rule set is unchanged |
+| `POST /profiles/{id}/rules` with `hostnames[]=MiXeD.Example.COM`, then again with `hostnames[]=mixed.example.com` | :white_check_mark: both 200 — **case variants coexist as two distinct rules** in the same profile |
 
 **Consequences for `cdctl`:** `rule update` cannot create a missing rule, so a typo'd hostname must
-be caught before the write — a pre-write existence check against a fresh profile-wide read-back,
-not whatever generic error the failed `PUT` happens to produce. `rule restore` (commands.md) must
+be caught before the write — a pre-write check against a fresh profile-wide read-back, not
+whatever generic error the failed `PUT` happens to produce. `rule restore` (commands.md) must
 route a manifest hostname absent from the profile through `POST`, never `PUT`, for the same reason.
 The spoof `via`/`via6` read-back comparison ([rule](../commands.md#rule)) is case-insensitive
 despite this result: DNS names are case-insensitive and the API is unversioned, so relying on
 today's case-preserving behavior continuing would be fragile. A redirect `via` is a proxy PK — an
-exact identifier — and compares case-sensitively. The *hostname* pre-write existence check is
-different: it is deliberately **case-sensitive**, mirroring the server's own case-sensitive `PUT`
-target matching just probed — a client-side case fold there would accept a target the write itself
-would then reject. `rule delete`'s own ack is equally uninformative: since a non-matching `DELETE`
-acks success too, `cdctl` runs the same pre-write existence check before every delete, never trusting
-the ack alone to mean something was actually removed.
+exact identifier — and compares case-sensitively.
+
+The *hostname* pre-write check is more than existence, because of the last row above: since case
+variants can coexist as distinct rules, and the server's own `PUT`/`DELETE` target matching is
+case-sensitive, `cdctl` cannot simply fold a target's case to find *a* match — it must resolve to
+the *right* one. `rule update`/`rule delete` therefore **keep their targets case-preserved**
+(`create` still lowercases, for canonical creation) and resolve each one against the pre-write
+listing: an exact
+case-sensitive match wins outright (this is also how a user disambiguates two coexisting variants);
+otherwise a *unique* case-insensitive match is accepted, with an `info:` line naming the
+substitution — never silent, since the write would otherwise land on a hostname other than the
+literal input; 2+ case-insensitive matches with no exact one is refused (exit `2`, naming every
+variant) rather than guessed. `rule delete`'s own ack is equally uninformative: since a
+non-matching `DELETE` acks success too, `cdctl` runs the same resolution before every delete, never
+trusting the ack alone to mean something was actually removed.
 
 ## Still unverified
 

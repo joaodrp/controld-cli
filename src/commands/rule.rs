@@ -1,7 +1,7 @@
 //! `cdctl rule` — a profile's DNS rules (commands.md#rule). Hostnames are
-//! profile-unique and canonicalized client-side (lowercased, one trailing
-//! dot stripped, deduplicated) before any request — a duplicate inside a
-//! `POST` chunk fails the whole chunk upstream
+//! profile-unique and canonicalized client-side (one trailing dot stripped,
+//! deduplicated; `create` also lowercases) before any request — a duplicate
+//! inside a `POST` chunk fails the whole chunk upstream
 //! (commands.md#rule-import-semantics), so `cdctl` never sends one.
 //! `create`/`update` are read back and verified against the desired state
 //! before anything is printed: the write response is a hostname-less
@@ -24,9 +24,17 @@
 //! advertising a blind `retry_argv` replay that could 404 on an already-gone
 //! rule. `delete` does still fetch beforehand, though: a `DELETE`'s ack
 //! proves nothing either way (a hostname matching no rule acks identically,
-//! write-verification.md), so every target's existence is checked against a
-//! profile-wide read-back before any deletion is attempted
-//! (`verify_targets_exist`, shared with `update`'s own pre-write check).
+//! write-verification.md), so every target is resolved against a
+//! profile-wide read-back before any deletion is attempted (`resolve_targets`,
+//! shared with `update`'s own pre-write resolution): an exact case-sensitive
+//! match wins outright — the server matches `PUT`/`DELETE` targets
+//! case-sensitively too, and case variants can coexist as distinct rules
+//! (write-verification.md, probed 2026-07-18) — else a *unique*
+//! case-insensitive match is accepted (with an `info:` line), else 2+
+//! case-insensitive matches is a usage error naming every variant, else the
+//! target is reported missing exactly as before. The resolved stored PKs —
+//! never the raw input — are what flow into the write, the read-back, the
+//! confirmation prompt, and any `retry_argv`.
 //! [`super::multi::aggregate`] turns any gap or failure into one D4
 //! `write.partial_failure` error.
 
@@ -265,7 +273,11 @@ async fn create(
     globals: &Globals,
 ) -> Result<(), Error> {
     validate_folder_selector(folder_selector.as_ref())?;
-    let hostnames = canonicalize_hostnames(raw_hostnames, super::validate::reject_control_chars)?;
+    // `create` always lowercases: it is the sole path that mints a rule's
+    // PK, so canonical (lowercase) creation is what keeps every later
+    // `cdctl`-issued lowercase target matching it (module doc).
+    let hostnames =
+        canonicalize_hostnames(raw_hostnames, super::validate::reject_control_chars, true)?;
     check_hostname_cap(&hostnames)?;
     super::preflight_fields(globals, Rule::FIELDS, dry_run)?;
     let (spec, client, _config, scope) = super::validated_client(
@@ -510,7 +522,13 @@ async fn update(
     globals: &Globals,
 ) -> Result<(), Error> {
     validate_folder_selector(folder_selector.as_ref())?;
-    let hostnames = canonicalize_hostnames(raw_hostnames, super::validate::reject_control_chars)?;
+    // `update` never lowercases: the server matches `PUT` targets
+    // case-sensitively and case variants can coexist as distinct rules
+    // (write-verification.md, probed 2026-07-18), so lowercasing here would
+    // make a foreign client's mixed-case rule unreachable. `resolve_targets`
+    // below is what still lets a lowercase input match such a rule.
+    let hostnames =
+        canonicalize_hostnames(raw_hostnames, super::validate::reject_control_chars, false)?;
     check_hostname_cap(&hostnames)?;
     if flags.is_empty() && folder_selector.is_none() && !root {
         return Err(Error::usage(
@@ -550,6 +568,10 @@ async fn update(
 
     let path = rules_path(&scope.id);
     if dry_run {
+        // Resolution-free: a dry run makes no requests, so there is nothing
+        // to resolve against. The plan shows targets as typed
+        // (post-canonicalization) — case-preserved: `update` does not
+        // lowercase its targets (module doc).
         return plan::print_one(
             globals,
             "PUT",
@@ -569,12 +591,19 @@ async fn update(
     // of only the server's first complaint. This costs a second profile-wide
     // fetch beyond `verify_update`'s own post-write read-back, but the two
     // can't share one call: this one must run before the mutation.
-    verify_targets_exist(
+    // `resolve_targets` also resolves each input to its stored PK — an exact
+    // case-sensitive match wins, else a unique case-insensitive one (an
+    // `info:` line names it) — since the server itself matches `PUT` targets
+    // case-sensitively and case variants can coexist as distinct rules
+    // (write-verification.md, probed 2026-07-18). Every use of the target
+    // list from here on is the resolved PK, never the raw input.
+    let resolved = resolve_targets(
         &client,
         &scope.id,
         &api_folders,
         &hostnames,
         "check the hostname with `cdctl rule list`; `rule update` never creates a rule",
+        globals,
     )
     .await?;
 
@@ -584,7 +613,7 @@ async fn update(
         Some(FolderPatch::Root) => form.push(("group", "0".to_owned())),
         None => {}
     }
-    for hostname in &hostnames {
+    for hostname in &resolved {
         form.push(("hostnames[]", hostname.clone()));
     }
 
@@ -594,7 +623,7 @@ async fn update(
             verify_update(
                 &client,
                 &scope,
-                &hostnames,
+                &resolved,
                 &changes,
                 &api_folders,
                 globals,
@@ -688,8 +717,12 @@ async fn delete(raw_hostnames: &[String], dry_run: bool, globals: &Globals) -> R
     // version). A canonical `.` or `..`, though, is the one class encoding
     // cannot make safe — WHATWG normalizes `%2e`/`%2e%2e` as dot segments
     // too — so those are rejected outright by `canonicalize_hostnames`
-    // before ever reaching `encode_path_segment`.
-    let hostnames = canonicalize_hostnames(raw_hostnames, super::validate::reject_control_chars)?;
+    // before ever reaching `encode_path_segment`. Not lowercased either, same
+    // rationale as `update`'s call: the server's own `DELETE` target matching
+    // is case-sensitive too, so `resolve_targets` — not a client-side fold
+    // here — is what lets a lowercase input still reach a mixed-case rule.
+    let hostnames =
+        canonicalize_hostnames(raw_hostnames, super::validate::reject_control_chars, false)?;
     // Before the confirmation prompt too: a delete emits no row, but a
     // typo'd `--fields` must fail before anything is deleted.
     super::preflight_fields(globals, Rule::FIELDS, dry_run)?;
@@ -698,6 +731,10 @@ async fn delete(raw_hostnames: &[String], dry_run: bool, globals: &Globals) -> R
     let scope = super::scope::resolve_profile(&client, globals, config.default_profile()).await?;
 
     if dry_run {
+        // Resolution-free: a dry run makes no requests, so there is nothing
+        // to resolve against. The plan shows targets as typed
+        // (post-canonicalization) — case-preserved: `delete` does not
+        // lowercase its targets (module doc).
         let requests = hostnames
             .iter()
             .map(|hostname| PlannedRequest {
@@ -715,29 +752,32 @@ async fn delete(raw_hostnames: &[String], dry_run: bool, globals: &Globals) -> R
     // Live path only, before the confirmation prompt and before anything is
     // written: a `DELETE`'s own `success: true` ack proves nothing — a
     // hostname matching no rule acks identically, "Custom rule(s) deleted",
-    // a silent no-op (write-verification.md, probed live) — so existence is
-    // checked upfront against a fresh profile-wide read-back, exactly like
-    // `update`'s pre-write check (`verify_targets_exist`, reused as-is).
-    // Matching is case-sensitive on purpose: the server's own target
-    // matching is case-sensitive too (the `PUT` probe), so a client-side
-    // case fold here would just accept a target the server would then
-    // silently no-op on.
+    // a silent no-op (write-verification.md, probed live) — so every target
+    // is resolved upfront against a fresh profile-wide read-back, exactly
+    // like `update`'s own pre-write resolution (`resolve_targets`, reused
+    // as-is). An exact case-sensitive match wins outright; only a *unique*
+    // case-insensitive match is accepted otherwise (with an `info:` line) —
+    // the server's own target matching is case-sensitive too (the `PUT`
+    // probe), and case variants can coexist as distinct rules
+    // (write-verification.md, probed 2026-07-18), so a silent fold could
+    // delete the wrong rule.
     let api_folders = super::scope::fetch_folders(&client, &scope.id).await?;
-    verify_targets_exist(
+    let resolved = resolve_targets(
         &client,
         &scope.id,
         &api_folders,
         &hostnames,
         "check the hostname with `cdctl rule list`; nothing was deleted",
+        globals,
     )
     .await?;
 
-    let prompt = delete_prompt(&hostnames, &scope.name);
+    let prompt = delete_prompt(&resolved, &scope.name);
     confirm(&prompt, globals.yes, &scope).await?;
 
-    let mut results: Vec<(String, TargetResult)> = Vec::with_capacity(hostnames.len());
+    let mut results: Vec<(String, TargetResult)> = Vec::with_capacity(resolved.len());
     let mut aborted = false;
-    for hostname in &hostnames {
+    for hostname in &resolved {
         if aborted {
             results.push((hostname.clone(), TargetResult::Skipped));
             continue;
@@ -758,8 +798,8 @@ async fn delete(raw_hostnames: &[String], dry_run: bool, globals: &Globals) -> R
     if !aborted {
         eprintln!(
             "info: deleted {} rule{} from profile \"{}\"",
-            hostnames.len(),
-            if hostnames.len() == 1 { "" } else { "s" },
+            resolved.len(),
+            if resolved.len() == 1 { "" } else { "s" },
             escape_controls(&scope.name)
         );
         return Ok(());
@@ -894,48 +934,186 @@ async fn fetch_folder_rules(client: &Client, path: &str) -> Result<Vec<ApiRule>,
     }
 }
 
-/// `update`'s pre-write existence check (probe-informed: `PUT /rules` does
-/// not upsert, write-verification.md), reused as-is by `delete`'s pre-check
+/// `update`'s pre-write resolution (probe-informed: `PUT /rules` does not
+/// upsert, write-verification.md), reused as-is by `delete`'s pre-check
 /// (its `DELETE` acks `success: true` even on a hostname matching no rule —
-/// a silent no-op, write-verification.md): every target must already exist
-/// in the profile-wide listing, or nothing is written at all. Exit 3
-/// (`rule.not_found`), naming every missing hostname — not just the first,
-/// unlike the server's own complaint on a multi-target `PUT`. The match is
-/// case-sensitive by design, not an oversight: the server's own `PUT`
-/// target matching is case-sensitive too (write-verification.md, probed
-/// live), so folding case here would only accept a target the write itself
-/// would then reject or silently no-op on.
-async fn verify_targets_exist(
+/// a silent no-op, write-verification.md). Fetches the profile-wide listing
+/// and resolves each `requested` target against it ([`resolve_against_known`]
+/// carries the actual matching rules — split out so it is unit-testable on a
+/// plain slice of PKs, without a fetch). Returns the resolved stored PKs in
+/// `requested` order — never the raw input.
+async fn resolve_targets(
     client: &Client,
     profile_id: &str,
     folders: &[ApiFolder],
-    hostnames: &[String],
-    hint: &str,
-) -> Result<(), Error> {
+    requested: &[String],
+    not_found_hint: &str,
+    globals: &Globals,
+) -> Result<Vec<String>, Error> {
     let api_rules = fetch_all_rules(client, profile_id, folders).await?;
-    let known: std::collections::HashSet<&str> =
-        api_rules.iter().map(|rule| rule.pk.as_str()).collect();
-    let missing: Vec<&str> = hostnames
-        .iter()
-        .map(String::as_str)
-        .filter(|hostname| !known.contains(hostname))
-        .collect();
-    if missing.is_empty() {
-        return Ok(());
+    let known: Vec<&str> = api_rules.iter().map(|rule| rule.pk.as_str()).collect();
+    let resolution = resolve_against_known(&known, requested, not_found_hint)?;
+    // Human mode only: the substitution notice is for a person about to see
+    // (or confirm) a hostname spelled differently than they typed. JSON
+    // mode's data document already carries the stored PK, and its stderr
+    // stays envelope-only for agents (D4).
+    if !globals.json() {
+        for (target, pk) in &resolution.substitutions {
+            eprintln!("info: {target:?} matches the stored rule {pk:?}");
+        }
     }
-    Err(Error::new(
-        "rule.not_found",
-        format!(
-            "no rule matches {}",
-            missing
+    Ok(resolution.resolved)
+}
+
+/// A clean end-to-end resolution: every requested target mapped to a stored
+/// PK, plus the case substitutions made along the way (requested, stored) —
+/// data, not output, so the caller decides whether and where to render them.
+#[derive(Debug)]
+struct Resolution {
+    resolved: Vec<String>,
+    substitutions: Vec<(String, String)>,
+}
+
+/// The resolution matrix [`resolve_targets`] fetches for: per `requested`
+/// target, against `known` (the pre-write listing's stored PKs) —
+///
+/// - an exact case-sensitive match wins outright — this is also how a user
+///   disambiguates coexisting case variants, and how every `cdctl`-created
+///   (always-lowercase) rule keeps matching without any fold.
+/// - else a *unique* case-insensitive match is accepted, with an `info:`
+///   line to stderr naming the substitution — silent would hide that the
+///   write is landing on a hostname other than the literal input.
+/// - else 2+ case-insensitive matches with no exact one is ambiguous —
+///   aggregated across the whole pass (below), not returned on the first
+///   one found, so a later ambiguous target never hides behind an earlier
+///   one and has to wait for a second run to be named.
+/// - else the target doesn't exist at all: also aggregated, into one
+///   exit 3 `rule.not_found` below naming every missing hostname, not just
+///   the first, unlike the server's own complaint on a multi-target `PUT`.
+///
+/// Ambiguity outranks missing: if the pass finds any ambiguous target, the
+/// exit-2 usage error naming every one of them (with its variants) is
+/// returned even when some other target is also missing — usage beats
+/// not-found, the same local-errors-first ordering used elsewhere in this
+/// codebase. The missing target still surfaces, just on the next run, once
+/// the ambiguity is retyped away.
+///
+/// Once every target has resolved, two *different* inputs resolving to the
+/// same stored PK is a usage error too (exit 2, naming both inputs and the
+/// PK) — an explicit ambiguity beats a silent duplicate write against one
+/// rule.
+///
+/// The case-insensitive fallback exists only because case variants can
+/// coexist as distinct rules (write-verification.md, probed 2026-07-18): the
+/// server's own `PUT`/`DELETE` target matching is case-sensitive, so an
+/// *exact* match is always preferred over a folded one.
+fn resolve_against_known(
+    known: &[&str],
+    requested: &[String],
+    not_found_hint: &str,
+) -> Result<Resolution, Error> {
+    // Built once — a linear exact `find` plus a linear case-insensitive
+    // `filter` per target would be up to 500 targets x 10,000 known rules
+    // today (the file's own established scale; `reconcile` below already
+    // took this shape for the same reason). `exact` backs the case-sensitive
+    // check; `by_lower` (each known PK ASCII-lowercased once) backs the
+    // case-insensitive fallback — its `Vec` values preserve `known`'s order,
+    // since ambiguity error messages must name variants in that order.
+    let exact: std::collections::HashSet<&str> = known.iter().copied().collect();
+    let mut by_lower: std::collections::HashMap<String, Vec<&str>> =
+        std::collections::HashMap::new();
+    for &pk in known {
+        by_lower
+            .entry(pk.to_ascii_lowercase())
+            .or_default()
+            .push(pk);
+    }
+
+    let mut resolved: Vec<String> = Vec::with_capacity(requested.len());
+    let mut missing: Vec<&str> = Vec::new();
+    // Aggregated across the whole pass, same reason as `missing`: the first
+    // ambiguous target must never hide a later one.
+    let mut ambiguous: Vec<(&str, Vec<&str>)> = Vec::new();
+    // Collected, never printed here: rendering is the caller's call
+    // (`resolve_targets` prints them in human mode only), and an error found
+    // later in this same pass (ambiguous, missing, or the duplicate check
+    // below) returns before any substitution escapes — a stray `info:` line
+    // must never precede the error envelope on stderr (D4).
+    let mut substitutions: Vec<(String, String)> = Vec::new();
+
+    for target in requested {
+        if exact.contains(target.as_str()) {
+            resolved.push(target.clone());
+            continue;
+        }
+        let lower = target.to_ascii_lowercase();
+        let variants: &[&str] = by_lower.get(&lower).map_or(&[][..], Vec::as_slice);
+        match variants {
+            [] => missing.push(target.as_str()),
+            [pk] => {
+                substitutions.push((target.clone(), (*pk).to_owned()));
+                resolved.push((*pk).to_owned());
+            }
+            _ => ambiguous.push((target.as_str(), variants.to_vec())),
+        }
+    }
+
+    // Ambiguity outranks missing (module doc): checked, and returned, before
+    // the missing-target aggregate below.
+    if !ambiguous.is_empty() {
+        return Err(Error::usage(
+            ambiguous
                 .iter()
-                .map(|hostname| format!("{hostname:?}"))
+                .map(|(target, variants)| {
+                    format!(
+                        "{target:?} matches {} rules that differ only in case ({})",
+                        variants.len(),
+                        variants
+                            .iter()
+                            .map(|pk| format!("{pk:?}"))
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                    )
+                })
                 .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        Exit::NotFound,
-    )
-    .with_hint(hint))
+                .join("; "),
+        )
+        .with_hint("retype the target with its exact stored case from `cdctl rule list`"));
+    }
+
+    if !missing.is_empty() {
+        return Err(Error::new(
+            "rule.not_found",
+            format!(
+                "no rule matches {}",
+                missing
+                    .iter()
+                    .map(|hostname| format!("{hostname:?}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Exit::NotFound,
+        )
+        .with_hint(not_found_hint));
+    }
+
+    for i in 0..resolved.len() {
+        if let Some(j) = resolved[..i].iter().position(|pk| pk == &resolved[i]) {
+            return Err(Error::usage(format!(
+                "{:?} and {:?} both resolve to the stored rule {:?}",
+                requested[j], requested[i], resolved[i],
+            ))
+            .with_hint(
+                "give each target a distinct hostname; a write cannot target the same rule \
+                 twice in one invocation",
+            ));
+        }
+    }
+
+    Ok(Resolution {
+        resolved,
+        substitutions,
+    })
 }
 
 /// The re-fetch every read-back verification shares: profile-wide (module
@@ -1041,10 +1219,11 @@ fn announce_if_ambiguous_write_landed(write_error: Option<&Error>) {
 
 /// A target absent from the read-back never landed — resending it is safe.
 /// For `update` specifically, this can only mean a dropped write, never a
-/// nonexistent target: `verify_targets_exist` already confirmed every target
-/// existed before the `PUT` was sent, and the probe that motivated it proved
-/// `PUT /rules` never upserts (write-verification.md) — so an absent target
-/// here genuinely landed nowhere, and retrying is safe.
+/// nonexistent target: `resolve_targets` already confirmed every target
+/// existed (resolving it to its stored PK) before the `PUT` was sent, and the
+/// probe that motivated it proved `PUT /rules` never upserts
+/// (write-verification.md) — so an absent target here genuinely landed
+/// nowhere, and retrying is safe.
 fn write_dropped(hostname: &str) -> Error {
     Error::new(
         "rule.write_dropped",
@@ -1219,40 +1398,57 @@ fn delete_retry_argv(profile_id: &str, hostnames: &[String]) -> Vec<String> {
     argv
 }
 
-/// Lowercase, strip one trailing dot, then dedup preserving first
-/// occurrence (commands.md#rule) — a duplicate inside a `POST` chunk
-/// atomically fails the whole chunk upstream (commands.md#rule-import-semantics),
-/// so `cdctl` never sends one. Every caller — create, update, and delete
-/// alike — validates with `reject_control_chars`: delete's hostname reaches
-/// the wire through `encode_path_segment` (`rule_path`), which
-/// percent-encodes it into the DELETE path regardless of its characters, so
-/// the stricter path-bound check (`validate_path_bound`) would only buy an
-/// asymmetry with create/update — a live probe shows the API itself 400s a
-/// `?`/`#`/`%` hostname at create (write-verification.md), so the rationale
-/// rests on symmetry with create/update plus `encode_path_segment` handling
-/// the encoding, with the API being unversioned as the softened residual
-/// justification (such a rule could exist via another surface or a past
-/// server version). A canonical `.` or `..`, though, is the one class
-/// encoding cannot make safe — WHATWG normalizes `%2e`/`%2e%2e` as dot
-/// segments too — so those are rejected outright below, never reaching
-/// `encode_path_segment` at all. Takes `validate_one` as a parameter — not
-/// every future caller of this function is guaranteed to be URL-bound the
-/// same way.
+/// Strip one trailing dot, then dedup preserving first occurrence
+/// (commands.md#rule) — a duplicate inside a `POST` chunk atomically fails
+/// the whole chunk upstream (commands.md#rule-import-semantics), so `cdctl`
+/// never sends one. `lowercase` additionally ASCII-lowercases every
+/// hostname: `create` always sets it — canonical creation is what keeps
+/// every later `cdctl`-issued lowercase target matching the rule it just
+/// made. `update`/`delete` do not: the server stores and matches those
+/// targets case-SENSITIVELY (write-verification.md, probed 2026-07-18), and
+/// case variants can coexist as distinct rules, so lowercasing a foreign
+/// client's mixed-case PK here would make it unreachable through the typed
+/// CLI — `resolve_targets` is what still lets a lowercase *input* reach such
+/// a rule, via its unique-case-insensitive-match branch. Every caller —
+/// create, update, and delete alike — validates with `reject_control_chars`:
+/// delete's hostname reaches the wire through `encode_path_segment`
+/// (`rule_path`), which percent-encodes it into the DELETE path regardless
+/// of its characters, so the stricter path-bound check
+/// (`validate_path_bound`) would only buy an asymmetry with create/update —
+/// a live probe shows the API itself 400s a `?`/`#`/`%` hostname at create
+/// (write-verification.md), so the rationale rests on symmetry with
+/// create/update plus `encode_path_segment` handling the encoding, with the
+/// API being unversioned as the softened residual justification (such a
+/// rule could exist via another surface or a past server version). A
+/// canonical `.` or `..`, though, is the one class encoding cannot make
+/// safe — WHATWG normalizes `%2e`/`%2e%2e` as dot segments too — so those
+/// are rejected outright below, never reaching `encode_path_segment` at
+/// all. Takes `validate_one` as a parameter — not every future caller of
+/// this function is guaranteed to be URL-bound the same way.
 fn canonicalize_hostnames(
     raw: &[String],
     validate_one: impl Fn(&str, &str) -> Result<(), Error>,
+    lowercase: bool,
 ) -> Result<Vec<String>, Error> {
     let mut seen = std::collections::HashSet::new();
     let mut out = Vec::with_capacity(raw.len());
     for hostname in raw {
         validate_one(hostname, "the hostname")?;
         reject_non_ascii(hostname)?;
-        let lower = hostname.to_ascii_lowercase();
-        let canon = lower.strip_suffix('.').map(str::to_owned).unwrap_or(lower);
+        let cased = if lowercase {
+            hostname.to_ascii_lowercase()
+        } else {
+            hostname.clone()
+        };
+        let canon = cased.strip_suffix('.').map(str::to_owned).unwrap_or(cased);
         if canon.is_empty() {
+            let steps = if lowercase {
+                "lowercase, one trailing dot stripped"
+            } else {
+                "one trailing dot stripped"
+            };
             return Err(Error::usage(format!(
-                "hostname {hostname:?} is empty after canonicalization (lowercase, one \
-                 trailing dot stripped)"
+                "hostname {hostname:?} is empty after canonicalization ({steps})"
             )));
         }
         // `.` and `..` are the one input encoding can never make safe: a
@@ -1375,21 +1571,44 @@ mod tests {
     }
 
     #[test]
-    fn canonicalization_lowercases_strips_one_trailing_dot_and_dedups() {
+    fn create_canonicalization_lowercases_strips_one_trailing_dot_and_dedups() {
         let raw = vec![
             "A.Example.com.".to_owned(),
             "a.example.com".to_owned(),
             "B.example.com".to_owned(),
         ];
-        let out = canonicalize_hostnames(&raw, super::super::validate::reject_control_chars)
+        let out = canonicalize_hostnames(&raw, super::super::validate::reject_control_chars, true)
             .expect("canonicalizes");
         assert_eq!(out, vec!["a.example.com", "b.example.com"]);
+    }
+
+    /// `update`/`delete` never lowercase — the server matches those targets
+    /// case-sensitively and case variants can coexist as distinct rules
+    /// (write-verification.md, probed 2026-07-18) — but a trailing dot is
+    /// still stripped, and dedup still collapses a byte-identical repeat.
+    #[test]
+    fn update_delete_canonicalization_preserves_case() {
+        let raw = vec![
+            "MiXeD.Example.COM.".to_owned(),
+            "a.example.com".to_owned(),
+            "a.example.com".to_owned(),
+            "A.example.com".to_owned(),
+        ];
+        let out = canonicalize_hostnames(&raw, super::super::validate::reject_control_chars, false)
+            .expect("canonicalizes");
+        // Dedup is case-SENSITIVE here: "a.example.com" and "A.example.com"
+        // differ only in case and both survive as distinct entries — the
+        // byte-identical repeat is what collapses, not the case variant.
+        assert_eq!(
+            out,
+            vec!["MiXeD.Example.COM", "a.example.com", "A.example.com"]
+        );
     }
 
     #[test]
     fn wildcards_survive_canonicalization() {
         let raw = vec!["*.Ads.example.com".to_owned()];
-        let out = canonicalize_hostnames(&raw, super::super::validate::reject_control_chars)
+        let out = canonicalize_hostnames(&raw, super::super::validate::reject_control_chars, true)
             .expect("canonicalizes");
         assert_eq!(out, vec!["*.ads.example.com"]);
     }
@@ -1397,28 +1616,37 @@ mod tests {
     #[test]
     fn a_bare_dot_is_empty_after_canonicalization() {
         let raw = vec![".".to_owned()];
-        let error = canonicalize_hostnames(&raw, super::super::validate::reject_control_chars)
-            .expect_err("empty after stripping the trailing dot");
+        let error =
+            canonicalize_hostnames(&raw, super::super::validate::reject_control_chars, true)
+                .expect_err("empty after stripping the trailing dot");
         assert_eq!(error.exit(), Exit::Usage);
     }
 
-    /// The dot-segment hazard this guards: `".."` canonicalizes (lowercase,
-    /// strip one trailing dot) to `"."`, and `"..."` to `".."` — both are
-    /// path dot-segments that `DELETE /profiles/{id}/rules/{segment}` would
+    /// The dot-segment hazard this guards: `".."` canonicalizes (strip one
+    /// trailing dot) to `"."`, and `"..."` to `".."` — both are path
+    /// dot-segments that `DELETE /profiles/{id}/rules/{segment}` would
     /// resolve away (WHATWG join), landing on the profile resource or the
     /// rules collection instead of a 404 on a bogus hostname.
     /// `encode_path_segment` cannot help here — it deliberately keeps `.`
     /// unencoded as RFC 3986 unreserved — so all three inputs must be
-    /// rejected before ever reaching a request path.
+    /// rejected before ever reaching a request path. Checked under both
+    /// `lowercase` settings: case plays no part in this hazard.
     #[test]
     fn dot_segments_are_rejected_at_every_length_that_collapses_to_one() {
-        for raw in [".", "..", "..."] {
-            let error = canonicalize_hostnames(
-                &[raw.to_owned()],
-                super::super::validate::reject_control_chars,
-            )
-            .unwrap_err();
-            assert_eq!(error.exit(), Exit::Usage, "input {raw:?} must be rejected");
+        for lowercase in [true, false] {
+            for raw in [".", "..", "..."] {
+                let error = canonicalize_hostnames(
+                    &[raw.to_owned()],
+                    super::super::validate::reject_control_chars,
+                    lowercase,
+                )
+                .unwrap_err();
+                assert_eq!(
+                    error.exit(),
+                    Exit::Usage,
+                    "input {raw:?} must be rejected (lowercase: {lowercase})"
+                );
+            }
         }
     }
 
@@ -1429,6 +1657,7 @@ mod tests {
         let out = canonicalize_hostnames(
             &["example.com.".to_owned()],
             super::super::validate::reject_control_chars,
+            true,
         )
         .expect("a real FQDN with a trailing dot is fine");
         assert_eq!(out, vec!["example.com"]);
@@ -1437,8 +1666,9 @@ mod tests {
     #[test]
     fn non_ascii_hostnames_are_rejected_with_a_punycode_hint() {
         let raw = vec!["café.example.com".to_owned()];
-        let error = canonicalize_hostnames(&raw, super::super::validate::reject_control_chars)
-            .expect_err("non-ASCII hostnames are rejected");
+        let error =
+            canonicalize_hostnames(&raw, super::super::validate::reject_control_chars, true)
+                .expect_err("non-ASCII hostnames are rejected");
         assert_eq!(error.exit(), Exit::Usage);
         let hint = error.hint.expect("hint present");
         assert!(hint.contains("xn--"), "got: {hint}");
@@ -1450,7 +1680,7 @@ mod tests {
     #[test]
     fn delete_canonicalization_allows_path_metacharacters() {
         let raw = vec!["a?b.example.com".to_owned()];
-        let out = canonicalize_hostnames(&raw, super::super::validate::reject_control_chars)
+        let out = canonicalize_hostnames(&raw, super::super::validate::reject_control_chars, false)
             .expect("allowed: encode_path_segment handles it");
         assert_eq!(out, vec!["a?b.example.com"]);
     }
@@ -1476,8 +1706,9 @@ mod tests {
         raw.push("h0.example.com".to_owned());
         assert_eq!(raw.len(), 501);
 
-        let canon = canonicalize_hostnames(&raw, super::super::validate::reject_control_chars)
-            .expect("canonicalizes");
+        let canon =
+            canonicalize_hostnames(&raw, super::super::validate::reject_control_chars, true)
+                .expect("canonicalizes");
         assert_eq!(canon.len(), 500, "the duplicate collapsed");
         check_hostname_cap(&canon).expect("500 distinct hostnames is within the cap");
     }
@@ -1940,5 +2171,183 @@ mod tests {
     fn delete_prompt_is_singular_for_one_hostname() {
         let prompt = delete_prompt(&["a.com".to_owned()], "Home");
         assert!(prompt.starts_with("delete 1 rule ("), "got: {prompt}");
+    }
+
+    // --- resolve_against_known: the case-aware resolution matrix ---
+
+    fn requested(hostnames: &[&str]) -> Vec<String> {
+        hostnames.iter().map(|h| (*h).to_owned()).collect()
+    }
+
+    #[test]
+    fn an_exact_case_sensitive_match_wins_over_a_coexisting_variant() {
+        let known = ["MiXeD.Example.COM", "mixed.example.com"];
+        let resolution = resolve_against_known(&known, &requested(&["MiXeD.Example.COM"]), "hint")
+            .expect("exact match resolves");
+        assert_eq!(resolution.resolved, vec!["MiXeD.Example.COM"]);
+        assert!(
+            resolution.substitutions.is_empty(),
+            "an exact match is no substitution"
+        );
+    }
+
+    #[test]
+    fn a_unique_case_insensitive_match_resolves_to_the_stored_pk() {
+        let known = ["MiXeD.Example.COM"];
+        let resolution = resolve_against_known(&known, &requested(&["mixed.example.com"]), "hint")
+            .expect("unique case-insensitive match resolves");
+        assert_eq!(resolution.resolved, vec!["MiXeD.Example.COM"]);
+        assert_eq!(
+            resolution.substitutions,
+            vec![(
+                "mixed.example.com".to_owned(),
+                "MiXeD.Example.COM".to_owned()
+            )]
+        );
+    }
+
+    #[test]
+    fn two_case_insensitive_variants_with_no_exact_match_is_ambiguous() {
+        let known = ["MiXeD.Example.COM", "MIXED.example.com"];
+        let error = resolve_against_known(&known, &requested(&["mixed.example.com"]), "hint")
+            .expect_err("ambiguous");
+        assert_eq!(error.exit(), Exit::Usage);
+        assert!(
+            error.message.contains("MiXeD.Example.COM"),
+            "got: {error:?}"
+        );
+        assert!(
+            error.message.contains("MIXED.example.com"),
+            "got: {error:?}"
+        );
+        let hint = error.hint.expect("hint present");
+        assert!(hint.contains("rule list"), "got: {hint}");
+    }
+
+    /// A target with no match at all — exact or folded — is missing, not
+    /// ambiguous: exit 3, `rule.not_found`, carrying the caller-supplied
+    /// hint.
+    #[test]
+    fn a_target_with_no_match_at_all_is_not_found() {
+        let known = ["a.example.com"];
+        let error = resolve_against_known(
+            &known,
+            &requested(&["ghost.example.com"]),
+            "custom not-found hint",
+        )
+        .expect_err("missing");
+        assert_eq!(error.exit(), Exit::NotFound);
+        assert_eq!(error.code, "rule.not_found");
+        assert!(error.message.contains("ghost.example.com"));
+        assert_eq!(error.hint.as_deref(), Some("custom not-found hint"));
+    }
+
+    /// Missing targets are aggregated — every one named in one error, not
+    /// just the first.
+    #[test]
+    fn every_missing_target_is_named_not_just_the_first() {
+        let known = ["a.example.com"];
+        let error = resolve_against_known(
+            &known,
+            &requested(&["ghost1.example.com", "ghost2.example.com"]),
+            "hint",
+        )
+        .expect_err("both missing");
+        assert!(error.message.contains("ghost1.example.com"));
+        assert!(error.message.contains("ghost2.example.com"));
+    }
+
+    /// Ambiguous targets are aggregated too — every one named in one error,
+    /// same as missing.
+    #[test]
+    fn every_ambiguous_target_is_named_not_just_the_first() {
+        let known = [
+            "MiXeD.Example.COM",
+            "MIXED.example.com",
+            "OTHER.Example.COM",
+            "other.example.com",
+        ];
+        let error = resolve_against_known(
+            &known,
+            &requested(&["mixed.example.com", "OTHER.EXAMPLE.COM"]),
+            "hint",
+        )
+        .expect_err("both ambiguous");
+        assert_eq!(error.exit(), Exit::Usage);
+        for variant in [
+            "MiXeD.Example.COM",
+            "MIXED.example.com",
+            "OTHER.Example.COM",
+            "other.example.com",
+        ] {
+            assert!(error.message.contains(variant), "got: {}", error.message);
+        }
+    }
+
+    /// A mixed invocation — one target ambiguous, one missing — reports the
+    /// ambiguity, not the missing target: ambiguity outranks missing (module
+    /// doc), so `rule update ghost.example.com mixed.example.com` names
+    /// `mixed.example.com`'s variants now, and `ghost.example.com` would
+    /// surface on the next run once the ambiguity is retyped away.
+    #[test]
+    fn ambiguous_outranks_missing_and_names_every_ambiguous_target() {
+        let known = ["MiXeD.Example.COM", "MIXED.example.com"];
+        let error = resolve_against_known(
+            &known,
+            &requested(&["ghost.example.com", "mixed.example.com"]),
+            "hint",
+        )
+        .expect_err("ambiguous wins over missing");
+        assert_eq!(error.exit(), Exit::Usage);
+        assert_eq!(error.code, "usage.invalid");
+        assert!(
+            error.message.contains("MiXeD.Example.COM"),
+            "got: {error:?}"
+        );
+        assert!(
+            error.message.contains("MIXED.example.com"),
+            "got: {error:?}"
+        );
+    }
+
+    /// Two different inputs that both resolve to the same stored PK (one
+    /// exact, one folded) is a usage error naming both inputs and the PK —
+    /// explicit beats a silent duplicate write.
+    #[test]
+    fn two_inputs_resolving_to_the_same_pk_is_a_usage_error() {
+        let known = ["MiXeD.Example.COM"];
+        let error = resolve_against_known(
+            &known,
+            &requested(&["mixed.example.com", "MiXeD.Example.COM"]),
+            "hint",
+        )
+        .expect_err("duplicate resolution");
+        assert_eq!(error.exit(), Exit::Usage);
+        assert!(
+            error.message.contains("mixed.example.com"),
+            "got: {error:?}"
+        );
+        assert!(
+            error.message.contains("MiXeD.Example.COM"),
+            "got: {error:?}"
+        );
+    }
+
+    /// The converse of the duplicate case above: when both case variants
+    /// exist as their own distinct rules, two differently-cased inputs
+    /// resolve to two *different* PKs and both succeed.
+    #[test]
+    fn two_inputs_matching_two_coexisting_variants_both_resolve() {
+        let known = ["mixed.example.com", "MiXeD.Example.COM"];
+        let resolution = resolve_against_known(
+            &known,
+            &requested(&["mixed.example.com", "MiXeD.Example.COM"]),
+            "hint",
+        )
+        .expect("two distinct exact matches");
+        assert_eq!(
+            resolution.resolved,
+            vec!["mixed.example.com", "MiXeD.Example.COM"]
+        );
     }
 }

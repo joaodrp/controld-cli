@@ -2280,7 +2280,7 @@ async fn mount_proxies(server: &MockServer, expect: u64) {
 /// `GET /profiles/{AGGRESSIVE_PK}/rules` — the profile-wide (no folder
 /// segment) GET plain `rule list` renders, `rule create`/`update`'s
 /// read-back re-fetches, and `rule update`/`rule delete`'s pre-write
-/// existence check (`verify_targets_exist`) fetches too.
+/// resolution (`resolve_targets`) fetches too.
 async fn mount_rules(server: &MockServer, fixture_name: &str, expect: u64) {
     Mock::given(method("GET"))
         .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
@@ -2302,8 +2302,8 @@ fn empty_rules_response() -> ResponseTemplate {
     }))
 }
 
-/// `rule delete`'s pre-write existence check (`verify_targets_exist`, reused
-/// from `update`): mounts an empty `GET /groups` (no folders in these tests)
+/// `rule delete`'s pre-write resolution (`resolve_targets`, reused from
+/// `update`): mounts an empty `GET /groups` (no folders in these tests)
 /// and a `GET /rules` root listing whose `PK`s are exactly `existing`, so the
 /// pre-check passes and the deletes proceed. Every hostname-bearing `rule
 /// delete` e2e test needs this ahead of its `DELETE` mocks — the pre-check
@@ -5142,9 +5142,9 @@ async fn rule_update_disabled_alone_sends_status_and_hostnames_only() {
         .expect(1)
         .mount(&server)
         .await;
-    // Fetched twice: `update`'s pre-write existence check
-    // (`verify_targets_exist`) and `verify_update`'s post-write read-back
-    // each run their own profile-wide `fetch_all_rules` (rule.rs).
+    // Fetched twice: `update`'s pre-write resolution (`resolve_targets`)
+    // and `verify_update`'s post-write read-back each run their own
+    // profile-wide `fetch_all_rules` (rule.rs).
     mount_rules(&server, "rules_converged.json", 2).await;
 
     let uri = server.uri();
@@ -5894,7 +5894,7 @@ async fn rule_update_multi_target_with_one_missing_names_only_the_missing_one() 
 }
 
 /// Two missing targets, not one: both must be named in the exit-3 message —
-/// `verify_targets_exist` joins every missing hostname, not just the first.
+/// `resolve_targets` joins every missing hostname, not just the first.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rule_update_of_two_missing_hostnames_names_both() {
     let server = MockServer::start().await;
@@ -5934,6 +5934,549 @@ async fn rule_update_of_two_missing_hostnames_names_both() {
         let message = doc["error"]["message"].as_str().unwrap();
         assert!(message.contains("ghost1.example.com"), "got: {message}");
         assert!(message.contains("ghost2.example.com"), "got: {message}");
+    })
+    .await
+    .expect("command runs");
+}
+
+// --- Case-aware target resolution (`resolve_targets`): the server stores
+// and matches update/delete targets case-SENSITIVELY, and case variants can
+// coexist as distinct rules (write-verification.md, probed 2026-07-18).
+// `rule update`/`rule delete` keep their targets case-preserved and resolve
+// each input against the pre-write listing's stored PKs. ---
+
+/// HEADLINE: a lowercase input resolves to a coexisting mixed-case stored
+/// PK — the exact wire assertion proves the resolved (not the raw) PK rides
+/// the `PUT` body, and the `info:` line documents the substitution.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_update_case_insensitive_input_resolves_to_the_stored_mixed_case_pk() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
+    Mock::given(method("PUT"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .and(body_string("status=0&hostnames[]=MiXeD.Example.COM"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_ack.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    // Fetched twice, same as every update: the pre-write resolution and the
+    // post-write read-back. The fixture already shows the target disabled
+    // (`status: 0`) since the mock cannot distinguish the two calls.
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "MiXeD.Example.COM", "order": 1, "group": 0, "action": {"do": 0, "status": 0}}
+            ]},
+            "success": true
+        })))
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "update",
+                "mixed.example.com",
+                "--disabled",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .success();
+        let json = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(doc[0]["hostname"], "MiXeD.Example.COM");
+        assert_eq!(doc[0]["enabled"], false);
+        // JSON mode suppresses the substitution info line: the data document
+        // above already carries the stored PK, and an agent's stderr must
+        // stay envelope-only (D4). The human-mode notice is pinned by the
+        // delete headline and multi-target tests below.
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            !stderr.contains("matches the stored rule"),
+            "JSON mode must not print the substitution notice, got: {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+/// Same headline shape for `delete`: the DELETE path carries the resolved,
+/// percent-encoded stored PK, never the lowercase input.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_delete_case_insensitive_input_resolves_to_the_stored_mixed_case_pk() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "MiXeD.Example.COM", "order": 1, "group": 0, "action": {"do": 0, "status": 1}}
+            ]},
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("DELETE"))
+        .and(path(format!(
+            "/profiles/{AGGRESSIVE_PK}/rules/MiXeD.Example.COM"
+        )))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_delete_ack.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "delete",
+                "mixed.example.com",
+                "--yes",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .success();
+        assert_eq!(assert.get_output().stdout, b"");
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            stderr.contains(r#""mixed.example.com" matches the stored rule "MiXeD.Example.COM""#),
+            "got: {stderr}"
+        );
+        assert!(stderr.contains("deleted 1 rule"), "got: {stderr}");
+    })
+    .await
+    .expect("command runs");
+}
+
+/// An exact-case input matches directly — no `info:` substitution line.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_update_exact_case_input_matches_directly_with_no_info_line() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
+    Mock::given(method("PUT"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .and(body_string("status=0&hostnames[]=MiXeD.Example.COM"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_ack.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "MiXeD.Example.COM", "order": 1, "group": 0, "action": {"do": 0, "status": 0}}
+            ]},
+            "success": true
+        })))
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "update",
+                "MiXeD.Example.COM",
+                "--disabled",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .success();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            !stderr.contains("matches the stored rule"),
+            "an exact match must print no substitution info line: got {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+/// Two coexisting case variants and a folded (lowercase) request between
+/// them is ambiguous: exit 2 naming both variants, nothing written.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_update_ambiguous_case_insensitive_match_is_exit_2_naming_both_variants() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "MiXeD.Example.COM", "order": 1, "group": 0, "action": {"do": 0, "status": 1}},
+                {"PK": "MIXED.example.com", "order": 2, "group": 0, "action": {"do": 0, "status": 1}}
+            ]},
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    mount_no_writes(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "update",
+                "mixed.example.com",
+                "--disabled",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "usage.invalid");
+        let message = doc["error"]["message"].as_str().unwrap();
+        assert!(message.contains("MiXeD.Example.COM"), "got: {message}");
+        assert!(message.contains("MIXED.example.com"), "got: {message}");
+    })
+    .await
+    .expect("command runs");
+}
+
+/// The same ambiguous listing, but the request names one variant's *exact*
+/// stored case — that resolves directly against the intended rule, never
+/// touching the other coexisting variant.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_update_exact_case_input_disambiguates_among_coexisting_variants() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
+    Mock::given(method("PUT"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .and(body_string("status=0&hostnames[]=MiXeD.Example.COM"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_ack.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "MiXeD.Example.COM", "order": 1, "group": 0, "action": {"do": 0, "status": 0}},
+                {"PK": "MIXED.example.com", "order": 2, "group": 0, "action": {"do": 0, "status": 1}}
+            ]},
+            "success": true
+        })))
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "update",
+                "MiXeD.Example.COM",
+                "--disabled",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .success();
+        let json = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(doc[0]["hostname"], "MiXeD.Example.COM");
+    })
+    .await
+    .expect("command runs");
+}
+
+/// Two inputs that resolve to the same stored PK (one exact, one folded) is
+/// a usage error naming both inputs — nothing is written.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_update_two_inputs_resolving_to_the_same_pk_is_exit_2() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "MiXeD.Example.COM", "order": 1, "group": 0, "action": {"do": 0, "status": 1}}
+            ]},
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    mount_no_writes(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "update",
+                "mixed.example.com",
+                "MiXeD.Example.COM",
+                "--disabled",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        // The load-bearing buffering assertion: `mixed.example.com` resolves
+        // via the case-insensitive fallback before the duplicate check fires,
+        // which would normally queue an `info:` substitution line — this
+        // strict single-envelope parse fails if that line ever leaked to
+        // stderr ahead of the JSON error (D4), since `from_slice` rejects
+        // trailing/leading bytes around the one document it expects.
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "usage.invalid");
+        let message = doc["error"]["message"].as_str().unwrap();
+        assert!(message.contains("mixed.example.com"), "got: {message}");
+        assert!(message.contains("MiXeD.Example.COM"), "got: {message}");
+        // Explicit, on top of the strict parse above: no substitution info
+        // line at all, buffered or otherwise.
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            !stderr.contains("matches the stored rule"),
+            "a buffered substitution must never surface once the pass errors: got {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+/// The converse of the duplicate case above: when both case variants exist
+/// as their own distinct rules (the coexistence probe,
+/// write-verification.md), two differently-cased inputs resolve to two
+/// *different* PKs and both succeed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_update_targets_resolving_to_different_coexisting_case_variants_both_succeed() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
+    Mock::given(method("PUT"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .and(body_string(
+            "status=0&hostnames[]=mixed.example.com&hostnames[]=MiXeD.Example.COM",
+        ))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_ack.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "mixed.example.com", "order": 1, "group": 0, "action": {"do": 0, "status": 0}},
+                {"PK": "MiXeD.Example.COM", "order": 2, "group": 0, "action": {"do": 0, "status": 0}}
+            ]},
+            "success": true
+        })))
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "update",
+                "mixed.example.com",
+                "MiXeD.Example.COM",
+                "--disabled",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .success();
+    })
+    .await
+    .expect("command runs");
+}
+
+/// A multi-target update mixing an exact-case input with a case-insensitive
+/// one: both resolve, the `PUT` body carries both stored PKs in the
+/// *requested* order (exact first, folded second here — not sorted, not
+/// grouped), and exactly one `info:` substitution line prints, naming only
+/// the folded target.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_update_multi_target_exact_and_case_insensitive_both_resolve_in_input_order() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
+    Mock::given(method("PUT"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .and(body_string(
+            "status=0&hostnames[]=First.Example.COM&hostnames[]=second.example.com",
+        ))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_ack.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "First.Example.COM", "order": 1, "group": 0, "action": {"do": 0, "status": 0}},
+                {"PK": "second.example.com", "order": 2, "group": 0, "action": {"do": 0, "status": 0}}
+            ]},
+            "success": true
+        })))
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "update",
+                "First.Example.COM",
+                "SECOND.EXAMPLE.COM",
+                "--disabled",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .success();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert_eq!(
+            stderr.matches("matches the stored rule").count(),
+            1,
+            "exactly one substitution, for the folded target only: got {stderr}"
+        );
+        assert!(
+            stderr.contains(r#""SECOND.EXAMPLE.COM" matches the stored rule "second.example.com""#),
+            "got: {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+/// The delete confirmation prompt names the *resolved* stored PK, not the
+/// raw case-insensitive input — the one resolved-PK consumer besides the
+/// `info:` line (`confirm.rs` embeds the prompt in its non-interactive
+/// `confirmation.required` error).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_delete_confirmation_prompt_names_the_resolved_mixed_case_pk() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_rule_delete_precheck(&server, &["MiXeD.Example.COM"]).await;
+    mount_no_writes(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        // Human mode, like the sibling non-interactive confirmation tests
+        // above: the resolution's own `info:` substitution line prints
+        // before the prompt (unchanged — the module doc's flush-placement
+        // note), so stderr here is that line followed by the plain-text
+        // `error:`/`hint:` lines, not one bare JSON envelope.
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "delete",
+                "mixed.example.com",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .code(7)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            stderr.contains(r#"delete 1 rule (MiXeD.Example.COM) from profile "Aggressive"?"#),
+            "the prompt must name the resolved stored PK, not the raw input: got {stderr}"
+        );
+        assert!(!stderr.contains("(mixed.example.com)"), "got: {stderr}");
+    })
+    .await
+    .expect("command runs");
+}
+
+/// A dry run is resolution-free (module doc): the printed plan carries the
+/// target exactly as typed (post-canonicalization, which never lowercases
+/// `delete`'s targets) — case-preserved, verbatim, with no pre-write listing
+/// consulted at all.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_delete_dry_run_preserves_case_verbatim_in_the_plan() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_no_writes(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "delete",
+                "MiXeD.Example.COM",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--dry-run",
+                "--json",
+            ])
+            .assert()
+            .success();
+        let json = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(
+            doc["requests"][0]["path"],
+            format!("/profiles/{AGGRESSIVE_PK}/rules/MiXeD.Example.COM")
+        );
+        assert_eq!(
+            doc["requests"][0]["intent"],
+            serde_json::json!({"hostname": "MiXeD.Example.COM"})
+        );
     })
     .await
     .expect("command runs");
