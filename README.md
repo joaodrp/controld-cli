@@ -15,6 +15,8 @@ devices. For humans, scripts, and AI agents.
 > [!IMPORTANT]
 > **Not [`ctrld`](https://github.com/Control-D-Inc/ctrld)**, Control D's DNS proxy **daemon**. That runs
 > DNS on your machine; this manages your Control D **account**. They coexist.
+>
+> An independent project — not affiliated with or endorsed by Control D.
 
 Package `controld-cli`, binary **`cdctl`**.
 
@@ -40,6 +42,7 @@ Or from source:
 cargo install controld-cli
 ```
 
+> [!NOTE]
 > The musl binary reads OS CA certificates at runtime — in a certless image, install/mount them or set `SSL_CERT_FILE` ([D14](docs/decisions.md#d14--distribution)).
 
 ### Shell completions and man pages
@@ -136,9 +139,12 @@ cp .env.example .env
 ```
 
 The token from `.env` is for the live suite and manual probes only — plain `cargo test` stays
-network-free. Live tests confine their writes to a temporary `cdctl-test-*` profile they create and
-delete ([docs/testing.md, Live-test isolation](docs/testing.md#live-test-isolation)); manual probes mutate whatever you point them at. A free
-trial account is the safe default.
+network-free.
+
+> [!WARNING]
+> Live tests confine their writes to a temporary `cdctl-test-*` profile they create and delete
+> ([docs/testing.md, Live-test isolation](docs/testing.md#live-test-isolation)); manual probes
+> mutate whatever you point them at. A free trial account is the safe default.
 
 `tests/fixtures/api/` holds **real API responses** (sanitized), covering every deserialization hazard
 the live API throws — catalogued in [`docs/reference/`](docs/reference/).
