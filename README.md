@@ -87,6 +87,7 @@ everything else). `rule import`/`restore` land in v0.2; the full roadmap is in
 | [commands.md](docs/commands.md) | Per-command flags, columns, JSON fields |
 | [decisions.md](docs/decisions.md) | What was decided, why, what it cost |
 | [roadmap.md](docs/roadmap.md) | What ships next, and its test gates |
+| [testing.md](docs/testing.md) | Test layers, fixture policy, live-test isolation |
 | [reference/](docs/reference/) | OpenAPI spec + provenance, live/write verification, error codes |
 | [AGENTS.md](AGENTS.md) | Instructions for coding agents (any agent, not just Claude Code) |
 
@@ -107,10 +108,11 @@ The Control D API is **unversioned** — *"[breaking changes can be introduced w
 ## Development
 
 ```console
-$ cp .env.example .env    # add a Control D API token
 $ cargo test
 $ cargo clippy --all-targets -- -D warnings
 $ cargo fmt --check
+
+$ cp .env.example .env    # API token — live suite and manual probes only; plain `cargo test` is network-free
 ```
 
 Live tests confine their writes to a temporary `cdctl-test-*` profile they create and delete
