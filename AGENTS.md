@@ -41,6 +41,10 @@ cp .env.example .env      # then add a CONTROLD_API_TOKEN (live suite and manual
 
 `cargo test` never touches the network — the live suite is opt-in (below).
 
+Toolchain: edition 2024, MSRV 1.85 (the first release with edition-2024 support; development uses
+latest stable) — exact dependency pins live in `Cargo.toml`, the async/rustls stack rationale in
+[decisions.md](docs/decisions.md).
+
 ### The account behind `.env`
 
 **Never assume it is disposable.** It may be someone's real account, and mutating it rewrites live
@@ -51,10 +55,6 @@ user saying so.
 
 Never pass the token on a command line (`-H "Authorization: Bearer ..."`); argv is world-readable
 via `ps`. Write a `curl` config file (mode 0600) and use `curl -K`.
-
-Toolchain: edition 2024, MSRV 1.85 (the first release with edition-2024 support; development uses
-latest stable) — exact dependency pins live in `Cargo.toml`, the async/rustls stack rationale in
-[decisions.md](docs/decisions.md).
 
 ### Test layers
 
@@ -75,6 +75,18 @@ tests instead of passing silently — the drift tripwire for an unversioned API.
 `dist build` needs `man/` and `completions/` populated first (`dist plan` does not) — CI does
 this via `.github/dist-build-setup.yml`; locally, run `cargo run -- man --out-dir man` and
 the `completions` step in that file yourself before building.
+
+`.github/workflows/release.yml` is machine-generated (`dist generate`) — never hand-edit it;
+change `dist-workspace.toml` and regenerate.
+
+## Conventions
+
+- Comments and docs describe the **current state**, never the change or what it replaced — git
+  history holds that. Commit messages are the exception: there, the change is the point.
+- Help strings avoid semicolons — use parentheticals or separate sentences.
+- `->` in comments and docs, never a unicode arrow; ASCII symbols generally (em dashes allowed,
+  never the default connector).
+- Emoji in docs only as GitHub shortcodes (`:warning:`), never raw unicode.
 
 ## API hazards — index
 
