@@ -7,7 +7,7 @@ Instructions for any coding agent working in this repository (see [agents.md](ht
 `cdctl` — a CLI for the **Control D REST API** (`https://api.controld.com`), in Rust. Crate/repo
 `controld-cli`, binary **`cdctl`** — **never rename the binary to `controld`**: Control D's DNS
 daemon is already `ctrld`, and a trailing `-d` reads as daemon ([D1](docs/decisions.md#d1--crate-controld-cli-binary-cdctl)). `cdctl` manages the *account*
-over REST; [`ctrld`](https://github.com/Control-D-Inc/ctrld) runs DNS on the machine. They coexist.
+over REST; [`ctrld`](https://github.com/Control-D-Inc/ctrld) runs DNS on the machine.
 
 Delivery is sliced per [`docs/roadmap.md`](docs/roadmap.md).
 

@@ -14,7 +14,7 @@ devices. For humans, scripts, and AI agents.
 
 > [!IMPORTANT]
 > **Not [`ctrld`](https://github.com/Control-D-Inc/ctrld)**, Control D's DNS proxy **daemon**. That runs
-> DNS on your machine; this manages your Control D **account**. They coexist.
+> DNS on your machine; this manages your Control D **account**.
 >
 > An independent project — not affiliated with or endorsed by Control D.
 
