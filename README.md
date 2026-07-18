@@ -15,14 +15,11 @@ devices. For humans, scripts, and AI agents.
 > [!IMPORTANT]
 > **Not [`ctrld`](https://github.com/Control-D-Inc/ctrld)**, Control D's DNS proxy **daemon**. That runs
 > DNS on your machine; this manages your Control D **account**.
->
-> An independent project — not affiliated with or endorsed by Control D.
-
-Package `controld-cli`, binary **`cdctl`**.
 
 ## Install
 
-Prebuilt-binary installer script (Linux and macOS):
+The package is `controld-cli`; every method below installs the `cdctl` binary. Installer script
+(Linux and macOS):
 
 ```sh
 curl --proto '=https' --tlsv1.2 -LsSf \
@@ -145,6 +142,8 @@ network-free.
 
 `tests/fixtures/api/` holds **real API responses** (sanitized), covering every deserialization hazard
 the live API throws — catalogued in [`docs/reference/`](docs/reference/).
+
+cdctl is an independent project, not affiliated with or endorsed by Control D.
 
 ## License
 
