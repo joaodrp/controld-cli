@@ -17,12 +17,6 @@ devices. For humans, scripts, and AI agents.
 >
 > Package `controld-cli`, binary **`cdctl`**
 
-```sh
-cdctl profile list
-cdctl rule create ads.example.com --action block --profile Home
-cdctl rule list --profile Home --json | jq '.[] | select(.action == "block")'
-```
-
 ## Install
 
 v0.1 is the first release; artifacts below land with it.
