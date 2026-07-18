@@ -53,8 +53,10 @@ Supported shells: `bash`, `elvish`, `fish`, `powershell`, `zsh`.
 
 ## Quickstart
 
+Create an API token in the [Control D dashboard](https://controld.com/dashboard/api), then:
+
 ```console
-$ echo -n "$CONTROLD_API_TOKEN" | cdctl auth login --token-stdin   # token: https://controld.com/dashboard/api
+$ echo -n "$CONTROLD_API_TOKEN" | cdctl auth login --token-stdin
 $ cdctl profile list
 $ cdctl rule create ads.example.com --action block --profile Home
 $ cdctl rule list --profile Home
