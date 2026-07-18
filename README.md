@@ -7,12 +7,12 @@
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 [![MSRV 1.85](https://img.shields.io/badge/MSRV-1.85-orange.svg?logo=rust)](Cargo.toml)
 
-CLI for the [Control D](https://controld.com) **REST API**. For humans, scripts, and AI agents.
+CLI for the [Control D](https://controld.com) REST API. For humans, scripts, and AI agents.
 
 </div>
 
 > [!IMPORTANT]
-> **Not [`ctrld`](https://github.com/Control-D-Inc/ctrld)** — that daemon runs your DNS; `cdctl` manages your **account**.
+> Not [`ctrld`](https://github.com/Control-D-Inc/ctrld) — that daemon runs your DNS; `cdctl` manages your account.
 
 ## Install
 
@@ -82,16 +82,16 @@ Scripts and agents get `--json` (stdout is data-only) and the
 
 ## For agents as well as humans
 
-- `--json` everywhere; **stdout is data-only**, diagnostics on stderr.
-- Structured errors with **stable slugs** and an explicit `retryable` flag.
-- **Exit `8` is retryable; everything else is terminal.**
+- `--json` everywhere; stdout is data-only, diagnostics on stderr.
+- Structured errors with stable slugs and an explicit `retryable` flag.
+- Exit `8` is retryable; everything else is terminal.
 - No hidden prompts — a non-interactive run without `--yes` fails loudly.
-- No silent degradation — a read-only token used for a write **errors**.
-- `cdctl api` escape hatch, as a **separate verb** so a sandbox can allow `cdctl` but deny `cdctl api`.
+- No silent degradation — a read-only token used for a write errors.
+- `cdctl api` escape hatch, as a separate verb so a sandbox can allow `cdctl` but deny `cdctl api`.
 
 ## Scope
 
-**Personal accounts.** Organization endpoints are deferred ([D15](docs/decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes)) — untestable on a
+Personal accounts. Organization endpoints are deferred ([D15](docs/decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes)) — untestable on a
 personal account. The design keeps them additive.
 
 ## Docs
@@ -118,7 +118,7 @@ $ ./scripts/fetch-spec.sh
     35 paths, 46 operations
 ```
 
-The Control D API is **unversioned** — *"[breaking changes can be introduced without warning](https://docs.controld.com/reference/get-started)"* — so it's worth re-running and diffing regularly; CI does exactly that every week.
+The Control D API is unversioned — *"[breaking changes can be introduced without warning](https://docs.controld.com/reference/get-started)"* — so it's worth re-running and diffing regularly; CI does exactly that every week.
 
 ## Development
 
@@ -138,7 +138,7 @@ network-free.
 > ([Live-test isolation](docs/testing.md#live-test-isolation)); manual probes
 > mutate whatever you point them at. A free trial account is the safe default.
 
-`tests/fixtures/api/` holds **real API responses** (sanitized), covering every deserialization hazard
+`tests/fixtures/api/` holds real API responses (sanitized), covering every deserialization hazard
 the live API throws — catalogued in [`docs/reference/`](docs/reference/).
 
 cdctl is an independent project, not affiliated with or endorsed by Control D.
