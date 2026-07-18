@@ -114,7 +114,7 @@ $ cargo fmt --check
 ```
 
 Live tests confine their writes to a temporary `cdctl-test-*` profile they create and delete
-([AGENTS.md](AGENTS.md)); manual probes mutate whatever you point them at. A free trial account is
+([docs/testing.md](docs/testing.md)); manual probes mutate whatever you point them at. A free trial account is
 the safe default.
 
 `tests/fixtures/api/` holds **real API responses** (sanitized), covering every deserialization hazard
