@@ -121,7 +121,7 @@ $ ./scripts/fetch-spec.sh
 ==> Extracting and cross-verifying embedded spec
     all 46 pages agree (sha256 0404ebecf30b38f9)
     35 paths, 46 operations
-==> Wrote docs/reference/controld-openapi.json
+==> Unchanged (matches docs/reference/controld-openapi.json)
 ```
 
 The Control D API is unversioned (*"[breaking changes can be introduced without warning](https://docs.controld.com/reference/get-started)"*), so it's worth re-running and diffing regularly; CI does exactly that every week.

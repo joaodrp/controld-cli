@@ -80,12 +80,20 @@ ops = sum(
 )
 
 os.makedirs(os.path.dirname(out_path), exist_ok=True)
+rendered = json.dumps(spec, indent=2) + "\n"
+try:
+    with open(out_path) as fh:
+        unchanged = fh.read() == rendered
+except OSError:
+    unchanged = False
 with open(out_path, "w") as fh:
-    json.dump(spec, fh, indent=2)
-    fh.write("\n")
+    fh.write(rendered)
 
 pages = len(next(iter(by_hash.values())))
 print(f"    all {pages} pages agree (sha256 {digest[:16]})")
 print(f"    {len(spec['paths'])} paths, {ops} operations")
-print(f"==> Wrote {out_path}")
+if unchanged:
+    print(f"==> Unchanged (matches {out_path})")
+else:
+    print(f"==> Updated {out_path}")
 PY
