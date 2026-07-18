@@ -19,9 +19,9 @@ crates.io, and fires cargo-dist (binaries, GitHub Release, Homebrew formula).
 
 ## First-release watch items
 
-Provable only when the release actually runs:
+Provable only when the release runs:
 
-- The Homebrew tap must actually receive `Formula/cdctl.rb` — an `installers`/`publish-jobs`
+- The Homebrew tap must receive `Formula/cdctl.rb` — an `installers`/`publish-jobs`
   desync in `dist-workspace.toml` makes the publish loop no-op green while the tap silently never
   updates.
 - `RELEASE_PLZ_TOKEN` and `HOMEBREW_TAP_TOKEN` scopes prove out only at release time.
@@ -63,7 +63,7 @@ fit** — point users at Control D's native filters.
 **Gate — adversarial tests:**
 
 - Out-of-scope rules untouched; mismatched existing rules converged.
-- Kill mid-chunk, then re-run reaches the declared state.
+- Kill mid-chunk, then the re-run reaches the declared state.
 - `rule restore` round-trips action, state, `via`, `via6`, and folder **with duplicate folder
   names present**.
 - Parser: `rule restore` takes no `--action` and no positional file.
