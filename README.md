@@ -1,8 +1,7 @@
 <div align="center">
 
-<picture>
-  <img alt="cdctl - Control D, from the command line" src="docs/assets/cdctl-banner.svg" width="840">
-</picture>
+![cdctl — Control D, from the command line](docs/assets/logo-dark.svg#gh-dark-mode-only)
+![cdctl — Control D, from the command line](docs/assets/logo-light.svg#gh-light-mode-only)
 
 [![CI](https://github.com/joaodrp/controld-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/joaodrp/controld-cli/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
@@ -32,7 +31,7 @@ v0.1 is the first release; artifacts below land with it.
 $ brew install joaodrp/tap/cdctl
 ```
 
-(`joaodrp/tap` resolves to the [`joaodrp/homebrew-tap`](https://github.com/joaodrp/homebrew-tap) repo.)
+Or the prebuilt-binary installer script (Linux and macOS):
 
 ```console
 $ curl --proto '=https' --tlsv1.2 -LsSf \
