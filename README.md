@@ -52,7 +52,7 @@ $ cargo install controld-cli
 Prebuilt archives ship generated completions and man pages. To generate a script yourself:
 
 ```console
-$ cdctl completions zsh
+$ cdctl completions <shell>
 ```
 
 The script goes to stdout; `cdctl completions --help` shows each shell's install path. Supported:
