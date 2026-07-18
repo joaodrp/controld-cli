@@ -20,21 +20,21 @@ Package `controld-cli`, binary **`cdctl`**.
 
 ## Install
 
-v0.1 is the first release; artifacts below land with it.
-
-```sh
-brew install joaodrp/tap/cdctl
-```
-
-Or the prebuilt-binary installer script (Linux and macOS):
+Prebuilt-binary installer script (Linux and macOS):
 
 ```sh
 curl --proto '=https' --tlsv1.2 -LsSf \
     https://github.com/joaodrp/controld-cli/releases/latest/download/controld-cli-installer.sh | sh
 ```
 
-Or grab a prebuilt archive from [Releases](https://github.com/joaodrp/controld-cli/releases) —
-Linux (gnu, musl), macOS (arm64, x64), Windows.
+Or a prebuilt archive from [Releases](https://github.com/joaodrp/controld-cli/releases) —
+Linux (gnu, musl), macOS (arm64, x64), Windows. Or Homebrew:
+
+```sh
+brew install joaodrp/tap/cdctl
+```
+
+Or from source:
 
 ```sh
 cargo install controld-cli
