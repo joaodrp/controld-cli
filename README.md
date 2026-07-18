@@ -12,7 +12,7 @@ CLI for the [Control D](https://controld.com) REST API. For humans, scripts, and
 </div>
 
 > [!IMPORTANT]
-> Not [`ctrld`](https://github.com/Control-D-Inc/ctrld) — that daemon runs your DNS; `cdctl` manages your account.
+> Not [`ctrld`](https://github.com/Control-D-Inc/ctrld): that daemon runs your DNS; `cdctl` manages your account.
 > An independent project, not affiliated with Control D.
 
 ## Install
@@ -25,7 +25,7 @@ curl --proto '=https' --tlsv1.2 -LsSf \
     https://github.com/joaodrp/controld-cli/releases/latest/download/controld-cli-installer.sh | sh
 ```
 
-Or a prebuilt archive from [Releases](https://github.com/joaodrp/controld-cli/releases) —
+Or a prebuilt archive from [Releases](https://github.com/joaodrp/controld-cli/releases):
 Linux (gnu, musl), macOS (arm64, x64), Windows. Or Homebrew:
 
 ```sh
@@ -86,13 +86,13 @@ Scripts and agents get `--json` (stdout is data-only) and the
 - `--json` everywhere; stdout is data-only, diagnostics on stderr.
 - Structured errors with stable slugs and an explicit `retryable` flag.
 - Exit `8` is retryable; everything else is terminal.
-- No hidden prompts — a non-interactive run without `--yes` fails loudly.
-- No silent degradation — a read-only token used for a write errors.
+- No hidden prompts: a non-interactive run without `--yes` fails loudly.
+- No silent degradation: a read-only token used for a write errors.
 - `cdctl api` escape hatch, as a separate verb so a sandbox can allow `cdctl` but deny `cdctl api`.
 
 ## Scope
 
-Personal accounts. Organization endpoints are deferred ([D15](docs/decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes)) — untestable on a
+Personal accounts. Organization endpoints are deferred ([D15](docs/decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes)): untestable on a
 personal account. The design keeps them additive.
 
 ## Docs
@@ -119,7 +119,7 @@ $ ./scripts/fetch-spec.sh
     35 paths, 46 operations
 ```
 
-The Control D API is unversioned — *"[breaking changes can be introduced without warning](https://docs.controld.com/reference/get-started)"* — so it's worth re-running and diffing regularly; CI does exactly that every week.
+The Control D API is unversioned (*"[breaking changes can be introduced without warning](https://docs.controld.com/reference/get-started)"*), so it's worth re-running and diffing regularly; CI does exactly that every week.
 
 ## Development
 
@@ -131,7 +131,7 @@ cargo fmt --check
 cp .env.example .env
 ```
 
-The token from `.env` is for the live suite and manual probes only — plain `cargo test` stays
+The token from `.env` is for the live suite and manual probes only; plain `cargo test` stays
 network-free.
 
 > [!WARNING]
@@ -140,7 +140,7 @@ network-free.
 > mutate whatever you point them at. A free trial account is the safe default.
 
 `tests/fixtures/api/` holds real API responses (sanitized), covering every deserialization hazard
-the live API throws — catalogued in [`docs/reference/`](docs/reference/).
+the live API throws, catalogued in [`docs/reference/`](docs/reference/).
 
 ## License
 
