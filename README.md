@@ -42,9 +42,6 @@ Or from source:
 cargo install controld-cli
 ```
 
-> [!NOTE]
-> The musl binary reads OS CA certificates at runtime — in a certless image, install/mount them or set `SSL_CERT_FILE` ([D14](docs/decisions.md#d14--distribution)).
-
 ### Shell completions and man pages
 
 Prebuilt archives ship generated completions and man pages. To generate a script yourself:
