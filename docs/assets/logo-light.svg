@@ -1,0 +1,39 @@
+<svg width="560" height="200" viewBox="0 0 560 200" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="cdctl — Control D from the command line">
+  <defs>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d9488"/>
+      <stop offset="1" stop-color="#0284c7"/>
+    </linearGradient>
+  </defs>
+
+  <!-- terminal card -->
+  <rect x="60" y="18" width="440" height="140" rx="14" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+  <!-- title bar -->
+  <line x1="60" y1="52" x2="500" y2="52" stroke="#d0d7de" stroke-width="1"/>
+  <circle cx="86" cy="35" r="5.5" fill="#f6f8fa" stroke="#d0d7de"/>
+  <circle cx="106" cy="35" r="5.5" fill="#f6f8fa" stroke="#d0d7de"/>
+  <circle cx="126" cy="35" r="5.5" fill="#f6f8fa" stroke="#d0d7de"/>
+
+  <!-- prompt line: fixed-width text so layout survives any monospace font -->
+  <text x="92" y="112" font-family="ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace" font-size="44" font-weight="600" fill="url(#accent)" textLength="26" lengthAdjust="spacingAndGlyphs">&#10095;</text>
+  <text x="134" y="112" font-family="ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace" font-size="44" font-weight="600" fill="#1f2328" textLength="160" lengthAdjust="spacingAndGlyphs">cdctl</text>
+  <!-- cursor -->
+  <rect x="308" y="80" width="22" height="40" rx="3" fill="url(#accent)" opacity="0.9"/>
+
+  <!-- dns nodes accent: resolver graph -->
+  <g stroke="#0d9488" stroke-width="1.5" opacity="0.85">
+    <line x1="386" y1="100" x2="418" y2="86"/>
+    <line x1="386" y1="100" x2="418" y2="114"/>
+    <line x1="418" y1="86" x2="450" y2="100"/>
+    <line x1="418" y1="114" x2="450" y2="100"/>
+  </g>
+  <g fill="#ffffff" stroke="url(#accent)" stroke-width="2">
+    <circle cx="386" cy="100" r="6"/>
+    <circle cx="418" cy="86" r="6"/>
+    <circle cx="418" cy="114" r="6"/>
+    <circle cx="450" cy="100" r="7" fill="#0d9488"/>
+  </g>
+
+  <!-- tagline -->
+  <text x="280" y="186" text-anchor="middle" font-family="ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace" font-size="16" fill="#57606a" textLength="300" lengthAdjust="spacingAndGlyphs">Control D, from the command line</text>
+</svg>

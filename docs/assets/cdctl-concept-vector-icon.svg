@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">cdctl Vector Field icon</title><desc id="desc">A luminous command chevron</desc>
+  <defs>
+    <radialGradient id="bg" cx="47%" cy="45%" r="74%"><stop stop-color="#183029"/><stop offset=".7" stop-color="#07130f"/><stop offset="1" stop-color="#020403"/></radialGradient>
+    <linearGradient id="lime" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f5ffad"/><stop offset=".5" stop-color="#a7ed58"/><stop offset="1" stop-color="#51b58a"/></linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="12" result="b"/><feFlood flood-color="#a7ed58" flood-opacity=".78" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" fill="none" stroke="#a7ed58" stroke-opacity=".1"/></pattern>
+  </defs>
+  <rect width="512" height="512" rx="110" fill="#202520"/>
+  <rect x="17" y="17" width="478" height="478" rx="96" fill="url(#bg)" stroke="#77806b" stroke-opacity=".6" stroke-width="3"/>
+  <rect x="17" y="17" width="478" height="478" rx="96" fill="url(#grid)"/>
+  <g filter="url(#glow)"><path d="M105 130l128 126-128 126h59l128-126-128-126z" fill="url(#lime)"/><rect x="307" y="340" width="103" height="28" fill="url(#lime)"/></g>
+</svg>

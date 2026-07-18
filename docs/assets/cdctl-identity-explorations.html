@@ -1,0 +1,705 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cdctl — visual identity, three directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#e9e6e0; --ink:#1b1814; --mut:#6d675c; --card:#f5f3ee; --line:#d8d3c7;
+    --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+  .wrap{max-width:1180px;margin:0 auto;padding:56px 28px 90px}
+  .kicker{font:600 11px/1 var(--mono);letter-spacing:.22em;color:var(--mut);text-transform:uppercase}
+  h1{font-size:27px;letter-spacing:-.01em;margin:10px 0 8px}
+  .sub{color:var(--mut);max-width:72ch;margin:0 0 14px}
+  .chips span{display:inline-block;border:1px solid var(--line);background:var(--card);border-radius:999px;
+              padding:3px 12px;margin:0 6px 6px 0;font:500 11.5px/1.6 var(--mono);color:#4d473c}
+  section.opt{margin-top:66px;border-top:2px solid var(--ink);padding-top:26px}
+  .ohead{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  .num{font:600 13px/1 var(--mono);color:var(--mut);letter-spacing:.15em}
+  h2{font-size:21px;margin:0;letter-spacing:-.01em}
+  .pitch{color:var(--mut);margin:6px 0 18px;max-width:76ch}
+  .frame{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px}
+  .frame>svg{display:block;width:100%;height:auto;border-radius:6px}
+  .ctx{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+  .chip{padding:14px;border-radius:10px;border:1px solid var(--line)}
+  .chip.l{background:#ffffff}
+  .chip.d{background:#0d1117;border-color:#0d1117}
+  .chip label{display:block;font:500 10.5px/1 var(--mono);letter-spacing:.12em;color:#8a857a;margin-bottom:9px}
+  .chip.d label{color:#7d8590}
+  .chip svg{display:block;width:100%;height:auto;border-radius:5px}
+  .row{display:flex;gap:14px;margin-top:14px;flex-wrap:wrap;align-items:stretch}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+  .card h3{margin:0 0 8px;font:600 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--mut)}
+  ul.why{margin:0 0 14px;padding-left:18px}
+  ul.why li{margin:5px 0;max-width:58ch}
+  .dots{margin:2px 0 14px}
+  .dots span{width:15px;height:15px;border-radius:50%;display:inline-block;margin-right:7px;
+             border:1px solid rgba(0,0,0,.18);vertical-align:-2px}
+  .dots em{font:500 10.5px/1 var(--mono);color:var(--mut);font-style:normal;margin-right:14px}
+  button{font:500 12px/1 var(--mono);padding:8px 15px;border:1px solid var(--ink);background:transparent;
+         border-radius:6px;cursor:pointer;margin-right:8px;color:var(--ink)}
+  button:hover{background:var(--ink);color:var(--bg)}
+  .icons{display:flex;align-items:flex-end;gap:26px;flex-wrap:wrap}
+  .icons figure{margin:0;text-align:center}
+  .icons svg{display:block;border-radius:6px}
+  .icons figcaption{font:500 10.5px/1 var(--mono);color:var(--mut);margin-top:8px}
+  .icdark{background:#0d1117;padding:10px;border-radius:8px;display:inline-block;line-height:0}
+  footer{margin-top:70px;border-top:1px solid var(--line);padding-top:22px;color:var(--mut);
+         font-size:13px;max-width:88ch}
+  footer p{margin:6px 0}
+  footer code{font:500 12px var(--mono);color:#4d473c}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">controld-cli &middot; identity exploration</div>
+  <h1>cdctl — three identity directions</h1>
+  <p class="sub">Each option is a 1120&times;400 README banner plus a square icon derived from the same mark,
+  shown live on GitHub light and dark backgrounds and at icon sizes down to 16px. All artwork is
+  hand-built, self-contained SVG &mdash; no stock assets, and no Control&nbsp;D logos, colors, or branding anywhere.
+  Export buttons sit under each option.</p>
+  <div class="chips">
+    <span>wordmark: cdctl</span>
+    <span>tagline: Control D, from the command line</span>
+    <span>banner carries its own background</span>
+    <span>icon acceptance size: 48px</span>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<!-- OPTION 01 — AMBER                                                     -->
+<!-- ==================================================================== -->
+<section class="opt" id="opt-a">
+  <div class="ohead"><span class="num">01</span><h2>AMBER &mdash; the phosphor terminal</h2></div>
+  <p class="pitch">A warm P3-amber tube in a real bezel: the command already typed, the block cursor waiting.
+  Nostalgic, confident, adult &mdash; depth from glass, grille, scanlines and bloom, not from a flat dark card.</p>
+
+  <div class="frame">
+    <svg id="svgA" viewBox="0 0 1120 400" role="img" aria-label="cdctl banner, amber CRT terminal">
+      <title>cdctl — amber phosphor terminal</title>
+      <style>
+        .a-cur{animation:aCur 1.15s steps(1) infinite}
+        @keyframes aCur{0%,49%{opacity:1}50%,100%{opacity:0}}
+        .a-glow{animation:aFl 6s ease-in-out infinite}
+        @keyframes aFl{0%,100%{opacity:1}50%{opacity:.965}}
+        @media (prefers-reduced-motion:reduce){.a-cur,.a-glow{animation:none}}
+      </style>
+      <defs>
+        <filter id="a-noise" x="0" y="0" width="100%" height="100%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3" stitchTiles="stitch"/>
+          <feColorMatrix type="matrix" values="0 0 0 0 0.9  0 0 0 0 0.75  0 0 0 0 0.5  0 0 0 0.07 0"/>
+        </filter>
+        <filter id="a-b12" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="12"/></filter>
+        <filter id="a-b4"  x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="4"/></filter>
+        <radialGradient id="aTube" cx="46%" cy="42%" r="78%">
+          <stop offset="0" stop-color="#1a1206"/><stop offset=".55" stop-color="#0d0903"/><stop offset="1" stop-color="#060402"/>
+        </radialGradient>
+        <radialGradient id="a-vig" cx="47%" cy="44%" r="75%">
+          <stop offset=".58" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".6"/>
+        </radialGradient>
+        <linearGradient id="a-glass" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#fff4dc" stop-opacity=".10"/>
+          <stop offset=".45" stop-color="#fff4dc" stop-opacity=".02"/>
+          <stop offset=".6" stop-color="#fff4dc" stop-opacity="0"/>
+        </linearGradient>
+        <pattern id="a-scan" width="4" height="4" patternUnits="userSpaceOnUse">
+          <rect y="2.8" width="4" height="1.2" fill="#000" opacity=".26"/>
+        </pattern>
+        <pattern id="a-grille" width="4" height="4" patternUnits="userSpaceOnUse">
+          <rect width="1.1" height="4" fill="#ffb000" opacity=".035"/>
+        </pattern>
+        <clipPath id="aClip"><rect x="26" y="26" width="1068" height="330" rx="20"/></clipPath>
+        <!-- hand-drawn chunky letterforms: baseline y=0, up is negative -->
+        <path id="a-c" fill="none" d="M 76 -106 C 40 -116 12 -100 12 -68 C 12 -36 40 -20 76 -30"/>
+        <path id="a-d" fill="none" d="M 60 -104 C 30 -112 12 -96 12 -68 C 12 -40 30 -24 60 -28 M 64 -128 L 64 0"/>
+        <path id="a-t" fill="none" d="M 34 -126 L 34 -20 C 34 -6 44 -2 56 -5 M 10 -92 L 62 -92"/>
+        <path id="a-l" fill="none" d="M 34 -128 L 34 -20 C 34 -6 44 -2 58 -5"/>
+        <path id="a-p" fill="none" d="M 2 -106 L 44 -66 L 2 -26"/>
+        <g id="a-word">
+          <use href="#a-p"/><use href="#a-c" x="92"/><use href="#a-d" x="192"/>
+          <use href="#a-c" x="292"/><use href="#a-t" x="392"/><use href="#a-l" x="492"/>
+        </g>
+        <g id="bnA">
+          <rect width="1120" height="400" rx="14" fill="#151209"/>
+          <rect width="1120" height="400" rx="14" filter="url(#a-noise)" opacity=".55"/>
+          <rect x="14" y="14" width="1092" height="372" rx="10" fill="#070605"/>
+          <rect x="26" y="26" width="1068" height="330" rx="20" fill="url(#aTube)"/>
+          <g clip-path="url(#aClip)">
+            <rect x="26" y="26" width="1068" height="330" fill="url(#a-grille)"/>
+            <g font-family="'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace" font-size="11.5" fill="#ffb347" opacity=".06">
+              <text x="84" y="64">$ dig cdctl. any +qr</text>
+              <text x="84" y="81">;; -&gt;&gt;HEADER&lt;&lt;- opcode: QUERY, status: NOERROR, id: 4010</text>
+              <text x="84" y="98">;; flags: qr rd ra ad; QUERY: 1, ANSWER: 2, AUTHORITY: 0</text>
+              <text x="84" y="115">;; QUESTION SECTION:</text>
+              <text x="84" y="132">;cdctl.                         IN   ANY</text>
+              <text x="84" y="149">;; ANSWER SECTION:</text>
+              <text x="84" y="166">cdctl.   300   IN   TXT   "filter: allow"</text>
+              <text x="84" y="183">cdctl.   300   IN   TXT   "deny: none"</text>
+            </g>
+            <g class="a-glow" transform="translate(100,248) scale(1.3)" fill="none" stroke-linejoin="round">
+              <use href="#a-word" stroke="#ff8a00" stroke-width="52" opacity=".45" filter="url(#a-b12)"/>
+              <use href="#a-word" stroke="#ffa61e" stroke-width="38" opacity=".8" filter="url(#a-b4)"/>
+              <use href="#a-word" stroke="#ffd27a" stroke-width="30"/>
+              <use href="#a-word" stroke="#fff3d6" stroke-width="13" opacity=".85"/>
+              <g class="a-cur">
+                <rect x="594" y="-110" width="38" height="120" fill="#ff9a00" opacity=".55" filter="url(#a-b12)"/>
+                <rect x="594" y="-110" width="38" height="120" fill="#ffc75e"/>
+                <rect x="594" y="-110" width="38" height="16" fill="#fff3d6" opacity=".85"/>
+              </g>
+            </g>
+            <g font-family="'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace" font-size="23" letter-spacing="1">
+              <text x="104" y="307" fill="#ff9a00" opacity=".5" filter="url(#a-b4)">Control D, from the command line</text>
+              <text x="104" y="307" fill="#f2b662">Control D, from the command line</text>
+            </g>
+            <rect x="26" y="26" width="1068" height="330" fill="url(#a-scan)"/>
+            <polygon points="620,26 945,26 705,356 470,356" fill="url(#a-glass)" opacity=".5"/>
+            <polygon points="965,26 1035,26 795,356 745,356" fill="url(#a-glass)" opacity=".3"/>
+            <rect x="26" y="26" width="1068" height="330" fill="url(#a-vig)"/>
+          </g>
+          <rect x="26" y="26" width="1068" height="330" rx="20" fill="none" stroke="#000" stroke-opacity=".5" stroke-width="2"/>
+          <g fill="#241e13" stroke="#000" stroke-opacity=".55">
+            <circle cx="17" cy="17" r="4"/><circle cx="1103" cy="17" r="4"/>
+            <circle cx="17" cy="383" r="4"/><circle cx="1103" cy="383" r="4"/>
+          </g>
+          <g stroke="#0b0804" stroke-width="1.4" stroke-linecap="round">
+            <line x1="14.2" y1="15.2" x2="19.8" y2="18.8"/><line x1="1100.2" y1="18.8" x2="1105.8" y2="15.2"/>
+            <line x1="14.2" y1="384.8" x2="19.8" y2="381.2"/><line x1="1100.2" y1="381.2" x2="1105.8" y2="384.8"/>
+          </g>
+          <text x="28" y="382" font-family="'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace" font-size="9" letter-spacing="2.5" fill="#5c5340">CDCTL FIELD TERMINAL &mdash; P3 PHOSPHOR &mdash; 60 HZ</text>
+          <text x="1070" y="382" text-anchor="end" font-family="'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace" font-size="7.5" letter-spacing="2" fill="#5c5340">PWR</text>
+          <circle cx="1084" cy="378" r="4.5" fill="#ffb000" filter="url(#a-b4)"/>
+          <circle cx="1084" cy="378" r="2.4" fill="#ffe9b0"/>
+        </g>
+      </defs>
+      <use href="#bnA"/>
+    </svg>
+  </div>
+
+  <div class="ctx">
+    <div class="chip l"><label>GITHUB LIGHT</label><svg viewBox="0 0 1120 400"><use href="#bnA"/></svg></div>
+    <div class="chip d"><label>GITHUB DARK</label><svg viewBox="0 0 1120 400"><use href="#bnA"/></svg></div>
+  </div>
+
+  <div class="row">
+    <div class="card" style="flex:1.2;min-width:340px">
+      <h3>Why it works</h3>
+      <ul class="why">
+        <li>P3 amber on a curved, vignetted tube: warmth and depth a flat dark card cannot fake.</li>
+        <li>The command is already typed &mdash; chevron plus blinking block cursor make the README reader the operator.</li>
+        <li>Aperture grille, scanlines, glass glare, bezel hardware: texture earned, not applied. A faint dig answer hides in the phosphor.</li>
+      </ul>
+      <div class="dots">
+        <span style="background:#151209"></span><em>bezel</em>
+        <span style="background:#ffa61e"></span><em>amber</em>
+        <span style="background:#ffdf9e"></span><em>core</em>
+        <span style="background:#0d0903"></span><em>tube</em>
+      </div>
+      <button onclick="dl('svgA','cdctl-banner-01-amber.svg')">Download banner SVG</button>
+      <button onclick="dl('svgIA','cdctl-icon-01-amber.svg')">Download icon SVG</button>
+    </div>
+    <div class="card" style="flex:1;min-width:340px">
+      <h3>Icon &mdash; tube, c and cursor</h3>
+      <div class="icons">
+        <figure><svg id="svgIA" width="128" height="128" viewBox="0 0 512 512" role="img" aria-label="cdctl icon, amber">
+          <title>cdctl icon — amber</title>
+          <style>
+            .a-cur2{animation:aCur2 1.15s steps(1) infinite}
+            @keyframes aCur2{0%,49%{opacity:1}50%,100%{opacity:0}}
+            @media (prefers-reduced-motion:reduce){.a-cur2{animation:none}}
+          </style>
+          <defs>
+            <filter id="ia-noise" x="0" y="0" width="100%" height="100%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3" stitchTiles="stitch"/>
+              <feColorMatrix type="matrix" values="0 0 0 0 0.9  0 0 0 0 0.75  0 0 0 0 0.5  0 0 0 0.07 0"/>
+            </filter>
+            <filter id="ia-b12" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="12"/></filter>
+            <filter id="ia-b4"  x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="4"/></filter>
+            <radialGradient id="iaTube" cx="46%" cy="42%" r="80%">
+              <stop offset="0" stop-color="#1a1206"/><stop offset=".6" stop-color="#0d0903"/><stop offset="1" stop-color="#060402"/>
+            </radialGradient>
+            <radialGradient id="ia-vig" cx="47%" cy="44%" r="72%">
+              <stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".55"/>
+            </radialGradient>
+            <linearGradient id="ia-glass" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#fff4dc" stop-opacity=".10"/>
+              <stop offset=".5" stop-color="#fff4dc" stop-opacity="0"/>
+            </linearGradient>
+            <pattern id="ia-scan" width="4" height="4" patternUnits="userSpaceOnUse">
+              <rect y="2.8" width="4" height="1.2" fill="#000" opacity=".26"/>
+            </pattern>
+            <clipPath id="iaClip"><rect x="44" y="44" width="424" height="424" rx="40"/></clipPath>
+            <path id="ia-c" fill="none" d="M 76 -106 C 40 -116 12 -100 12 -68 C 12 -36 40 -20 76 -30"/>
+            <g id="icA">
+              <rect width="512" height="512" rx="86" fill="#151209"/>
+              <rect width="512" height="512" rx="86" filter="url(#ia-noise)" opacity=".5"/>
+              <rect x="26" y="26" width="460" height="460" rx="56" fill="#070605"/>
+              <rect x="44" y="44" width="424" height="424" rx="40" fill="url(#iaTube)"/>
+              <g clip-path="url(#iaClip)">
+                <g transform="translate(100,368) scale(1.95)" fill="none" stroke-linejoin="round">
+                  <use href="#ia-c" stroke="#ff8a00" stroke-width="52" opacity=".45" filter="url(#ia-b12)"/>
+                  <use href="#ia-c" stroke="#ffa61e" stroke-width="38" opacity=".8" filter="url(#ia-b4)"/>
+                  <use href="#ia-c" stroke="#ffd27a" stroke-width="30"/>
+                  <use href="#ia-c" stroke="#fff3d6" stroke-width="13" opacity=".85"/>
+                  <g class="a-cur2">
+                    <rect x="118" y="-110" width="36" height="120" fill="#ff9a00" opacity=".55" filter="url(#ia-b12)"/>
+                    <rect x="118" y="-110" width="36" height="120" fill="#ffc75e"/>
+                    <rect x="118" y="-110" width="36" height="16" fill="#fff3d6" opacity=".85"/>
+                  </g>
+                </g>
+                <rect x="44" y="44" width="424" height="424" fill="url(#ia-scan)"/>
+                <polygon points="300,44 430,44 260,468 160,468" fill="url(#ia-glass)" opacity=".45"/>
+                <rect x="44" y="44" width="424" height="424" fill="url(#ia-vig)"/>
+              </g>
+              <rect x="44" y="44" width="424" height="424" rx="40" fill="none" stroke="#000" stroke-opacity=".5" stroke-width="3"/>
+            </g>
+          </defs>
+          <use href="#icA"/>
+        </svg><figcaption>128</figcaption></figure>
+        <figure><svg width="64" height="64" viewBox="0 0 512 512"><use href="#icA"/></svg><figcaption>64</figcaption></figure>
+        <figure><svg width="48" height="48" viewBox="0 0 512 512"><use href="#icA"/></svg><figcaption>48</figcaption></figure>
+        <figure><svg width="32" height="32" viewBox="0 0 512 512"><use href="#icA"/></svg><figcaption>32</figcaption></figure>
+        <figure><svg width="16" height="16" viewBox="0 0 512 512"><use href="#icA"/></svg><figcaption>16</figcaption></figure>
+        <figure><span class="icdark"><svg width="48" height="48" viewBox="0 0 512 512"><use href="#icA"/></svg></span><figcaption>48 on dark</figcaption></figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<!-- OPTION 02 — XY                                                        -->
+<!-- ==================================================================== -->
+<section class="opt" id="opt-b">
+  <div class="ohead"><span class="num">02</span><h2>XY &mdash; the vectorscope</h2></div>
+  <p class="pitch">The wordmark drawn the way an electron beam draws it: single-stroke letterforms on a P31
+  storage scope, with graticule, Lissajous underlay and a front panel of knobs. Lab gear for people who
+  read packet captures &mdash; and the bottom trace tells the product story: one spike, filtered out.</p>
+
+  <div class="frame">
+    <svg id="svgB" viewBox="0 0 1120 400" role="img" aria-label="cdctl banner, oscilloscope">
+      <title>cdctl — vectorscope</title>
+      <style>
+        .b-beam{animation:bBm 7s ease-in-out infinite}
+        @keyframes bBm{0%,100%{opacity:1}50%{opacity:.93}}
+        .b-led{animation:bLed 3.2s ease-in-out infinite}
+        @keyframes bLed{0%,100%{opacity:1}50%{opacity:.55}}
+        @media (prefers-reduced-motion:reduce){.b-beam,.b-led{animation:none}}
+      </style>
+      <defs>
+        <filter id="b-noise" x="0" y="0" width="100%" height="100%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="8" stitchTiles="stitch"/>
+          <feColorMatrix type="matrix" values="0 0 0 0 0.7  0 0 0 0 0.9  0 0 0 0 0.8  0 0 0 0.05 0"/>
+        </filter>
+        <filter id="b-bh" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation="0.38"/></filter>
+        <filter id="b-bm" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation="0.13"/></filter>
+        <filter id="b-b2" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="2"/></filter>
+        <filter id="b-b6" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="6"/></filter>
+        <radialGradient id="bScr" cx="45%" cy="40%" r="78%">
+          <stop offset="0" stop-color="#0c2418"/><stop offset=".6" stop-color="#071009"/><stop offset="1" stop-color="#040806"/>
+        </radialGradient>
+        <radialGradient id="bKnob" cx="42%" cy="38%" r="75%">
+          <stop offset="0" stop-color="#2a332c"/><stop offset=".7" stop-color="#171c18"/><stop offset="1" stop-color="#10140f"/>
+        </radialGradient>
+        <linearGradient id="bRefl" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#e6fff0" stop-opacity=".07"/>
+          <stop offset=".5" stop-color="#e6fff0" stop-opacity=".015"/>
+          <stop offset=".62" stop-color="#e6fff0" stop-opacity="0"/>
+        </linearGradient>
+        <clipPath id="bClip"><rect x="28" y="28" width="772" height="344" rx="20"/></clipPath>
+        <!-- single-stroke beam letterforms, unit grid 4x6, baseline y=0 -->
+        <path id="b-c" fill="none" d="M 3.3 -4.42 A 1.9 1.9 0 1 0 3.3 -1.58"/>
+        <path id="b-d" fill="none" d="M 3.3 -4.35 A 1.9 1.9 0 1 0 3.3 -1.65 M 3.3 -6 L 3.3 0"/>
+        <path id="b-t" fill="none" d="M 1.7 -5.6 L 1.7 -0.95 A 0.95 0.95 0 0 0 2.65 0 M 0.55 -3.8 L 3.05 -3.8"/>
+        <path id="b-l" fill="none" d="M 1.8 -6 L 1.8 -0.95 A 0.95 0.95 0 0 0 2.75 0"/>
+        <g id="b-word">
+          <use href="#b-c"/><use href="#b-d" x="5.4"/><use href="#b-c" x="10.8"/>
+          <use href="#b-t" x="16.2"/><use href="#b-l" x="21.6"/>
+        </g>
+        <g id="bnB">
+          <rect width="1120" height="400" rx="14" fill="#0d100e"/>
+          <rect width="1120" height="400" rx="14" filter="url(#b-noise)" opacity=".5"/>
+          <rect width="1120" height="2" fill="#fff" opacity=".05"/>
+          <rect x="28" y="28" width="772" height="344" rx="20" fill="url(#bScr)"/>
+          <g clip-path="url(#bClip)">
+            <g id="b-grat" stroke="#1c4a34" stroke-width="1" opacity=".6"></g>
+            <line x1="414" y1="28" x2="414" y2="372" stroke="#1c4a34" stroke-width="1.2" opacity=".95"/>
+            <line x1="28" y1="200" x2="800" y2="200" stroke="#1c4a34" stroke-width="1.2" opacity=".95"/>
+            <path id="b-liss1" fill="none" stroke="#1f7a4e" stroke-width="1.5" opacity=".5"/>
+            <path id="b-liss2" fill="none" stroke="#1f7a4e" stroke-width="1.2" opacity=".22"/>
+            <path id="b-wave" fill="none" stroke="#1f8a56" stroke-width="2" opacity=".4"/>
+            <path d="M 414 191 L 414 209 M 405 200 L 423 200" stroke="#2a6b49" stroke-width="2" opacity=".8"/>
+            <g class="b-beam" transform="translate(92,238) scale(24)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <use href="#b-word" stroke="#20ff8f" stroke-width=".5" opacity=".18" transform="translate(.07,.05)"/>
+              <use href="#b-word" stroke="#00d672" stroke-width="1.05" opacity=".55" filter="url(#b-bh)"/>
+              <use href="#b-word" stroke="#3cff9f" stroke-width=".6" opacity=".95" filter="url(#b-bm)"/>
+              <use href="#b-word" stroke="#eafff3" stroke-width=".32"/>
+            </g>
+            <g font-family="'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace" font-size="19" letter-spacing="1.5">
+              <text x="94" y="298" fill="#00d672" opacity=".5" filter="url(#b-b2)">Control D, from the command line</text>
+              <text x="94" y="298" fill="#8affc4" opacity=".9">Control D, from the command line</text>
+            </g>
+            <g font-family="'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#54d492" opacity=".6">
+              <text x="94" y="62">5.00 V/div&#160;&#160;&#160;20.0 ms/div&#160;&#160;&#160;TRIG'D</text>
+              <text x="778" y="62" text-anchor="end">RCODE 0 &middot; NOERROR</text>
+            </g>
+            <polygon points="120,28 330,28 180,372 60,372" fill="url(#bRefl)"/>
+            <rect x="28" y="28" width="772" height="344" fill="none" stroke="#000" stroke-width="14" opacity=".45" filter="url(#b-b6)"/>
+          </g>
+          <rect x="28" y="28" width="772" height="344" rx="20" fill="none" stroke="#26312a" stroke-width="2"/>
+          <line x1="816" y1="28" x2="816" y2="372" stroke="#1d2420" stroke-width="2"/>
+          <text x="838" y="60" font-family="'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace" font-size="9.5" letter-spacing="2.5" fill="#5f7368">CDCTL/XY &middot; STORAGE DISPLAY &middot; P31</text>
+          <g>
+            <circle cx="902" cy="128" r="37" fill="url(#bKnob)" stroke="#323d36" stroke-width="1.5"/>
+            <circle cx="902" cy="128" r="25" fill="none" stroke="#1c2420" stroke-width="1.2"/>
+            <circle cx="1028" cy="128" r="37" fill="url(#bKnob)" stroke="#323d36" stroke-width="1.5"/>
+            <circle cx="1028" cy="128" r="25" fill="none" stroke="#1c2420" stroke-width="1.2"/>
+            <circle cx="902" cy="244" r="25" fill="url(#bKnob)" stroke="#323d36" stroke-width="1.5"/>
+            <circle cx="902" cy="244" r="17" fill="none" stroke="#1c2420" stroke-width="1.2"/>
+            <circle cx="1028" cy="244" r="25" fill="url(#bKnob)" stroke="#323d36" stroke-width="1.5"/>
+            <circle cx="1028" cy="244" r="17" fill="none" stroke="#1c2420" stroke-width="1.2"/>
+          </g>
+          <g id="b-kfx"></g>
+          <g font-family="'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace" font-size="9" letter-spacing="2" fill="#5f7368" text-anchor="middle">
+            <text x="902" y="186">INTENSITY</text>
+            <text x="1028" y="186">FOCUS</text>
+            <text x="902" y="288">TIME/DIV</text>
+            <text x="1028" y="288">VOLTS/DIV</text>
+            <text x="940" y="362" font-size="8">INPUT</text>
+            <text x="1042" y="344" font-size="8">POWER</text>
+          </g>
+          <g>
+            <circle cx="940" cy="326" r="16" fill="#28312b" stroke="#39443e" stroke-width="1.5"/>
+            <circle cx="940" cy="326" r="10.5" fill="#0b0e0c" stroke="#454f47" stroke-width="1"/>
+            <circle cx="940" cy="326" r="3" fill="#98a39b"/>
+          </g>
+          <g class="b-led">
+            <circle cx="1042" cy="322" r="4" fill="#3cff9f" filter="url(#b-b2)"/>
+            <circle cx="1042" cy="322" r="2" fill="#d8ffe9"/>
+          </g>
+          <g fill="#1a211c" stroke="#000" stroke-opacity=".5">
+            <circle cx="16" cy="16" r="4"/><circle cx="1104" cy="16" r="4"/>
+            <circle cx="16" cy="384" r="4"/><circle cx="1104" cy="384" r="4"/>
+          </g>
+        </g>
+      </defs>
+      <use href="#bnB"/>
+    </svg>
+  </div>
+
+  <div class="ctx">
+    <div class="chip l"><label>GITHUB LIGHT</label><svg viewBox="0 0 1120 400"><use href="#bnB"/></svg></div>
+    <div class="chip d"><label>GITHUB DARK</label><svg viewBox="0 0 1120 400"><use href="#bnB"/></svg></div>
+  </div>
+
+  <div class="row">
+    <div class="card" style="flex:1.2;min-width:340px">
+      <h3>Why it works</h3>
+      <ul class="why">
+        <li>The wordmark is an electron beam: single-stroke letterforms, dwell-bright joints, phosphor afterglow.</li>
+        <li>The bottom trace is the pitch &mdash; a pulse train with one spike clamped flat. Filtering, told in instrument language.</li>
+        <li>Graticule, Lissajous underlay, knobs and BNC: it reads as a bench instrument, not a dev-tool template.</li>
+      </ul>
+      <div class="dots">
+        <span style="background:#0d100e"></span><em>panel</em>
+        <span style="background:#3cff9f"></span><em>beam</em>
+        <span style="background:#eafff3"></span><em>core</em>
+        <span style="background:#1c4a34"></span><em>graticule</em>
+      </div>
+      <button onclick="dl('svgB','cdctl-banner-02-xy.svg')">Download banner SVG</button>
+      <button onclick="dl('svgIB','cdctl-icon-02-xy.svg')">Download icon SVG</button>
+    </div>
+    <div class="card" style="flex:1;min-width:340px">
+      <h3>Icon &mdash; round screen, traced c</h3>
+      <div class="icons">
+        <figure><svg id="svgIB" width="128" height="128" viewBox="0 0 512 512" role="img" aria-label="cdctl icon, scope">
+          <title>cdctl icon — scope</title>
+          <defs>
+            <filter id="ib-noise" x="0" y="0" width="100%" height="100%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="8" stitchTiles="stitch"/>
+              <feColorMatrix type="matrix" values="0 0 0 0 0.7  0 0 0 0 0.9  0 0 0 0 0.8  0 0 0 0.05 0"/>
+            </filter>
+            <filter id="ib-bh" x="-60%" y="-120%" width="220%" height="340%"><feGaussianBlur stdDeviation="0.38"/></filter>
+            <filter id="ib-bm" x="-60%" y="-120%" width="220%" height="340%"><feGaussianBlur stdDeviation="0.13"/></filter>
+            <filter id="ib-b4" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="4"/></filter>
+            <filter id="ib-b6" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="6"/></filter>
+            <radialGradient id="ibScr" cx="45%" cy="40%" r="80%">
+              <stop offset="0" stop-color="#0c2418"/><stop offset=".6" stop-color="#071009"/><stop offset="1" stop-color="#040806"/>
+            </radialGradient>
+            <linearGradient id="ibRefl" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#e6fff0" stop-opacity=".08"/>
+              <stop offset=".55" stop-color="#e6fff0" stop-opacity="0"/>
+            </linearGradient>
+            <clipPath id="ibClip"><circle cx="256" cy="248" r="180"/></clipPath>
+            <path id="ib-c" fill="none" d="M 3.3 -4.42 A 1.9 1.9 0 1 0 3.3 -1.58"/>
+            <g id="icB">
+              <rect width="512" height="512" rx="86" fill="#0d100e"/>
+              <rect width="512" height="512" rx="86" filter="url(#ib-noise)" opacity=".5"/>
+              <rect width="512" height="2" fill="#fff" opacity=".05"/>
+              <circle cx="256" cy="248" r="180" fill="url(#ibScr)"/>
+              <g clip-path="url(#ibClip)">
+                <g stroke="#1c4a34" stroke-width="2" opacity=".55">
+                  <line x1="76" y1="248" x2="436" y2="248"/><line x1="256" y1="68" x2="256" y2="428"/>
+                </g>
+                <g transform="translate(175,391) scale(47)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                  <use href="#ib-c" stroke="#20ff8f" stroke-width=".5" opacity=".18" transform="translate(.06,.04)"/>
+                  <use href="#ib-c" stroke="#00d672" stroke-width="1.05" opacity=".55" filter="url(#ib-bh)"/>
+                  <use href="#ib-c" stroke="#3cff9f" stroke-width=".6" opacity=".95" filter="url(#ib-bm)"/>
+                  <use href="#ib-c" stroke="#eafff3" stroke-width=".32"/>
+                </g>
+                <polygon points="150,68 300,68 200,428 90,428" fill="url(#ibRefl)"/>
+                <circle cx="256" cy="248" r="180" fill="none" stroke="#000" stroke-width="16" opacity=".45" filter="url(#ib-b6)"/>
+              </g>
+              <circle cx="256" cy="248" r="180" fill="none" stroke="#26312a" stroke-width="3"/>
+              <g stroke="#39443e" stroke-width="4">
+                <line x1="256" y1="48" x2="256" y2="58"/><line x1="256" y1="438" x2="256" y2="448"/>
+                <line x1="56" y1="248" x2="66" y2="248"/><line x1="446" y1="248" x2="456" y2="248"/>
+              </g>
+              <circle cx="412" cy="424" r="7" fill="#3cff9f" filter="url(#ib-b4)"/>
+              <circle cx="412" cy="424" r="3.5" fill="#d8ffe9"/>
+            </g>
+          </defs>
+          <use href="#icB"/>
+        </svg><figcaption>128</figcaption></figure>
+        <figure><svg width="64" height="64" viewBox="0 0 512 512"><use href="#icB"/></svg><figcaption>64</figcaption></figure>
+        <figure><svg width="48" height="48" viewBox="0 0 512 512"><use href="#icB"/></svg><figcaption>48</figcaption></figure>
+        <figure><svg width="32" height="32" viewBox="0 0 512 512"><use href="#icB"/></svg><figcaption>32</figcaption></figure>
+        <figure><svg width="16" height="16" viewBox="0 0 512 512"><use href="#icB"/></svg><figcaption>16</figcaption></figure>
+        <figure><span class="icdark"><svg width="48" height="48" viewBox="0 0 512 512"><use href="#icB"/></svg></span><figcaption>48 on dark</figcaption></figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<!-- OPTION 03 — FANFOLD                                                   -->
+<!-- ==================================================================== -->
+<section class="opt" id="opt-c">
+  <div class="ohead"><span class="num">03</span><h2>FANFOLD &mdash; the printout</h2></div>
+  <p class="pitch">A 132-column line-printer answer section: overstruck Courier, tractor-feed holes, a column
+  ruler, and a red NOERROR stamp where a signature would go. DNS as paperwork &mdash; light by default,
+  tactile, and funny exactly the way dig output is funny.</p>
+
+  <div class="frame">
+    <svg id="svgC" viewBox="0 0 1120 400" role="img" aria-label="cdctl banner, line printer fanfold">
+      <title>cdctl — fanfold printout</title>
+      <defs>
+        <filter id="c-grain" x="0" y="0" width="100%" height="100%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" seed="11" stitchTiles="stitch"/>
+          <feColorMatrix type="matrix" values="0 0 0 0 0.24  0 0 0 0 0.2  0 0 0 0 0.14  0 0 0 0.05 0"/>
+        </filter>
+        <filter id="c-ink" x="-20%" y="-20%" width="140%" height="140%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="2" seed="5" result="n"/>
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="2.2"/>
+        </filter>
+        <filter id="c-bleed" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.1"/></filter>
+        <radialGradient id="cEdge" cx="50%" cy="46%" r="75%">
+          <stop offset=".72" stop-color="#78643c" stop-opacity="0"/>
+          <stop offset="1" stop-color="#78643c" stop-opacity=".14"/>
+        </radialGradient>
+        <g id="bnC">
+          <rect width="1120" height="400" fill="#f5efe1"/>
+          <rect width="1120" height="400" filter="url(#c-grain)"/>
+          <rect width="1120" height="400" fill="url(#cEdge)"/>
+          <g id="c-holes"></g>
+          <g stroke="#c9c0a6" stroke-width="1.6" stroke-dasharray="7 6">
+            <line x1="8" y1="36" x2="1112" y2="36"/><line x1="8" y1="364" x2="1112" y2="364"/>
+          </g>
+          <g font-family="'Courier New',Courier,monospace" fill="#221e1b">
+            <text x="88" y="76" font-size="15" opacity=".72">$ dig cdctl. txt +noall +answer | lp</text>
+            <text x="88" y="102" font-size="14" opacity=".55">;; -&gt;&gt;HEADER&lt;&lt;- opcode: QUERY, status: NOERROR, id: 1320</text>
+            <text x="88" y="124" font-size="14" opacity=".42">;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 0</text>
+            <text x="88" y="150" font-size="11" opacity=".32">----+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----8----+----9----+----0----+----1----+----2----+</text>
+          </g>
+          <g font-family="'Courier New',Courier,monospace" font-weight="700" font-size="156" letter-spacing="-4" fill="#211d1a">
+            <text x="91.6" y="292.8" opacity=".3" filter="url(#c-bleed)">cdctl</text>
+            <text x="90" y="292" filter="url(#c-ink)">cdctl</text>
+            <text x="91.2" y="291.3" opacity=".92" filter="url(#c-ink)">cdctl</text>
+          </g>
+          <circle cx="560" cy="280" r="11.5" fill="#b3372a" opacity=".25" filter="url(#c-bleed)"/>
+          <circle cx="560" cy="280" r="11.5" fill="#b3372a" filter="url(#c-ink)"/>
+          <text x="96" y="342" font-family="'Courier New',Courier,monospace" font-size="17" fill="#221e1b" opacity=".85">cdctl.   300   IN   TXT   "Control D, from the command line"</text>
+          <g transform="translate(912,214) rotate(-6)">
+            <rect x="-118" y="-40" width="236" height="80" rx="9" fill="none" stroke="#b3372a" stroke-width="3" opacity=".75" filter="url(#c-ink)"/>
+            <rect x="-110" y="-33" width="220" height="66" rx="6" fill="none" stroke="#b3372a" stroke-width="1.2" opacity=".7"/>
+            <text y="4" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-weight="700" font-size="34" letter-spacing="5" fill="#b3372a" opacity=".85" filter="url(#c-ink)">NOERROR</text>
+            <text y="25" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="10" letter-spacing="2" fill="#b3372a" opacity=".75">RCODE 0 &middot; ANSWER 1</text>
+          </g>
+        </g>
+      </defs>
+      <use href="#bnC"/>
+    </svg>
+  </div>
+
+  <div class="ctx">
+    <div class="chip l"><label>GITHUB LIGHT</label><svg viewBox="0 0 1120 400"><use href="#bnC"/></svg></div>
+    <div class="chip d"><label>GITHUB DARK</label><svg viewBox="0 0 1120 400"><use href="#bnC"/></svg></div>
+  </div>
+
+  <div class="row">
+    <div class="card" style="flex:1.2;min-width:340px">
+      <h3>Why it works</h3>
+      <ul class="why">
+        <li>A real artifact, not a theme: overstruck Courier, ink-rough edges (displacement, not a texture PNG), tractor holes, column ruler.</li>
+        <li>Light by default &mdash; it stands out in a feed of near-black dev-tool banners, and still carries its own background on dark READMEs.</li>
+        <li>The jokes are resolver jokes: the tagline ships as a TXT record, and NOERROR is the stamp of a query gone right.</li>
+      </ul>
+      <div class="dots">
+        <span style="background:#f5efe1"></span><em>paper</em>
+        <span style="background:#211d1a"></span><em>ink</em>
+        <span style="background:#b3372a"></span><em>stamp</em>
+        <span style="background:#ddd4bb"></span><em>holes</em>
+      </div>
+      <button onclick="dl('svgC','cdctl-banner-03-fanfold.svg')">Download banner SVG</button>
+      <button onclick="dl('svgIC','cdctl-icon-03-fanfold.svg')">Download icon SVG</button>
+    </div>
+    <div class="card" style="flex:1;min-width:340px">
+      <h3>Icon &mdash; slip, struck c, root dot</h3>
+      <div class="icons">
+        <figure><svg id="svgIC" width="128" height="128" viewBox="0 0 512 512" role="img" aria-label="cdctl icon, printout">
+          <title>cdctl icon — printout</title>
+          <defs>
+            <filter id="ic-grain" x="0" y="0" width="100%" height="100%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" seed="11" stitchTiles="stitch"/>
+              <feColorMatrix type="matrix" values="0 0 0 0 0.24  0 0 0 0 0.2  0 0 0 0 0.14  0 0 0 0.05 0"/>
+            </filter>
+            <filter id="ic-ink2" x="-20%" y="-20%" width="140%" height="140%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.55" numOctaves="2" seed="5" result="n"/>
+              <feDisplacementMap in="SourceGraphic" in2="n" scale="4"/>
+            </filter>
+            <filter id="ic-bleed2" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.2"/></filter>
+            <radialGradient id="icEdge" cx="50%" cy="46%" r="75%">
+              <stop offset=".7" stop-color="#78643c" stop-opacity="0"/>
+              <stop offset="1" stop-color="#78643c" stop-opacity=".16"/>
+            </radialGradient>
+            <g id="icC">
+              <rect width="512" height="512" rx="86" fill="#d9d2c0"/>
+              <rect x="36" y="28" width="440" height="456" rx="16" fill="#f5efe1"/>
+              <rect x="36" y="28" width="440" height="456" rx="16" filter="url(#ic-grain)"/>
+              <rect x="36" y="28" width="440" height="456" rx="16" fill="url(#icEdge)"/>
+              <g id="ic-holes"></g>
+              <line x1="48" y1="62" x2="464" y2="62" stroke="#c9c0a6" stroke-width="2" stroke-dasharray="8 7"/>
+              <g font-family="'Courier New',Courier,monospace" font-weight="700" font-size="320" fill="#211d1a">
+                <text x="151.5" y="379.5" opacity=".3" filter="url(#ic-bleed2)">c</text>
+                <text x="150" y="378" filter="url(#ic-ink2)">c</text>
+                <text x="151.8" y="377.3" opacity=".92" filter="url(#ic-ink2)">c</text>
+              </g>
+              <circle cx="396" cy="356" r="22" fill="#b3372a" opacity=".25" filter="url(#ic-bleed2)"/>
+              <circle cx="396" cy="356" r="22" fill="#b3372a" filter="url(#ic-ink2)"/>
+            </g>
+          </defs>
+          <use href="#icC"/>
+        </svg><figcaption>128</figcaption></figure>
+        <figure><svg width="64" height="64" viewBox="0 0 512 512"><use href="#icC"/></svg><figcaption>64</figcaption></figure>
+        <figure><svg width="48" height="48" viewBox="0 0 512 512"><use href="#icC"/></svg><figcaption>48</figcaption></figure>
+        <figure><svg width="32" height="32" viewBox="0 0 512 512"><use href="#icC"/></svg><figcaption>32</figcaption></figure>
+        <figure><svg width="16" height="16" viewBox="0 0 512 512"><use href="#icC"/></svg><figcaption>16</figcaption></figure>
+        <figure><span class="icdark"><svg width="48" height="48" viewBox="0 0 512 512"><use href="#icC"/></svg></span><figcaption>48 on dark</figcaption></figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p><strong>Ground rules honored:</strong> wordmark is exactly <code>cdctl</code>; tagline exactly
+  <code>Control D, from the command line</code> (option 03 ships it as a TXT record, quotes and all).
+  No Control D logo, colors, or brand assets anywhere &mdash; these are three independent directions:
+  warm phosphor hardware, cool lab instrument, light paper artifact.</p>
+  <p><strong>Production notes:</strong> A and B wordmarks are already hand-drawn vector paths (font-independent).
+  Microcopy uses IBM Plex Mono (Google Fonts) and option 03 uses Courier New (system) &mdash; outline or embed
+  before shipping finals. Cursor blink and beam shimmer are cosmetic, honor <code>prefers-reduced-motion</code>,
+  and freeze to a clean static frame. Exported SVGs are standalone (defs included); option 02's graticule,
+  traces and knob ticks are generated at load, so export from this page after it renders.</p>
+</footer>
+
+</div>
+
+<script>
+// ---- generated artwork: graticule, lissajous, filtered pulse train, knob ticks, tractor holes ----
+(function(){
+  const NS='http://www.w3.org/2000/svg';
+
+  // Option 02: graticule lines (10 x 8 divisions inside the screen rect)
+  const grat=document.getElementById('b-grat');
+  if(grat){
+    let s='';
+    for(let i=1;i<10;i++){const x=(28+i*77.2).toFixed(1);s+='<line x1="'+x+'" y1="28" x2="'+x+'" y2="372"/>';}
+    for(let i=1;i<8;i++){const y=(28+i*43).toFixed(1);s+='<line x1="28" y1="'+y+'" x2="800" y2="'+y+'"/>';}
+    grat.innerHTML=s;
+  }
+
+  // Option 02: lissajous underlays (3:2 and 5:4)
+  const pts=p=>'M'+p.map(q=>q[0].toFixed(1)+' '+q[1].toFixed(1)).join(' L ');
+  const liss=(a,b,d)=>{const p=[];for(let i=0;i<=240;i++){const t=i/240*Math.PI*2;
+    p.push([414+310*Math.sin(a*t+d),205+120*Math.sin(b*t)]);}return pts(p);};
+  const l1=document.getElementById('b-liss1'),l2=document.getElementById('b-liss2');
+  if(l1)l1.setAttribute('d',liss(3,2,Math.PI/4));
+  if(l2)l2.setAttribute('d',liss(5,4,0.9));
+
+  // Option 02: pulse train with one spike filtered flat
+  const wave=document.getElementById('b-wave');
+  if(wave){
+    const y0=348,h=22,w=44,gap=32;let x=48,i=0,d='M '+x+' '+y0;
+    while(x<740){const ph=(i===3)?6:h;
+      d+=' L '+x+' '+(y0-ph)+' L '+(x+w)+' '+(y0-ph)+' L '+(x+w)+' '+y0+' L '+(x+w+gap)+' '+y0;
+      x+=w+gap;i++;}
+    d+=' L 776 '+y0;
+    wave.setAttribute('d',d);
+  }
+
+  // Option 02: knob tick rings + indicator needles
+  const kfx=document.getElementById('b-kfx');
+  if(kfx){
+    const knobs=[[902,128,37,-55],[1028,128,37,30],[902,244,25,-18],[1028,244,25,68]];
+    let s='';
+    for(const [cx,cy,r,a] of knobs){
+      for(let t=-135;t<=135;t+=27){
+        const rad=(t-90)*Math.PI/180;
+        s+='<line x1="'+(cx+Math.cos(rad)*(r+7)).toFixed(1)+'" y1="'+(cy+Math.sin(rad)*(r+7)).toFixed(1)
+          +'" x2="'+(cx+Math.cos(rad)*(r+12)).toFixed(1)+'" y2="'+(cy+Math.sin(rad)*(r+12)).toFixed(1)
+          +'" stroke="#39443e" stroke-width="2"/>';
+      }
+      const ar=(a-90)*Math.PI/180;
+      s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+(cx+Math.cos(ar)*(r-7)).toFixed(1)+'" y2="'+(cy+Math.sin(ar)*(r-7)).toFixed(1)
+        +'" stroke="#c9d4cd" stroke-width="3" stroke-linecap="round"/>';
+    }
+    kfx.innerHTML=s;
+  }
+
+  // Option 03: tractor-feed holes (banner + icon)
+  const holes=(el,cxList,ys,r)=>{
+    if(!el)return;let s='';
+    for(const cx of cxList)for(const y of ys){
+      s+='<circle cx="'+cx+'" cy="'+y+'" r="'+r+'" fill="#ddd4bb" stroke="#c5ba9d"/>'
+        +'<circle cx="'+cx+'" cy="'+(y+r*0.17)+'" r="'+(r*0.45)+'" fill="#b3a887" opacity=".55"/>';
+    }
+    el.innerHTML=s;
+  };
+  const hy=[];for(let y=44;y<=384;y+=28)hy.push(y);
+  holes(document.getElementById('c-holes'),[30,1090],hy,7);
+  holes(document.getElementById('ic-holes'),[74],[80,140,200,260,320,380,440],12);
+})();
+
+// ---- standalone SVG export ----
+function dl(id,name){
+  const svg=document.getElementById(id).cloneNode(true);
+  svg.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  const vb=svg.viewBox.baseVal;
+  svg.setAttribute('width',vb.width);svg.setAttribute('height',vb.height);
+  const src='<?xml version="1.0" encoding="UTF-8"?>\n'+new XMLSerializer().serializeToString(svg);
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([src],{type:'image/svg+xml'}));
+  a.download=name;a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+</script>
+</body>
+</html>
