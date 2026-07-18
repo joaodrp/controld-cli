@@ -9,8 +9,7 @@ Instructions for any coding agent working in this repository (see [agents.md](ht
 daemon is already `ctrld`, and a trailing `-d` reads as daemon (D1). `cdctl` manages the *account*
 over REST; [`ctrld`](https://github.com/Control-D-Inc/ctrld) runs DNS on the machine. They coexist.
 
-Delivery is sliced per [`docs/roadmap.md`](docs/roadmap.md): v0.1 ships profiles, rules, folders,
-and the `cdctl api` escape hatch; `rule import`/`restore` follow in v0.2.
+Delivery is sliced per [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Doc map
 
@@ -36,11 +35,13 @@ cargo test
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 
-./scripts/fetch-spec.sh   # re-fetch the OpenAPI spec; fails if the 46 docs pages disagree
-cp .env.example .env      # then add a CONTROLD_API_TOKEN (live suite and manual probes only)
+./scripts/fetch-spec.sh
+cp .env.example .env
 ```
 
-`cargo test` never touches the network — the live suite is opt-in (below).
+`cargo test` never touches the network — the live suite is opt-in (below). `fetch-spec.sh`
+re-fetches the OpenAPI spec and fails if the 46 docs pages disagree. `.env` supplies
+`CONTROLD_API_TOKEN`, needed only for the live suite and manual probes.
 
 Toolchain: edition 2024, MSRV 1.85 (the first release with edition-2024 support; development uses
 latest stable) — exact dependency pins live in `Cargo.toml`, the async/rustls stack rationale in
@@ -64,8 +65,8 @@ Layers, fixture policy, and the live-suite isolation rules live in
 
 - The live suite runs only with `CONTROLD_LIVE_TESTS=1` (plus `CONTROLD_API_TOKEN`); plain
   `cargo test` and CI never touch the network.
-- **Never touch pre-existing profiles** — live mutations stay inside a fresh
-  `cdctl-test-<timestamp>-<nonce>` profile the run creates and deletes.
+- **Never touch pre-existing profiles** (above) — every mutation stays inside the run's own
+  fresh profile.
 - New fixtures in `tests/fixtures/api/` must be sanitized: no emails, device names, real domains,
   public IPs, or account PKs.
 
@@ -96,7 +97,7 @@ spec. Read this before touching `src/api/` or any write path. Evidence:
 ever contradicts this list, update the reference doc and this index.**
 
 - **Missing `action.do` is an error, never a default** — defaulting it silently creates a BLOCK
-  rule, the worst failure a DNS tool can have.
+  rule.
 - **Auth failures return HTTP 400, not 401** — classify on `error.code`, never on HTTP status.
 - **Three envelope shapes**, and `body` becomes `[]` on error — deserialize `body` as `Value`,
   unwrap per operation.
@@ -110,8 +111,8 @@ ever contradicts this list, update the reference doc and this index.**
 - **Filter level names cannot be constructed** — read `levels[]`.
 - **Writes are form-encoded and the server silently drops form variables past ~1001** — chunk at
   500, scalars first, then **re-fetch and verify the full desired state** (action, enabled,
-  `via`, `via6`, folder). Client caps: 500 hostnames, 50 IPs. 10,000 rules/profile. No bulk
-  delete; percent-encode hostnames into DELETE paths (`*` -> `%2A`).
+  `via`, `via6`, folder). Client caps: 500 hostnames, 50 IPs, and 10,000 rules per profile; there's
+  no bulk delete, so percent-encode hostnames into DELETE paths (`*` -> `%2A`).
 - **`body: []` is not an error marker** — successful deletes return it too. Branch on
   `success`/`error` only.
 - **`DELETE` of a non-matching hostname returns `success: true`** (`"Custom rule(s) deleted"`) —

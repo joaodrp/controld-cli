@@ -1,8 +1,7 @@
 # Roadmap
 
 What ships next, in what order, and the test gates each slice must pass. Delivery is vertically
-sliced ([D17](decisions.md)): every global contract — exit codes, output schema, error envelope,
-shared flags, config format — shipped complete in v0.1 and is **frozen**; later slices only add
+sliced ([D17](decisions.md)): v0.1 freezes every global contract, so later slices only add
 commands. Anything not yet typed is reachable via `cdctl api` today.
 
 Current state: **v0.1 is code-complete on `main`** (core, `cdctl api`, `profile list/get`,
@@ -127,8 +126,6 @@ fit** — point users at Control D's native filters.
 The full mapped surface: 40/46 operations — org ([D15](decisions.md)) and `billing payments`
 ([D2](decisions.md)) stay deferred, reachable via `cdctl api`. 1.0 declares the contracts, frozen
 since v0.1, semver-guaranteed.
-
-**Not in 1.0:** org commands ([D15](decisions.md)).
 
 ## Post-1.0 candidates
 

@@ -36,9 +36,7 @@ Linux (gnu, musl), macOS (arm64, x64), Windows.
 $ cargo install controld-cli
 ```
 
-> **musl static binary in a certless container:** it reads OS certificates at runtime
-> (`/etc/ssl/certs`), so a scratch/certless image needs CA certs installed or mounted, or
-> `SSL_CERT_FILE`/`SSL_CERT_DIR` pointed at them ([D14](docs/decisions.md)).
+> The musl binary reads OS CA certificates at runtime — in a certless image, install/mount them or set `SSL_CERT_FILE` ([D14](docs/decisions.md)).
 
 ### Shell completions and man pages
 
@@ -75,7 +73,7 @@ $ cdctl rule delete ads.example.com --profile Home --yes
 ## Scope
 
 **Personal accounts.** Organization endpoints are deferred ([D15](docs/decisions.md)) — untestable on a
-personal account, and untested commands are worse than none. The design keeps them additive.
+personal account. The design keeps them additive.
 
 ## Docs
 
@@ -87,7 +85,7 @@ personal account, and untested commands are worse than none. The design keeps th
 | [roadmap.md](docs/roadmap.md) | What ships next, and its test gates |
 | [testing.md](docs/testing.md) | Test layers, fixture policy, live-test isolation |
 | [reference/](docs/reference/) | OpenAPI spec + provenance, live/write verification, error codes |
-| [AGENTS.md](AGENTS.md) | Instructions for coding agents (any agent, not just Claude Code) |
+| [AGENTS.md](AGENTS.md) | Instructions for coding agents |
 
 ### The spec
 
@@ -101,7 +99,7 @@ $ ./scripts/fetch-spec.sh
     35 paths, 46 operations
 ```
 
-The Control D API is **unversioned** — *"[breaking changes can be introduced without warning](https://docs.controld.com/reference/get-started)"* — so re-run and diff. CI does this weekly.
+The Control D API is **unversioned** — *"[breaking changes can be introduced without warning](https://docs.controld.com/reference/get-started)"* — so it's worth re-running and diffing regularly; CI does exactly that every week.
 
 ## Development
 
@@ -110,12 +108,13 @@ $ cargo test
 $ cargo clippy --all-targets -- -D warnings
 $ cargo fmt --check
 
-$ cp .env.example .env    # API token — live suite and manual probes only; plain `cargo test` is network-free
+$ cp .env.example .env
 ```
 
-Live tests confine their writes to a temporary `cdctl-test-*` profile they create and delete
-([docs/testing.md](docs/testing.md)); manual probes mutate whatever you point them at. A free trial account is
-the safe default.
+The token from `.env` is for the live suite and manual probes only — plain `cargo test` stays
+network-free. Live tests confine their writes to a temporary `cdctl-test-*` profile they create and
+delete ([docs/testing.md](docs/testing.md)); manual probes mutate whatever you point them at. A free
+trial account is the safe default.
 
 `tests/fixtures/api/` holds **real API responses** (sanitized), covering every deserialization hazard
 the live API throws — catalogued in [`docs/reference/`](docs/reference/).
