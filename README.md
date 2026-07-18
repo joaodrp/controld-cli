@@ -12,10 +12,11 @@ devices. For humans, scripts, and AI agents.
 
 </div>
 
+> [!IMPORTANT]
 > **Not [`ctrld`](https://github.com/Control-D-Inc/ctrld)**, Control D's DNS proxy **daemon**. That runs
 > DNS on your machine; this manages your Control D **account**. They coexist.
->
-> Package `controld-cli`, binary **`cdctl`**
+
+Package `controld-cli`, binary **`cdctl`**.
 
 ## Install
 
