@@ -13,7 +13,7 @@ real API.
 | Snapshots | `insta` | `--help`, JSON shapes |
 | Live | opt-in suite | Runs only with `CONTROLD_LIVE_TESTS=1` (plus `CONTROLD_API_TOKEN`); isolated to a randomized profile (below) |
 
-Exit codes and the retryable set are **public API** ([AGENTS.md](../AGENTS.md#contracts-that-are-public-api), Contracts). Test
+Exit codes and the retryable set are **public API** ([D5](decisions.md#d5--nine-exit-codes-exactly-one-retryable)). Test
 them like it. Model types deserialize leniently in the binary; fixture tests use
 `deny_unknown_fields`, so an API field addition fails tests instead of passing silently — the
 drift tripwire for an unversioned API.
@@ -21,7 +21,7 @@ drift tripwire for an unversioned API.
 ## Fixtures
 
 `tests/fixtures/api/` holds **real, sanitized API responses** — prefer them to hand-written
-mocks; they carry every hazard in the API-hazards index ([AGENTS.md](../AGENTS.md#api-hazards--index)). Sanitize any
+mocks; they carry every hazard in the [API-hazards index](reference/hazards.md). Sanitize any
 new fixture: no emails, device names, real domains, public IPs, or account PKs.
 
 ## Live-test isolation

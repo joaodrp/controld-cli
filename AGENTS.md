@@ -43,8 +43,7 @@ cp .env.example .env
 re-fetches the OpenAPI spec and fails if the 46 docs pages disagree. `.env` supplies
 `CONTROLD_API_TOKEN`, needed only for the live suite and manual probes.
 
-Toolchain: edition 2024, MSRV 1.85 (the first release with edition-2024 support; development uses
-latest stable) — exact dependency pins live in `Cargo.toml`, the async/rustls stack rationale in
+Toolchain: pins live in `Cargo.toml`; the edition/MSRV choice and stack rationale in
 [decisions.md, D13](docs/decisions.md#d13--rust-stack-compile-verified-july-2026).
 
 ### The account behind `.env`
@@ -88,38 +87,12 @@ change `dist-workspace.toml` and regenerate.
   never the default connector).
 - Emoji in docs only as GitHub shortcodes (`:warning:`), never raw unicode.
 
-## API hazards — index
+## API hazards
 
-The Control D API is unversioned; everything below was verified live and contradicts their docs or
-spec. Read this before touching `src/api/` or any write path. Evidence:
-[`read-verification.md`](docs/reference/read-verification.md) (read path) and
-[`write-verification.md`](docs/reference/write-verification.md) (mutations). **If the live API
-ever contradicts this list, update the reference doc and this index.**
-
-- **Missing `action.do` is an error, never a default** — defaulting it silently creates a BLOCK
-  rule.
-- **Auth failures return HTTP 400, not 401** — classify on `error.code`, never on HTTP status.
-- **Three envelope shapes**, and `body` becomes `[]` on error — deserialize `body` as `Value`,
-  unwrap per operation.
-- **`GET /profiles/{id}/rules` must omit the folder segment** — the documented `folder_id=0`
-  404s. The segment-less path returns **root rules only**; a foldered rule is invisible on it.
-  Seeing every rule in a profile needs one `GET /rules/{folder_id}` per folder on top of it.
-- **`content-type: application/json` can carry a 0-byte body.**
-- **Error messages can be multi-line dumps** — never parse them.
-- **`error.code` is a coarse bucket** — classify on its 3-digit HTTP prefix
-  ([`error-codes.md`](docs/reference/error-codes.md#classify-on-the-prefix-not-the-code)).
-- **Filter level names cannot be constructed** — read `levels[]`.
-- **Writes are form-encoded and the server silently drops form variables past ~1001** — chunk at
-  500, scalars first, then **re-fetch and verify the full desired state** (action, enabled,
-  `via`, `via6`, folder). Client caps: 500 hostnames, 50 IPs, and 10,000 rules per profile; there's
-  no bulk delete, so percent-encode hostnames into DELETE paths (`*` -> `%2A`).
-- **`body: []` is not an error marker** — successful deletes return it too. Branch on
-  `success`/`error` only.
-- **`DELETE` of a non-matching hostname returns `success: true`** (`"Custom rule(s) deleted"`) —
-  a silent no-op. Delete success proves nothing; check existence before, not after.
-- **`PUT /rules` never upserts** — an unknown hostname 400s `Custom Rule does not exist`, and
-  target matching is case-sensitive while `PK`s store case-preserved — pre-check existence and
-  resolve case before writing.
+The Control D API is unversioned and departs from its own docs in ways that cause silent damage
+(defaulted BLOCK rules, silently truncated writes, meaningless DELETE acks). Read
+[`docs/reference/hazards.md`](docs/reference/hazards.md) before touching `src/api/` or any write
+path.
 
 ## Contracts that are public API
 

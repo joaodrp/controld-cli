@@ -385,8 +385,8 @@ feature, and every write needs it), `tokio`, `serde`/`serde_json`, `thiserror`, 
 with the first colored output.
 Dev: `wiremock`, `assert_cmd`, `insta`, `predicates`, `nix` (the SIGINT test).
 
-Latest stable versions at implementation time; exact pins live in `Cargo.toml`, and the
-edition/MSRV choice in [AGENTS.md](../AGENTS.md#build-and-test).
+Latest stable versions at implementation time; exact pins live in `Cargo.toml`. Edition 2024,
+MSRV 1.85 — the first release with edition-2024 support; development uses latest stable.
 
 `reqwest::blocking` is *not* tokio-free (it spawns a runtime thread), so "blocking to avoid tokio" is a
 myth — hence async.
