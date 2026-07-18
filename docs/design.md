@@ -16,11 +16,11 @@ Noun-verb, singular nouns, shallow tree — the `gh`/`doctl`/`op` model.
 cdctl <noun> <verb> [args] [flags]
 ```
 
-```console
-$ cdctl profile list
-$ cdctl rule create ads.example.com --action block
-$ cdctl filter enable ads_medium --profile Home
-$ cdctl device list --json
+```sh
+cdctl profile list
+cdctl rule create ads.example.com --action block
+cdctl filter enable ads_medium --profile Home
+cdctl device list --json
 ```
 
 ### Global flags

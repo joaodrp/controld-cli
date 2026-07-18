@@ -17,32 +17,32 @@ devices. For humans, scripts, and AI agents.
 >
 > Package `controld-cli`, binary **`cdctl`**
 
-```console
-$ cdctl profile list
-$ cdctl rule create ads.example.com --action block --profile Home
-$ cdctl rule list --profile Home --json | jq '.[] | select(.action == "block")'
+```sh
+cdctl profile list
+cdctl rule create ads.example.com --action block --profile Home
+cdctl rule list --profile Home --json | jq '.[] | select(.action == "block")'
 ```
 
 ## Install
 
 v0.1 is the first release; artifacts below land with it.
 
-```console
-$ brew install joaodrp/tap/cdctl
+```sh
+brew install joaodrp/tap/cdctl
 ```
 
 Or the prebuilt-binary installer script (Linux and macOS):
 
-```console
-$ curl --proto '=https' --tlsv1.2 -LsSf \
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf \
     https://github.com/joaodrp/controld-cli/releases/latest/download/controld-cli-installer.sh | sh
 ```
 
 Or grab a prebuilt archive from [Releases](https://github.com/joaodrp/controld-cli/releases) —
 Linux (gnu, musl), macOS (arm64, x64), Windows.
 
-```console
-$ cargo install controld-cli
+```sh
+cargo install controld-cli
 ```
 
 > The musl binary reads OS CA certificates at runtime — in a certless image, install/mount them or set `SSL_CERT_FILE` ([D14](docs/decisions.md#d14--distribution)).
@@ -51,8 +51,8 @@ $ cargo install controld-cli
 
 Prebuilt archives ship generated completions and man pages. To generate a script yourself:
 
-```console
-$ cdctl completions <shell>
+```sh
+cdctl completions <shell>
 ```
 
 The script goes to stdout; `cdctl completions --help` shows each shell's install path. Supported:
@@ -63,26 +63,26 @@ The script goes to stdout; `cdctl completions --help` shows each shell's install
 Create an API token in the [Control D dashboard](https://controld.com/dashboard/api), store it,
 and check it reaches the API:
 
-```console
-$ echo -n "$CONTROLD_API_TOKEN" | cdctl auth login --token-stdin
-$ cdctl auth status
+```sh
+echo -n "$CONTROLD_API_TOKEN" | cdctl auth login --token-stdin
+cdctl auth status
 ```
 
 Most commands operate on one profile; set a default once instead of passing `--profile` every
 time:
 
-```console
-$ cdctl profile list
-$ cdctl config set default_profile Home
+```sh
+cdctl profile list
+cdctl config set default_profile Home
 ```
 
 Block a domain, list the rules, then delete it again. The delete prompts for confirmation
 (`--yes` skips the prompt, but only alongside an explicit `--profile`):
 
-```console
-$ cdctl rule create ads.example.com --action block
-$ cdctl rule list
-$ cdctl rule delete ads.example.com
+```sh
+cdctl rule create ads.example.com --action block
+cdctl rule list
+cdctl rule delete ads.example.com
 ```
 
 From here, every command answers `--help`, `cdctl reference` prints the whole surface as one
@@ -132,12 +132,12 @@ The Control D API is **unversioned** — *"[breaking changes can be introduced w
 
 ## Development
 
-```console
-$ cargo test
-$ cargo clippy --all-targets -- -D warnings
-$ cargo fmt --check
+```sh
+cargo test
+cargo clippy --all-targets -- -D warnings
+cargo fmt --check
 
-$ cp .env.example .env
+cp .env.example .env
 ```
 
 The token from `.env` is for the live suite and manual probes only — plain `cargo test` stays
