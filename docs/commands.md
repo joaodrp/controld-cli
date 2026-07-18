@@ -3,9 +3,13 @@
 Per-command contract: flags, human table columns, and normalized JSON fields.
 Written before implementation so the commands are consistent by construction, not by luck.
 
+A section or heading tagged with a release version (`(v0.2)`, `(v0.3)`, `(v0.4)`) describes a
+planned command, not yet in the binary — see [`docs/roadmap.md`](roadmap.md) for the shipping
+sequence. Untagged sections are shipped.
+
 **Conventions used below**
-- JSON field names are **ours**, not the API's ([D2](decisions.md)). `PK` never appears in output.
-- `do`/`status` integers never appear in output or input ([D10](decisions.md)).
+- JSON field names are **ours**, not the API's ([D2](decisions.md#d2--the-cli-is-the-stability-layer-own-the-output-schema)). `PK` never appears in output.
+- `do`/`status` integers never appear in output or input ([D10](decisions.md#d10--never-make-users-type-magic-integers)).
 - Timestamps: API sends Unix seconds; we emit **RFC-3339** in JSON, and relative ("3 days ago") in tables.
 - Every command accepts the [global flags](design.md#global-flags).
 - Every typed **remote-mutation** command accepts `-n, --dry-run` — semantics defined once in
@@ -65,8 +69,8 @@ action context is needed to validate it); `--via6` without `--action spoof`.
 
 **Shared syntax != shared capability.** `--via6` is accepted by **rules and services only** —
 service `via_v6` write *and* read-back verified live
-([write-verification](reference/write-verification.md)). Folders and the profile default have no
-documented `via_v6` field, and [D16](decisions.md) forbids building on undocumented ones:
+([write-verification](reference/write-verification.md#services)). Folders and the profile default have no
+documented `via_v6` field, and [D16](decisions.md#d16--documented-surface-only) forbids building on undocumented ones:
 `--via6` on `folder create/update` or `profile default set` is exit `2`.
 
 ---
@@ -91,7 +95,7 @@ whatever the count — cardinality never changes the shape.
 | `filter enable/disable/set` | RB | the response is only a family-keyed `{do,status,lvl}` map (`[]` when empty) — no titles, levels, or descriptions; re-fetch `filter list` and print the affected families |
 | `service set` | RB | neither response nor request carries `category`/`locations`/`warning`; `GET .../services` does |
 | `device create/update` | R | device object flat at `body` |
-| `access add` | RB | the ack is `body: []` plus a count message; the read-back window is the latest 50 IPs — hence the 50-IP cap ([access](#access--proxy)) |
+| `access add` | RB | the ack is `body: []` plus a count message; the read-back window is the latest 50 IPs — hence the 50-IP cap ([access](#access-proxy-v04)) |
 
 **Validation, client-side, before the request:**
 - `--via` **required** when `--action spoof` or `--action redirect`; **rejected** otherwise.
@@ -106,9 +110,9 @@ whatever the count — cardinality never changes the shape.
 ## Dry run
 
 Typed **remote-mutation** commands accept `-n, --dry-run` (the clig.dev standard flag): every
-Phase-4 write plus `rule import` and `rule restore`. Local-state commands (`auth login/logout`,
-`config set`) do **not** take it, and `cdctl api` is excluded — the escape hatch is gated by
-[D9](decisions.md) (`-X` + `--yes`) instead.
+typed remote mutation, with `rule import` and `rule restore` joining in v0.2. Local-state commands
+(`auth login/logout`, `config set`) do **not** take it, and `cdctl api` is excluded — the escape
+hatch is gated by [D9](decisions.md#d9--cdctl-api-separately-gateable-get-by-default) (`-X` + `--yes`) instead.
 
 - **Resolve and validate everything; persist nothing.** Names resolve to ids, `--via` is checked
   against `GET /proxies`, option values against their type, import quota and cross-folder
@@ -116,10 +120,10 @@ Phase-4 write plus `rule import` and `rule restore`. Local-state commands (`auth
   mutating request, any config or credential change, **any file creation** — a
   `--force-delete-first` dry run prints the manifest path it *would* write and does not create it.
 - **Output is data on stdout**, schema-stable like every other JSON output (semver-governed,
-  [D2](decisions.md)). The plan is **normalized intent, not wire bytes**: action names and
-  booleans per D2/D10 — encoding integers (`do`, `status`) never appear here either (identity
+  [D2](decisions.md#d2--the-cli-is-the-stability-layer-own-the-output-schema)). The plan is **normalized intent, not wire bytes**: action names and
+  booleans per [D2](decisions.md#d2--the-cli-is-the-stability-layer-own-the-output-schema)/[D10](decisions.md#d10--never-make-users-type-magic-integers) — encoding integers (`do`, `status`) never appear here either (identity
   integers like a folder id do). Wire encoding (form ordering, bracket
-  keys, scalar-params-first) is [D11](decisions.md)'s contract, proven by Phase-4 request-body
+  keys, scalar-params-first) is [D11](decisions.md#d11--form-encoded-hostnames-resolved-live)'s contract, proven by v0.1's request-body
   tests and visible under `--debug` — the plan does not restate it. `requests` lists the
   **withheld mutations**, in send order; validation GETs execute normally and are not listed:
 
@@ -159,7 +163,7 @@ Phase-4 write plus `rule import` and `rule restore`. Local-state commands (`auth
 
   `service set`, `profile default set`, `profile option set`, and `filter enable/disable/set`
   send complete state — with one verified exception: service `via_v6` **merges** upstream, so it
-  appears in the intent only when `--via6` was given ([service](#service)). Their plans are full
+  appears in the intent only when `--via6` was given ([service](#service-v03)). Their plans are full
   intents, never patches:
   `{service, action, via, via6, enabled}`, `{action, via, enabled}`, `{name, enabled, value}`,
   `{levels: {"<level-or-family>": true|false}}`. Merge-style updates
@@ -260,7 +264,7 @@ Phase-4 write plus `rule import` and `rule restore`. Local-state commands (`auth
   add-first `--replace` peaks *before* its deletions, delete-first peaks lower — and **the cap
   check runs against `peak`**; `final` is the end state. `manifest` is the would-be path under
   `--force-delete-first`, else `null`. Human mode renders the same fields as text
-  ([D4](decisions.md)).
+  ([D4](decisions.md#d4--errors-json-on-stderr-stable-slugs-explicit-retryable)).
 - **Exit `0` on a valid plan.** Validation failures exit with their normal codes — a hallucinated
   parameter fails locally, with the same error the real run would produce, before it reaches the
   API. An import with cross-folder collisions exits `6` here exactly as the real run would.
@@ -280,13 +284,15 @@ built**:
   double-encode). The error hint states that values are taken literally, never pre-encoded.
   Wildcard `*` stays **legal in hostnames** — it is rule grammar, percent-encoded at the HTTP
   layer.
+- **Non-ASCII hostnames** on `rule create`/`update`/`delete` argv are rejected with exit `2` and a
+  hint to supply the punycode (`xn--`) form.
 
 Percent-encoding into paths stays the load-bearing defense; rejection exists to turn a confusing
 `404` (exit `3`) into a precise exit `2` with a usable hint. Form-bound values (names, `--value`)
 need only the control-character check — form encoding transmits the rest safely.
 
 `cdctl api` is exempt: its path and `-F` pairs are forwarded raw by design — the escape hatch must
-not reshape what it carries. It is gated by [D9](decisions.md) instead.
+not reshape what it carries. It is gated by [D9](decisions.md#d9--cdctl-api-separately-gateable-get-by-default) instead.
 
 ---
 
@@ -296,13 +302,13 @@ not reshape what it carries. It is gated by [D9](decisions.md) instead.
 | --- | --- |
 | `profile list` | — |
 | `profile get <id\|name>` | — |
-| `profile create <name>` | `--clone <PK>` |
-| `profile update <id>` | `--name <s>`, `--disable-until <time>`, `--enable` |
-| `profile delete <id>` | `--confirm=<name>` — `--yes` alone is never enough |
-| `profile option list` | — |
-| `profile option set <name>` | `--enabled/--disabled`, `--value <v>` |
-| `profile default get` | — |
-| `profile default set` | *action flags* |
+| `profile create <name>` (v0.3) | `--clone <PK>` |
+| `profile update <id>` (v0.3) | `--name <s>`, `--disable-until <time>`, `--enable` |
+| `profile delete <id>` (v0.3) | `--confirm=<name>` — `--yes` alone is never enough |
+| `profile option list` (v0.3) | — |
+| `profile option set <name>` (v0.3) | `--enabled/--disabled`, `--value <v>` |
+| `profile default get` (v0.3) | — |
+| `profile default set` (v0.3) | *action flags* |
 
 **Table:** `NAME, ID, RULES, UPDATED` — `RULES` shows the **enabled** count
 **JSON:** `{id, name, enabled_rules, enabled_filters, enabled_services, folders, options, default_action, enabled, disabled_until, updated}`
@@ -321,20 +327,22 @@ create. Readback shape-shifts (`disable: null` <-> `disable_ttl: <ts>`); derive
 `enabled`/`disabled_until` from it. The PUT response can echo stale state — re-read after writing.
 
 `profile get` is a **client-side filter over `GET /profiles`** — the API has no `GET /profiles/{id}`.
+Human mode: key/value lines over the full JSON field set, not the list table.
 
-**`profile option list`** — table `OPTION, TITLE, TYPE, DEFAULT`;
+**`profile option list`** (v0.3) — table `OPTION, TITLE, TYPE, DEFAULT`;
 JSON `{name, title, description, type, default, info_url}`. `type` is an **open enum** — live values
 are `toggle`, `field`, and `dropdown` (the third is absent from the API docs); render unknown types
 as-is, never error. `default` is **raw JSON**: an integer for toggles/fields, an object map
 (`{"0.9": "Minimal"}`) or a **bare label array** (`ecs_subnet`) for dropdowns. Never assume a shape.
 
-**`profile option set <name> --enabled|--disabled [--value <v>]`** — the API write takes a required
-`status` plus an optional `value`; a single positional value cannot express enable/disable/select
-unambiguously. Validate `--value` per type against the live catalogue (field -> number, dropdown -> a
-key of its map). :warning: The dropdown write is **unprobed** — verify before Phase 4. Prints the new state
-`{name, value, enabled}` via read-back (no verified write response exists).
+**`profile option set <name> --enabled|--disabled [--value <v>]`** (v0.3) — the API write takes a
+required `status` plus an optional `value`; a single positional value cannot express
+enable/disable/select unambiguously. Validate `--value` per type against the live catalogue
+(field -> number, dropdown -> a key of its map). :warning: The dropdown write is **unprobed** —
+verify before v0.3. Prints the new state `{name, value, enabled}` via read-back (no verified write
+response exists).
 
-**`profile default get/set`** — one row, `ACTION, VIA, ENABLED`; JSON `{action, via, enabled}`.
+**`profile default get/set`** (v0.3) — one row, `ACTION, VIA, ENABLED`; JSON `{action, via, enabled}`.
 
 ---
 
@@ -346,8 +354,8 @@ key of its map). :warning: The dropdown write is **unprobed** — verify before 
 | `rule create <hostname>...` | *action flags*, `--folder <id\|name>` |
 | `rule update <hostname>...` | *action flags*, `--folder`, `--root` |
 | `rule delete <hostname>...` | `--yes` |
-| `rule import <file\|->` | *action flags*, `--folder`, `--replace`, `--force-delete-first` |
-| `rule restore <manifest>` | `--force` *(accept a profile mismatch)* |
+| `rule import <file\|->` (v0.2) | *action flags*, `--folder`, `--replace`, `--force-delete-first` |
+| `rule restore <manifest>` (v0.2) | `--force` *(accept a profile mismatch)* |
 
 **Table:** `HOSTNAME, ACTION, VIA, ENABLED, FOLDER`
 **JSON:** `{hostname, action, via, via6, enabled, folder, folder_id, order}`
@@ -359,7 +367,7 @@ key of its map). :warning: The dropdown write is **unprobed** — verify before 
 - `rule update --root` moves rules back out of a folder — `group=0` on `PUT`, **verified live**.
   Mutually exclusive with `--folder`.
 - `rule list` **omits** the folder segment. Passing `folder_id=0` 404s — see
-  [read-verification section 3](reference/read-verification.md). That segment-less listing returns
+  [read-verification section 3](reference/read-verification.md#listing-root-rules-the-docs-offer-two-ways-one-is-false--and-the-working-one-isnt-all-rules). That segment-less listing returns
   **root rules only**: a rule inside a folder is invisible on it. `rule list` with no `--folder`
   therefore aggregates the root listing with one listing per folder (`GET /profiles/{id}/groups` for
   the folder ids) into one client-side result, sorted by `order` — not a single request.
@@ -368,11 +376,11 @@ key of its map). :warning: The dropdown write is **unprobed** — verify before 
   (verified live), so `rule update x.com --disabled` needs no `--action`.
 - **`rule update` never creates a rule** — `PUT /rules` does not upsert (probed live: an unknown
   hostname 400s `Custom Rule does not exist`,
-  [write-verification](reference/write-verification.md)). Every `update`/`delete` target is
+  [write-verification](reference/write-verification.md#put-rules-does-not-upsert-via-case-is-preserved--reject-at-create-probed-2026-07-18)). Every `update`/`delete` target is
   resolved against a fresh profile-wide listing before anything is written, never a bare
   existence check: an **exact case-sensitive match wins outright** — the server matches
   `PUT`/`DELETE` targets case-sensitively too, and case variants can coexist as distinct rules
-  ([write-verification](reference/write-verification.md)) — else a **unique case-insensitive
+  ([write-verification](reference/write-verification.md#put-rules-does-not-upsert-via-case-is-preserved--reject-at-create-probed-2026-07-18)) — else a **unique case-insensitive
   match** is accepted, with an `info:` line naming the substitution (human mode only — the JSON
   document already carries the stored PK, and JSON-mode stderr stays envelope-only), else **2+ case-insensitive
   matches with no exact one** is a usage error (exit `2`) naming every variant, with a hint to
@@ -384,7 +392,7 @@ key of its map). :warning: The dropdown write is **unprobed** — verify before 
 - **`via6` cannot be cleared** while the spoof action persists — probed: omission preserves it,
   empty string and `0` are rejected atomically, and only an action flip clears it (an unprotected
   window `cdctl` never enters implicitly —
-  [write-verification](reference/write-verification.md)). `rule update` therefore offers no
+  [write-verification](reference/write-verification.md#via_v6-cannot-be-cleared-probed-2026-07-11-rule-was-do2-via1920210-via_v62001db81)). `rule update` therefore offers no
   clear-`via6` operation, and a patch of `via6: null` is unrepresentable. The one spelling that
   *requests* it — `--via6=` (the attached empty value, unambiguous across POSIX and Windows
   shells) — is rejected as an **attempted unsupported clear**: exit `2`, hint carrying the
@@ -398,7 +406,7 @@ key of its map). :warning: The dropdown write is **unprobed** — verify before 
   make a foreign client's mixed-case rule unreachable; the resolution above is what still lets a
   lowercase *input* reach such a rule.
 - **Multi-target cap: 500 hostnames** per `rule create`/`rule update` invocation — the import
-  chunk size, safely inside the server's silent ~1001-form-var ceiling ([D11](decisions.md)).
+  chunk size, safely inside the server's silent ~1001-form-var ceiling ([D11](decisions.md#d11--form-encoded-hostnames-resolved-live)).
   More is exit `2` with a hint to `rule import` (resumable, quota-aware). Whatever the count,
   **read back and verify** every target landed in the desired state before printing it — the
   write response is a one-entry summary that cannot reveal a dropped hostname. The read-back is
@@ -406,19 +414,19 @@ key of its map). :warning: The dropdown write is **unprobed** — verify before 
   listing — a rule that landed in a folder must still be found. A spoof `via`/`via6` compares
   case-insensitively against the desired state — DNS names are case-insensitive and the API is
   unversioned, so the comparison does not lean on the server's case-preserving storage continuing
-  ([write-verification](reference/write-verification.md)). A redirect `via` is a proxy PK, an
+  ([write-verification](reference/write-verification.md#put-rules-does-not-upsert-via-case-is-preserved--reject-at-create-probed-2026-07-18)). A redirect `via` is a proxy PK, an
   exact identifier, and compares case-sensitively.
 - **Partial failure is per-target, inside the error envelope.** When a multi-target
-  `create`/`update`/`delete` fails partway, or verification finds a gap, the [D4](decisions.md)
+  `create`/`update`/`delete` fails partway, or verification finds a gap, the [D4](decisions.md#d4--errors-json-on-stderr-stable-slugs-explicit-retryable)
   `details` (`kind: "multi_target"`) carries ordered per-target entries and a shell-neutral
   **`retry_argv`** array covering **only the missing targets** — it must exclude already-landed
-  hostnames, since a duplicate in a `POST` fails its whole chunk. Exit by D4's
+  hostnames, since a duplicate in a `POST` fails its whole chunk. Exit by [D4](decisions.md#d4--errors-json-on-stderr-stable-slugs-explicit-retryable)'s
   aggregation rule: `8` only when every failed target is retryable, else the shared terminal code
   (or `1` when mixed). stdout stays empty.
 
 `rule delete` must **percent-encode the hostname into the path**, wildcards included.
 
-### `rule import` semantics
+### `rule import` semantics (v0.2)
 
 Input: one hostname per line; `#` comments and blanks skipped; hosts-file format accepted
 (`0.0.0.0 ads.example.com` -> `ads.example.com`). Hostnames are canonicalized (lowercased, trailing
@@ -450,12 +458,12 @@ add/converge/delete plan and exits `0`.
   addresses a rule with no folder segment and `PUT` *moves* one between folders — so a file
   hostname that already lives in a **different** folder cannot converge in scope without mutating
   that other folder, and the contract promises other folders stay untouched. Refuse the whole
-  import before any request: the error's [D4](decisions.md) `details` (`kind: "collisions"`)
+  import before any request: the error's [D4](decisions.md#d4--errors-json-on-stderr-stable-slugs-explicit-retryable) `details` (`kind: "collisions"`)
   lists every collision as `{hostname, folder_id, folder}`, nothing is written (the profile-wide
   fetch makes this decidable up front; `--dry-run` reports the identical failure).
 - **Unconvergeable states fail fast too, exit `6`.** A file/manifest rule with `via6: null` whose
   live counterpart has `via_v6` set cannot be converged — the API has no clear operation for it
-  ([write-verification](reference/write-verification.md)). Decidable from the same pre-mutation
+  ([write-verification](reference/write-verification.md#via_v6-cannot-be-cleared-probed-2026-07-11-rule-was-do2-via1920210-via_v62001db81)). Decidable from the same pre-mutation
   diff: refuse with `details` (`kind: "unconvergeable"`, entries
   `{hostname, reason: "via6-clear", current_via6, desired_via6}` — the live value included, so a
   caller decides without another fetch). The **hint separates the two real choices** — they are
@@ -485,7 +493,7 @@ add/converge/delete plan and exits `0`.
   `{"version": 1, "profile_id": "...", "rules": [<normalized rule objects>]}`. Rules carry
   `folder_id`, so restore stays exact when folder names collide, and heterogeneous actions
   round-trip (a plain hostname list cannot).
-- **`rule restore <manifest>`** is a **separate command** — no positional file and no `--action`
+- **`rule restore <manifest>`** (v0.2) is a **separate command** — no positional file and no `--action`
   (each rule carries its own), so it doesn't collide with the import grammar. It refuses a manifest
   whose `profile_id` differs from the target profile unless `--force` is given, and refuses unknown
   `version` values. Recreates action, state, `via`, `via6`, and folder exactly. Idempotent by
@@ -503,7 +511,7 @@ add/converge/delete plan and exits `0`.
   form variables past ~1001) and a total-count check is insufficient — a concurrent add elsewhere
   can mask a dropped hostname. After the last chunk, run **one final full-scope verification** so
   a concurrent mutation of an earlier chunk cannot escape detection. On mismatch, abort with a
-  resumable report ([write-verification](reference/write-verification.md)).
+  resumable report ([write-verification](reference/write-verification.md#the-1001-variable-silent-truncation)).
 - **On mid-import failure**: report chunks written, chunks remaining, and the exact re-runnable
   command. Re-running is safe — the diff step makes import idempotent and convergent.
 
@@ -528,7 +536,7 @@ add/converge/delete plan and exits `0`.
 - `folder update` sends only the flags given — **`PUT /groups/{id}` merges** (verified live:
   rename-only preserves action and status, status-only preserves the rest, and an action-less folder
   survives a rename without gaining a `do`; the spec wrongly marks `do`+`status` required —
-  [write-verification](reference/write-verification.md)).
+  [write-verification](reference/write-verification.md#folders)).
 - Folders may have **no action at all** (`{"action":{"status":1}}` with no `do`) — `action` is then
   `null`, which is legal and distinct from `block`.
 - controld-go sleeps 2s after creation — **defensive, not evidence**: no lag was observed live, and
@@ -538,7 +546,7 @@ add/converge/delete plan and exits `0`.
 
 ---
 
-## filter
+## filter (v0.3)
 
 | Command | Flags |
 | --- | --- |
@@ -566,7 +574,7 @@ add/converge/delete plan and exits `0`.
   disable-first step.
 - The write response is a **map keyed by family** (`{"porn": {do, status, lvl}}`), and **`[]` when
   zero filters remain enabled** — the object<->array flip is by emptiness
-  ([write-verification](reference/write-verification.md)).
+  ([write-verification](reference/write-verification.md#filters)).
 - `filter list` must make the legal level names obvious. This is the most confusing part of the API
   surface, and clearing it up is the CLI's job.
 - Third-party filter PKs are **`x-`-prefixed**; set `third_party: true`.
@@ -574,7 +582,7 @@ add/converge/delete plan and exits `0`.
 
 ---
 
-## service
+## service (v0.3)
 
 | Command | Flags |
 | --- | --- |
@@ -594,7 +602,7 @@ video`); a bad one 404s with `Invalid category` — validate client-side and sug
 rule**. A bad service name is 400 `Invalid service was provided`; validate client-side and suggest.
 
 `via_v6` on services behaves exactly like rules
-([write-verification](reference/write-verification.md)): **omitted = preserved** (the PUT merges
+([write-verification](reference/write-verification.md#services)): **omitted = preserved** (the PUT merges
 it), `--via6=` is the rejected clear attempt (exit `2`), and only an action transition clears it.
 Since services cannot be deleted, the destructive clear is the explicit two-step flip
 (`service set <s> --action bypass`, then re-set spoof with `--via` only) — the hint spells it out
@@ -608,7 +616,7 @@ catalogue, not the profile's rules.
 
 ---
 
-## device (API: "endpoints")
+## device (API: "endpoints") (v0.4)
 
 | Command | Flags |
 | --- | --- |
@@ -623,7 +631,7 @@ catalogue, not the profile's rules.
 **JSON:** `{id, device_id, name, profile: {id, name}, status, analytics, clients, ips, learn_ip, ctrld: {version, status, last_fetch}, icon, resolvers, last_seen}`
 
 **Device lifecycle is four states, not a boolean** — `status` is the string
-`pending | active | soft-disabled | hard-disabled` (API ints 0-3, never exposed — D10). The two
+`pending | active | soft-disabled | hard-disabled` (API ints 0-3, never exposed — [D10](decisions.md#d10--never-make-users-type-magic-integers)). The two
 disabled modes differ materially: *soft* serves plain unfiltered DNS, *hard* serves none.
 `device update --status soft-disabled|hard-disabled|active` writes it (**PUT-only** — devices are
 born `pending` and flip to `active` on their first DNS query, not via the API; `--status active` on
@@ -636,7 +644,7 @@ alias — the boolean cannot say which disable it means.
   A duplicate name is a conflict (exit 6).
 - `--analytics none|some|full` <- the API's `stats` ints 0-2, named after its own `analytics levels`
   catalogue (`No/Some/Full Analytics`). Integers never appear in input or output
-  ([D10](decisions.md)); JSON `analytics` is the name, `null` when unset.
+  ([D10](decisions.md#d10--never-make-users-type-magic-integers)); JSON `analytics` is the name, `null` when unset.
 - **`ctrld`, `icon`, and `analytics` are optional** and absent on some devices — model them as `Option`.
 - `ctrld` reports the *daemon's* version on that endpoint. `device list` can surface
   `version != version_target` as an upgrade hint.
@@ -646,7 +654,7 @@ alias — the boolean cannot say which disable it means.
 
 ---
 
-## access, proxy
+## access, proxy (v0.4)
 
 | Command | Flags |
 | --- | --- |
@@ -665,13 +673,13 @@ alias — the boolean cannot say which disable it means.
   back, print a note to stderr that the list may be truncated.
 - `access add`/`access remove` take at most **50 IPs** per invocation (exit `2` above): the
   read-back window is those latest 50, so a larger add cannot be verified — and the form-var
-  ceiling is **unprobed for `ips[]`**; the cap keeps it unreachable ([D11](decisions.md)). After
+  ceiling is **unprobed for `ips[]`**; the cap keeps it unreachable ([D11](decisions.md#d11--form-encoded-hostnames-resolved-live)). After
   `access add`, read back and assert every IP is present — added IPs are the newest, so they sit
   inside the window.
 - `access remove` sends **one `DELETE` per IP**, mirroring `rule delete`. Read-back cannot prove a
   removal (an older IP may sit outside the 50-entry window), and the batch ack is `body: []` plus
   a human count that must never be parsed — so the per-request ack **is** the per-target outcome.
-  A mixed batch reports each IP's result through the same [D4](decisions.md) `details` contract;
+  A mixed batch reports each IP's result through the same [D4](decisions.md#d4--errors-json-on-stderr-stable-slugs-explicit-retryable) `details` contract;
   `retry_argv` covers only the failures.
 - **Proxy `code` (PK) is the legal `--via` value for `--action redirect`.** `proxy list` is therefore
   the discovery command for redirect targets — cross-reference it from `rule create --help`.
@@ -679,9 +687,9 @@ alias — the boolean cannot say which disable it means.
 
 ---
 
-## account, billing, analytics, misc
+## account, billing, analytics, misc (v0.4)
 
-> **`org` is deferred to a later release** ([D15](decisions.md)) — `cdctl` targets personal accounts.
+> **`org` is deferred to a later release** ([D15](decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes)) — `cdctl` targets personal accounts.
 > The `--org` flag arrives with the org commands; context-keyed config keeps them additive.
 > Reachable today via `cdctl api`.
 
@@ -690,7 +698,7 @@ alias — the boolean cannot say which disable it means.
 | `account get` | `EMAIL, VERIFIED, 2FA, REGION` | `{id, email, verified, created, twofa, region, proxy_access}` — `GET /users`, body flat, **no controller key** |
 | `billing products` | `PRODUCT, TYPE, EXPIRY` | `{id, name, type, expiry, proxy_access}` |
 | `billing subscriptions` | `SUBSCRIPTION, PRODUCT, STATE, NEXT BILL` | `{id, product: {id, name, type}, state, method, amount, currency, started, ended, next_bill}` |
-| `billing payments` | — | **Not in v1.** No probe account has payment history, so no schema can be verified — and a typed passthrough is exactly what [D2](decisions.md) forbids. Use `cdctl api /billing/payments`; the typed command ships once a real sanitized payload fixes the schema. |
+| `billing payments` | — | **Not in v1.** No probe account has payment history, so no schema can be verified — and a typed passthrough is exactly what [D2](decisions.md#d2--the-cli-is-the-stability-layer-own-the-output-schema) forbids. Use `cdctl api /billing/payments`; the typed command ships once a real sanitized payload fixes the schema. |
 | `analytics levels` | `LEVEL, TITLE` | `{level, title}` — upstream `PK` is an **int** (0/1/2) |
 | `analytics regions` | `REGION, TITLE, COUNTRY` | `{region, title, country}` — upstream `PK` is a **string** (`america`/`europe`/`asia`) |
 | `network` | `POP, CITY, COUNTRY, DNS, API, PROXY` | `{pops: [{pop, city, country, lat, lon, up: {dns, api, proxy}}], time, current_pop}` — `body` carries `time`/`current_pop` **siblings**; `up.*` are booleans (API sends 0/1) |
@@ -702,22 +710,22 @@ alias — the boolean cannot say which disable it means.
 
 | Command | stdout |
 | --- | --- |
-| `auth status` | `{authenticated, email, region, token_source}` — `token_source`: `env` \| `config`. Human mode: key/value lines. No token is the D4 envelope (`auth.missing_token`, exit `4`) — `authenticated: false` is never printed |
+| `auth status` | `{authenticated, email, region, token_source}` — `token_source`: `env` \| `config`. Human mode: key/value lines. No token is the [D4](decisions.md#d4--errors-json-on-stderr-stable-slugs-explicit-retryable) envelope (`auth.missing_token`, exit `4`) — `authenticated: false` is never printed |
 | `auth login` / `auth logout` | nothing — confirmation goes to stderr. An explicit `--json`/`--fields` is a usage error (exit `2`) like the artifact rows below; ambient `CONTROLD_OUTPUT=json` is ignored |
 | `config get <k>` / `config set <k> <v>` / `config path` | the raw value (nothing when unset) / nothing / the file path, respectively — never JSON; an explicit `--json`/`--fields` is a usage error (exit `2`) on all three, ambient `CONTROLD_OUTPUT=json` ignored. `config list` -> `{context: {value, source}, token: {set, source}, default_profile: {value, source}}`, `source`: `env` \| `config` \| `default` \| `null` — the token's *value* never prints |
 | `completions <shell>` / `reference` | the artifact itself (script / Markdown) — **not JSON**; an explicit `--json`/`--fields` is a usage error (exit 2), ambient `CONTROLD_OUTPUT=json` is ignored — an env-configured agent can still install completions |
-| `api ...` | the upstream body **verbatim**, byte-for-byte with no added newline (the binary `/mobileconfig` response survives piping) — unstable by design ([D9](decisions.md)); errors still classify to standard exit codes, with the literal noun `resource` in slugs (`resource.not_found`) — the passthrough cannot know what it touched. An explicit `--json`/`--fields` is a usage error (exit `2`) like the artifact rows — neither can be honored on a verbatim body; ambient `CONTROLD_OUTPUT=json` shapes only error rendering. A 2xx whose body carries no error marker is **success, whatever the body's shape** — typed writes demand `success: true`, but the passthrough cannot impose the envelope (the binary `/mobileconfig` case); confirming a raw write's effect means re-fetching state |
+| `api ...` | the upstream body **verbatim**, byte-for-byte with no added newline (the binary `/mobileconfig` response survives piping) — unstable by design ([D9](decisions.md#d9--cdctl-api-separately-gateable-get-by-default)); errors still classify to standard exit codes, with the literal noun `resource` in slugs (`resource.not_found`) — the passthrough cannot know what it touched. An explicit `--json`/`--fields` is a usage error (exit `2`) like the artifact rows — neither can be honored on a verbatim body; ambient `CONTROLD_OUTPUT=json` shapes only error rendering. A 2xx whose body carries no error marker is **success, whatever the body's shape** — typed writes demand `success: true`, but the passthrough cannot impose the envelope (the binary `/mobileconfig` case); confirming a raw write's effect means re-fetching state |
 
 ### `cdctl api` request encoding
 
-One exact encoding per input form — nothing is sniffed ([D16](decisions.md)):
+One exact encoding per input form — nothing is sniffed ([D16](decisions.md#d16--documented-surface-only)):
 
 | Input | Wire |
 | --- | --- |
 | `-F key=value` *(repeatable)* | `application/x-www-form-urlencoded` body. **Keys are sent literally** — write `-F 'hostnames[]=a' -F 'hostnames[]=b'` yourself; values are form-encoded, keys are never rewritten. Requires a non-GET `-X` (exit `2` otherwise — no documented GET takes a form body) |
 | `--input -` | stdin sent **verbatim** with `Content-Type: application/json` — the API's one JSON write is `PUT .../filters`. No validation, no reshaping. Requires a non-GET `-X <method>` (exit `2` otherwise — a GET never carries a body here) |
 | `-F` **and** `--input -` | mutually exclusive — exit `2` |
-| Query parameters | ride in the path: `cdctl api '/access?device_id=abc'` — taken verbatim; [D9](decisions.md) origin rules still apply |
+| Query parameters | ride in the path: `cdctl api '/access?device_id=abc'` — taken verbatim; [D9](decisions.md#d9--cdctl-api-separately-gateable-get-by-default) origin rules still apply |
 | `DELETE` with a body | `-X DELETE -F 'ips[]=1.2.3.4' -F device_id=abc` — covers `DELETE /access` |
 
 ---
@@ -737,7 +745,7 @@ lifetime; do not cache across runs.
 
 ---
 
-## Confirmation matrix ([D8](decisions.md))
+## Confirmation matrix ([D8](decisions.md#d8--tiered-confirmation))
 
 | Operation | TTY | Non-TTY |
 | --- | --- | --- |
@@ -745,9 +753,9 @@ lifetime; do not cache across runs.
 | `folder delete` (deletes contained rules) | prompt, **state the rule count** | needs `--yes` |
 | `profile delete`, `device delete` | `--confirm=<name>` | `--confirm=<name>` — `--yes` alone is **not** enough |
 | `org update` | `--confirm=<org>` + **"this is billable"** | same |
-| `api` with a non-GET `-X` | needs `--yes`, else exit `7` (`confirmation.required`) — **never prompts**, the escape hatch is gated, not conversational ([D9](decisions.md)) | same |
+| `api` with a non-GET `-X` | needs `--yes`, else exit `7` (`confirmation.required`) — **never prompts**, the escape hatch is gated, not conversational ([D9](decisions.md#d9--cdctl-api-separately-gateable-get-by-default)) | same |
 
 `--yes` is **ignored when the target is implicit** — the profile came from the config file's
-`default_profile`. `--profile` and `CONTROLD_PROFILE` both count as **explicit** ([D8](decisions.md)),
+`default_profile`. `--profile` and `CONTROLD_PROFILE` both count as **explicit** ([D8](decisions.md#d8--tiered-confirmation)),
 so env-configured agents keep `--yes`. Deleting the wrong profile because it was the default is the
 failure mode worth designing out.

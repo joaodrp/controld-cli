@@ -49,6 +49,9 @@ not 401. Special-case it to `auth.*` (exit 4). Every other `400xx` is genuine va
 | `40003` | 400 | `Via_v6 must be a minimum of 1 characters` *(empty `via_v6=` — there is no clear)* | `request.invalid` | 1 |
 | `40003` | 400 | `Invalid service rule action was provided` *(`via_v6=0` on a service — a distinct wording from the rule variant)* | `request.invalid` | 1 |
 | `40003` | 400 | `You have reached the maximum number of custom rules` | `request.invalid` | 1 |
+| `40003` | 400 | `Custom Rule does not exist` *(`PUT /rules` targeting a hostname with no existing rule — no upsert)* | `request.invalid` | 1 |
+| `40003` | 400 | `Invalid hostname was supplied` *(a hostname containing `%` or `?` at create)* | `request.invalid` | 1 |
+| `40003` | 400 | `This folder does not exist` *(the `{folder}` path segment was a name, not the integer `PK`)* | `request.invalid` | 1 |
 | `40201` | **402** | `You need the Full Control plan to perform this action.` | `plan.upgrade_required` | 5 |
 | `40401` | 404 | `No such group exists.` | `folder.not_found` | 3 |
 | `40401` | 404 | `Invalid category` | `category.not_found` | 3 |
@@ -72,7 +75,7 @@ do must be one of Array
 
 **Never assume one line. Never parse it.** Human mode collapses CR/LF/TAB to spaces and **strips
 every other C0/DEL control** (ANSI escapes included) — the `error: ...` line stays single-line and
-upstream bytes never rewrite the terminal ([D4](../decisions.md)); JSON `upstream.message` carries the
+upstream bytes never rewrite the terminal ([D4](../decisions.md#d4--errors-json-on-stderr-stable-slugs-explicit-retryable)); JSON `upstream.message` carries the
 verbatim text, and `--debug` renders it JSON-escaped — visible, never executable.
 
 ## Refining `400` by message — best-effort, by design
@@ -100,7 +103,7 @@ retry. Agents must treat exit 6 as a convenience, never as the only way conflict
 | `success: false`, `error` or `error.code` missing | classify on the HTTP status prefix |
 | non-JSON or empty body, non-2xx | synthesize `upstream.error` from the HTTP status (5xx -> exit 8) |
 | **2xx** with unparseable body | `upstream.error`, exit 8 — success cannot be confirmed |
-| `error.code` prefix != HTTP status | trust `error.code` (D4b); surface the mismatch under `--debug` |
+| `error.code` prefix != HTTP status | trust `error.code` ([D4b](../decisions.md#d4b--classify-on-the-prefix-of-errorcode-not-a-table)); surface the mismatch under `--debug` |
 | `error.code` with no plausible status prefix (100-599) | classify on the HTTP status |
 
 ## Empty / non-JSON bodies

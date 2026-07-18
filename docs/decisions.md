@@ -126,7 +126,7 @@ contract is the **complete envelope**, not fragments:
       "retry_argv": [                   // resolved ids, never names/defaults
         "cdctl", "rule", "create", "b.com",
         "--action", "block",
-        "--profile", "697994madigo"
+        "--profile", "123456abcdefg"
       ]
     },
     "hint": "Re-run retry_argv; it covers only the failed targets."
@@ -174,7 +174,7 @@ contract is the **complete envelope**, not fragments:
 ```
 
 The `unconvergeable` variant covers desired states the API cannot reach
-([write-verification](reference/write-verification.md)); `reason` is a stable slug and the
+([write-verification](reference/write-verification.md#via_v6-cannot-be-cleared-probed-2026-07-11-rule-was-do2-via1920210-via_v62001db81)); `reason` is a stable slug and the
 `current_*`/`desired_*` members are `null` when a future reason doesn't use them.
 
 `outcome` is `"landed" | "failed" | "skipped"` (skipped = not attempted after an abort).
@@ -198,13 +198,13 @@ stderr.
 
 Only **five** distinct codes are known (`40001`, `40002`, `40003`, `40201`, `40401`), and `40003` alone
 carries **a still-growing list of unrelated meanings** — every probe session adds to the observed
-table in [error-codes.md](reference/error-codes.md). A lookup table would be worthless.
+table in [error-codes.md](reference/error-codes.md#observed-codes--the-entire-known-universe). A lookup table would be worthless.
 
 Control D document the structure: *"first 3 digits match the HTTP status."* So classify on the prefix
 — it's total, and a code we've never seen still resolves correctly.
 
 **The trap:** `400` is overloaded. Auth runs before routing, so a bad token is `400`/`40001`, not 401.
-Special-case it. Full table: [reference/error-codes.md](reference/error-codes.md).
+Special-case it. Full table: [reference/error-codes.md](reference/error-codes.md#observed-codes--the-entire-known-universe).
 
 ## D5 — Nine exit codes, exactly **one** retryable
 
@@ -331,14 +331,14 @@ One flag group, reused by `rule`, `folder`, `service`, `profile default`:
 
 `--enabled/--disabled` is **orthogonal** to `--action`. The CLI's biggest ergonomic win over `curl`.
 
-## D11 — Form-encoded, `hostnames[]` :white_check_mark: *resolved live*
+## D11 — Form-encoded, `hostnames[]`, resolved live
 
 Send what the spec declares: form for the 18 writes, JSON for `PUT .../filters`. Arrays as
 **`hostnames[]=a&hostnames[]=b`**.
 
 **The "contradiction" never existed** — bracket and indexed both work. The *bare repeat* fails, and
 that's what Go/Python emit by default. Root cause: **the backend is PHP** (it leaked a `print_r()`
-dump into an error). Details: [reference/write-verification.md](reference/write-verification.md).
+dump into an error). Details: [reference/write-verification.md](reference/write-verification.md#array-encoding--there-was-never-a-contradiction).
 
 Consequences:
 
@@ -386,7 +386,7 @@ with the first colored output.
 Dev: `wiremock`, `assert_cmd`, `insta`, `predicates`, `nix` (the SIGINT test).
 
 Latest stable versions at implementation time; exact pins live in `Cargo.toml`, and the
-edition/MSRV choice in [AGENTS.md](../AGENTS.md).
+edition/MSRV choice in [AGENTS.md](../AGENTS.md#build-and-test).
 
 `reqwest::blocking` is *not* tokio-free (it spawns a runtime thread), so "blocking to avoid tokio" is a
 myth — hence async.
@@ -499,15 +499,15 @@ its integration point.
 2. **Rate limits** — never observed.
 3. **The `[]`-shaped default rule** — never reproduced; spec says it can happen. Tolerate both.
 4. **`icon` on `PUT /devices`, `profile_id2` read-back, `lock_status` values** — unprobed, low-stakes.
-5. **`dropdown` option writes** (`PUT /options/{name}` with `value`) — unprobed; verify before Phase 4.
+5. **`dropdown` option writes** (`PUT /options/{name}` with `value`) — unprobed; verify before v0.3.
 6. **`billing payments` schema** — needs one real sanitized payload; the typed command waits on it.
 7. **Level-less filter writes** (`PUT /filters/filter/{family}` for families without `levels[]`,
-   e.g. `noai`) — unprobed; verify before Phase 4.
+   e.g. `noai`) — unprobed; verify before v0.3.
 8. **The `ips[]` form-variable ceiling** (`POST /access`) — unprobed; the 50-IP cap keeps it
    unreachable.
 9. **Percent-encoded bracket keys** :white_check_mark: *resolved* — form bodies are hand-built:
    keys verbatim, values percent-encoded. Every write (typed and `cdctl api -F`) sends the literal
    `hostnames[]=` form live verification proved, so the probe of the `%5B%5D` form is moot. (The
    original note claimed `cdctl api -F` already sent literal keys — it did not: reqwest's form
-   encoder emitted `hostnames%5B%5D=` there too, and the Phase 2 wire test had pinned the encoded
+   encoder emitted `hostnames%5B%5D=` there too, and an earlier `cdctl api -F` wire test had pinned the encoded
    form under a test name that said otherwise.)

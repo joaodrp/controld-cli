@@ -96,12 +96,12 @@ pub enum Details {
     },
     #[allow(
         dead_code,
-        reason = "constructed from Phase 4 (rule import collisions); schema frozen here"
+        reason = "constructed from `rule import` (v0.2, collisions); schema frozen here"
     )]
     Collisions { collisions: Vec<Collision> },
     #[allow(
         dead_code,
-        reason = "constructed from Phase 4 (rule import unconvergeable states); schema frozen here"
+        reason = "constructed from `rule import` (v0.2, unconvergeable states); schema frozen here"
     )]
     Unconvergeable { rules: Vec<UnconvergeableRule> },
 }
@@ -721,6 +721,27 @@ mod tests {
                 40003,
                 "You have reached the maximum number of custom rules",
                 "rule",
+                "request.invalid",
+                Exit::Generic,
+            ),
+            (
+                40003,
+                "Custom Rule does not exist",
+                "rule",
+                "request.invalid",
+                Exit::Generic,
+            ),
+            (
+                40003,
+                "Invalid hostname was supplied",
+                "rule",
+                "request.invalid",
+                Exit::Generic,
+            ),
+            (
+                40003,
+                "This folder does not exist",
+                "folder",
                 "request.invalid",
                 Exit::Generic,
             ),

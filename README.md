@@ -36,7 +36,7 @@ Linux (gnu, musl), macOS (arm64, x64), Windows.
 $ cargo install controld-cli
 ```
 
-> The musl binary reads OS CA certificates at runtime — in a certless image, install/mount them or set `SSL_CERT_FILE` ([D14](docs/decisions.md)).
+> The musl binary reads OS CA certificates at runtime — in a certless image, install/mount them or set `SSL_CERT_FILE` ([D14](docs/decisions.md#d14--distribution)).
 
 ### Shell completions and man pages
 
@@ -72,7 +72,7 @@ $ cdctl rule delete ads.example.com --profile Home --yes
 
 ## Scope
 
-**Personal accounts.** Organization endpoints are deferred ([D15](docs/decisions.md)) — untestable on a
+**Personal accounts.** Organization endpoints are deferred ([D15](docs/decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes)) — untestable on a
 personal account. The design keeps them additive.
 
 ## Docs
@@ -113,7 +113,7 @@ $ cp .env.example .env
 
 The token from `.env` is for the live suite and manual probes only — plain `cargo test` stays
 network-free. Live tests confine their writes to a temporary `cdctl-test-*` profile they create and
-delete ([docs/testing.md](docs/testing.md)); manual probes mutate whatever you point them at. A free
+delete ([docs/testing.md, Live-test isolation](docs/testing.md#live-test-isolation)); manual probes mutate whatever you point them at. A free
 trial account is the safe default.
 
 `tests/fixtures/api/` holds **real API responses** (sanitized), covering every deserialization hazard

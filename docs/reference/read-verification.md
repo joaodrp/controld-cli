@@ -28,7 +28,7 @@ not a 404. All of these are `400` / `40001`:
 
 - no token, bad token, nonexistent path with no token
 
-**Classify on `error.code`, never on the HTTP status.** See [error-codes.md](error-codes.md).
+**Classify on `error.code`, never on the HTTP status.** See [error-codes.md](error-codes.md#classify-on-the-prefix-not-the-code).
 
 ## Listing root rules: the docs offer two ways, one is false — and the working one isn't "all rules"
 

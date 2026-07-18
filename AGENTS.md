@@ -6,7 +6,7 @@ Instructions for any coding agent working in this repository (see [agents.md](ht
 
 `cdctl` — a CLI for the **Control D REST API** (`https://api.controld.com`), in Rust. Crate/repo
 `controld-cli`, binary **`cdctl`** — **never rename the binary to `controld`**: Control D's DNS
-daemon is already `ctrld`, and a trailing `-d` reads as daemon (D1). `cdctl` manages the *account*
+daemon is already `ctrld`, and a trailing `-d` reads as daemon ([D1](docs/decisions.md#d1--crate-controld-cli-binary-cdctl)). `cdctl` manages the *account*
 over REST; [`ctrld`](https://github.com/Control-D-Inc/ctrld) runs DNS on the machine. They coexist.
 
 Delivery is sliced per [`docs/roadmap.md`](docs/roadmap.md).
@@ -45,14 +45,14 @@ re-fetches the OpenAPI spec and fails if the 46 docs pages disagree. `.env` supp
 
 Toolchain: edition 2024, MSRV 1.85 (the first release with edition-2024 support; development uses
 latest stable) — exact dependency pins live in `Cargo.toml`, the async/rustls stack rationale in
-[decisions.md](docs/decisions.md).
+[decisions.md, D13](docs/decisions.md#d13--rust-stack-compile-verified-july-2026).
 
 ### The account behind `.env`
 
 **Never assume it is disposable.** It may be someone's real account, and mutating it rewrites live
 DNS behavior — some contributors will knowingly test against their own account, and that's their
 call, not yours. Confine live probes to a temporary `cdctl-test-<timestamp>-<nonce>` profile and
-delete it afterwards ([`docs/testing.md`](docs/testing.md), Live-test isolation). Never touch
+delete it afterwards ([`docs/testing.md`, Live-test isolation](docs/testing.md#live-test-isolation)). Never touch
 pre-existing profiles without the user saying so.
 
 Never pass the token on a command line (`-H "Authorization: Bearer ..."`); argv is world-readable
@@ -107,7 +107,7 @@ ever contradicts this list, update the reference doc and this index.**
 - **`content-type: application/json` can carry a 0-byte body.**
 - **Error messages can be multi-line dumps** — never parse them.
 - **`error.code` is a coarse bucket** — classify on its 3-digit HTTP prefix
-  ([`error-codes.md`](docs/reference/error-codes.md)).
+  ([`error-codes.md`](docs/reference/error-codes.md#classify-on-the-prefix-not-the-code)).
 - **Filter level names cannot be constructed** — read `levels[]`.
 - **Writes are form-encoded and the server silently drops form variables past ~1001** — chunk at
   500, scalars first, then **re-fetch and verify the full desired state** (action, enabled,
@@ -117,19 +117,22 @@ ever contradicts this list, update the reference doc and this index.**
   `success`/`error` only.
 - **`DELETE` of a non-matching hostname returns `success: true`** (`"Custom rule(s) deleted"`) —
   a silent no-op. Delete success proves nothing; check existence before, not after.
+- **`PUT /rules` never upserts** — an unknown hostname 400s `Custom Rule does not exist`, and
+  target matching is case-sensitive while `PK`s store case-preserved — pre-check existence and
+  resolve case before writing.
 
 ## Contracts that are public API
 
 Breaking either is a semver-major event. Test them like it.
 
 - **Exit codes:** `0` ok, `1` generic, `2` usage, `3` not found, `4` auth, `5` forbidden/plan,
-  `6` conflict, `7` confirmation required, **`8` retryable**, `130` SIGINT. Exit `8` is retryable;
-  everything else is terminal.
+  `6` conflict, `7` confirmation required, **`8` retryable**, `130` SIGINT, `141` broken pipe
+  (SIGPIPE, Unix). Exit `8` is retryable; everything else is terminal.
 - **Output:** stdout carries **only** data — valid JSON or nothing; diagnostics go to stderr. The
-  JSON schema is ours, normalized (D2): `PK` and raw `do`/`status` integers never appear.
+  JSON schema is ours, normalized ([D2](docs/decisions.md#d2--the-cli-is-the-stability-layer-own-the-output-schema)): `PK` and raw `do`/`status` integers never appear.
 
 ## Scope
 
-Personal accounts, documented API surface only (D15, D16). Org support must stay additive;
+Personal accounts, documented API surface only ([D15](docs/decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes), [D16](docs/decisions.md#d16--documented-surface-only)). Org support must stay additive;
 `cdctl api` is the escape hatch for everything else.
 

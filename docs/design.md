@@ -31,13 +31,13 @@ $ cdctl device list --json
 | `--json` | `CONTROLD_OUTPUT=json` | Full document. Boolean — an optional value would swallow the next positional (clap parses `--json <positional>` as the field list). |
 | `--fields <a,b>` | | Select JSON fields; implies `--json`. |
 | `--plain` | | Tables without borders/color — for `awk`/`cut`. |
-| `-y, --yes` | | Skip confirmation. **Ignored when the target is implicit** (D8). |
-| `-n, --dry-run` | | **Typed remote mutations only** (Phase-4 writes + `rule import`/`restore`): resolve and validate everything, print the request/domain plan, persist nothing — no HTTP write, no config change, no file created. Exit `0`. Excluded from `cdctl api` (D9). Contract in [commands.md](commands.md#dry-run). |
+| `-y, --yes` | | Skip confirmation. **Ignored when the target is implicit** ([D8](decisions.md#d8--tiered-confirmation)). |
+| `-n, --dry-run` | | **Every typed remote mutation** (`rule import`/`restore` join in v0.2): resolve and validate everything, print the request/domain plan, persist nothing — no HTTP write, no config change, no file created. Exit `0`. Excluded from `cdctl api` ([D9](decisions.md#d9--cdctl-api-separately-gateable-get-by-default)). Contract in [commands.md](commands.md#dry-run). |
 | `--no-retry` | | Disable automatic retries. |
-| `--timeout <secs>` | | Per-request cap; default 30 s total, 10 s connect (D12). A hang is worse than a fast failure. |
+| `--timeout <secs>` | | Per-request cap; default 30 s total, 10 s connect ([D12](decisions.md#d12--rate-limiting-reactive-not-predictive)). A hang is worse than a fast failure. |
 | `--debug` | | Request/response trace to stderr, including `x-controld-pop`/`x-controld-srv`. Token always redacted; upstream bytes JSON-escaped — control sequences never reach the terminal raw. |
 
-**No `--token` flag** — argv is world-readable (D6). Use `CONTROLD_API_TOKEN` or `cdctl auth login --token-stdin`.
+**No `--token` flag** — argv is world-readable ([D6](decisions.md#d6--auth-env-or-stdin-no---token-flag-no-keyring)). Use `CONTROLD_API_TOKEN` or `cdctl auth login --token-stdin`.
 
 **No `-v` short flag** — the version/verbose ambiguity isn't worth it; `--version` and `--debug`
 are explicit.
@@ -46,14 +46,14 @@ are explicit.
 
 ```console
 $ cdctl rule list
-info: using profile "Home" (697994madigo) from config     # <- stderr, keeps implicit state honest
+info: using default profile "Home" (123456abcdefg) from config     # <- stderr, keeps implicit state honest
 ```
 
 ---
 
 ## Endpoint coverage — 40 mapped for v1, 5 deferred (org), 1 deferred pending schema (billing payments)
 
-> **Delivery is vertically sliced ([D17](decisions.md)):**
+> **Delivery is vertically sliced ([D17](decisions.md#d17--ship-in-vertical-slices-not-all-40-operations-at-once)):**
 >
 > - v0.1 — `cdctl api`, profiles (list/get), rules, folders
 > - v0.2 — `rule import`/`restore`
@@ -87,8 +87,8 @@ spec's folder path parameter is literally `{folder}`).
 | --- | --- |
 | `rule list [--folder <id>]` | No `--folder`: **`GET /profiles/{id}/rules`** (segment **omitted**) — returns *root rules only*, unioned client-side with one `GET .../rules/{folder_id}` per folder (ids from `GET /profiles/{id}/groups`), since the root listing alone omits every foldered rule. :warning: The docs also offer `folder_id=0` for root; **that 404s**. With `--folder`, just `GET /profiles/{id}/rules/{folder_id}` |
 | `rule create <hostname>... --action <a>` | `POST /profiles/{profile_id}/rules` |
-| `rule update <hostname> ...` | `PUT /profiles/{profile_id}/rules` |
-| `rule delete <hostname>` | `DELETE /profiles/{profile_id}/rules/{hostname}` — hostname may be a wildcard; **percent-encode carefully** |
+| `rule update <hostname>...` | `PUT /profiles/{profile_id}/rules` |
+| `rule delete <hostname>...` | `DELETE /profiles/{profile_id}/rules/{hostname}` — hostname may be a wildcard; **percent-encode carefully** |
 | `rule import <file>` | bulk; see below |
 | `rule restore <manifest>` | `POST /profiles/{profile_id}/rules` — chunked recreate from a local restore manifest |
 
@@ -142,7 +142,7 @@ spec's folder path parameter is literally `{folder}`).
 | `access remove --device <id> --ip <ip>` | `DELETE /access` — **a DELETE with a body** |
 | `proxy list` | `GET /proxies` — PKs are the legal `--via` values for `redirect` |
 | `account get` | `GET /users` — body is the user object, **no controller key** |
-| `billing products`, `billing subscriptions` | `GET /billing/products`, `GET /billing/subscriptions` — `billing payments` is **deferred** (no verifiable schema exists; D2); reachable via `cdctl api` |
+| `billing products`, `billing subscriptions` | `GET /billing/products`, `GET /billing/subscriptions` — `billing payments` is **deferred** (no verifiable schema exists; [D2](decisions.md#d2--the-cli-is-the-stability-layer-own-the-output-schema)); reachable via `cdctl api` |
 | `analytics levels`, `analytics regions` | `GET /analytics/levels`, `GET /analytics/endpoints` |
 | `network`, `ip` | `GET /network`, `GET /ip` |
 
@@ -152,7 +152,7 @@ spec's folder path parameter is literally `{folder}`).
 > **`GET /mobileconfig/{device_id}`** is documented on the docs site but absent from the spec's 46
 > operations (binary `.mobileconfig` response). No typed command; `cdctl api` reaches it.
 
-### org — **deferred to a later release** ([D15](decisions.md))
+### org — **deferred to a later release** ([D15](decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes))
 
 `cdctl` targets **personal accounts**. The five organization operations are documented and specified
 but **not implemented in v1**. They are a business feature, and a personal account cannot test them
@@ -171,7 +171,7 @@ but **not implemented in v1**. They are a business feature, and a personal accou
 
 The `--org` global flag (wired to the documented `X-Force-Org-Id` header) arrives **with** the org
 commands: adding an optional flag later is not a breaking change, and its live effect cannot be
-verified on a personal account today ([D15](decisions.md)).
+verified on a personal account today ([D15](decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes)).
 
 Until then, `cdctl api /organizations/organization` reaches them.
 
@@ -181,12 +181,12 @@ Until then, `cdctl api /organizations/organization` reaches them.
 | --- | --- |
 | `auth login --token-stdin`, `auth status`, `auth logout` | Tokens are dashboard-issued only — **no OAuth/device flow is possible** |
 | `config get/set/list/path` | `$XDG_CONFIG_HOME/cdctl/config.toml`, mode `0600` |
-| `api <path> [-X <method>] [-F k=v]... [--input -]` | Raw passthrough (D9). **GET by default**; non-GET needs `-X <method>` **and** `--yes`; both body forms (`-F`, `--input -`) require a non-GET `-X`. A distinct verb so sandboxes can deny `Bash(cdctl api:*)` while allowing `Bash(cdctl:*)`. Encoding is explicit, never sniffed — [commands.md](commands.md#cdctl-api-request-encoding) |
-| `completions <shell>`, `reference` | Must work **without a token** (D7) |
+| `api <path> [-X <method>] [-F k=v]... [--input -]` | Raw passthrough ([D9](decisions.md#d9--cdctl-api-separately-gateable-get-by-default)). **GET by default**; non-GET needs `-X <method>` **and** `--yes`; both body forms (`-F`, `--input -`) require a non-GET `-X`. A distinct verb so sandboxes can deny `Bash(cdctl api:*)` while allowing `Bash(cdctl:*)`. Encoding is explicit, never sniffed — [commands.md](commands.md#cdctl-api-request-encoding) |
+| `completions <shell>`, `reference` | Must work **without a token** ([D7](decisions.md#d7--resolve-auth-lazily)) |
 
 **Coverage: 40/46 operations mapped for v1. The 5 `organizations/*` operations are deferred by scope
-([D15](decisions.md)); `billing payments` is deferred until a real payload makes its schema
-verifiable ([D2](decisions.md)). All are reachable today via `cdctl api`.**
+([D15](decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes)); `billing payments` is deferred until a real payload makes its schema
+verifiable ([D2](decisions.md#d2--the-cli-is-the-stability-layer-own-the-output-schema)). All are reachable today via `cdctl api`.**
 
 Plus one shape absent from the spec's `paths` object: **`GET /profiles/{id}/rules`** with the folder
 segment omitted. Only the prose of the `folder_id` parameter description documents it — and that
@@ -198,7 +198,7 @@ this form, and a client generated from the spec alone would never find it.
 ## The shared action model
 
 `do`/`status` recur across rules, folders, services, and the default rule. One flag group, reused
-four times. **Users never type the magic integers** (D10).
+four times. **Users never type the magic integers** ([D10](decisions.md#d10--never-make-users-type-magic-integers)).
 
 ```
 --action block|bypass|spoof|redirect     # do = 0|1|2|3
@@ -214,9 +214,9 @@ not an allow.
 ## Output contract
 
 stdout carries **only** data. Diagnostics, prompts, and errors go to stderr. JSON is always
-**pretty-printed** — 2-space indent, stable key order — identical piped or not (D3). Tables escape
+**pretty-printed** — 2-space indent, stable key order — identical piped or not ([D3](decisions.md#d3--no-tty-based-format-switching)). Tables escape
 C0/DEL controls in server-supplied strings (`\x1b` -> `^[`) — a resource name must never rewrite the
-terminal (the D4 rule, applied to success output).
+terminal (the [D4](decisions.md#d4--errors-json-on-stderr-stable-slugs-explicit-retryable) rule, applied to success output).
 
 ```console
 $ cdctl rule list --json
@@ -244,7 +244,7 @@ $ cdctl rule list --json
 ]
 ```
 
-Normalized, not passed through (D2): `do:0` -> `"action":"block"`, `status:1` -> `"enabled":true`,
+Normalized, not passed through ([D2](decisions.md#d2--the-cli-is-the-stability-layer-own-the-output-schema)): `do:0` -> `"action":"block"`, `status:1` -> `"enabled":true`,
 `group:0` -> `"folder":null`, `PK` -> `"hostname"`.
 
 ### Errors
@@ -275,7 +275,7 @@ $ echo $?
 **Exit code 8 is retryable. Everything else is terminal.** The full set: `0` ok, `1` generic,
 `2` usage, `3` not found, `4` auth, `5` forbidden/plan, `6` conflict, `7` confirmation required,
 `8` retryable, `130` SIGINT, `141` SIGPIPE (Unix). Rationale:
-[decisions.md](decisions.md#d5--exit-codes-nine-with-exactly-one-retryable).
+[decisions.md](decisions.md#d5--nine-exit-codes-exactly-one-retryable).
 
 An empty result is **exit 0**, not an error. A read-scoped token used for a write **fails loudly**
 with exit `5` — never a silently filtered result.
@@ -302,7 +302,7 @@ with exit `5` — never a silently filtered result.
 - `cdctl reference` — the entire command surface as one pipeable Markdown document. Works without
   a token.
 - **No machine-readable command manifest in v1.** Command metadata stays centralized and derivable so
-  a versioned spec can be generated post-v1 when a real consumer needs it ([D3](decisions.md)).
+  a versioned spec can be generated post-v1 when a real consumer needs it ([D3](decisions.md#d3--no-tty-based-format-switching)).
 - `AGENTS.md` at the repo root (the [agents.md](https://agents.md) convention — instructions any
   coding agent reads): the `ctrld` disambiguation, the exit-code contract and retryable set, the
   always-`--json` rule, the stdout/stderr split, the no-token-in-argv rule, the **read-only-token**

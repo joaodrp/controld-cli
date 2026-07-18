@@ -1,7 +1,7 @@
 # Roadmap
 
 What ships next, in what order, and the test gates each slice must pass. Delivery is vertically
-sliced ([D17](decisions.md)): v0.1 freezes every global contract, so later slices only add
+sliced ([D17](decisions.md#d17--ship-in-vertical-slices-not-all-40-operations-at-once)): v0.1 freezes every global contract, so later slices only add
 commands. Anything not yet typed is reachable via `cdctl api` today.
 
 Current state: **v0.1 is code-complete on `main`** (core, `cdctl api`, `profile list/get`,
@@ -32,7 +32,7 @@ Provable only when the release runs:
 ## v0.2 — `rule import` + `rule restore`
 
 The feature that justifies the project — two blocklist-sync tools exist because it doesn't.
-Full semantics in [commands.md](commands.md#rule-import-semantics): **folder-scoped**
+Full semantics in [commands.md](commands.md#rule-import-semantics-v02): **folder-scoped**
 diff -> converge -> add over one **profile-wide** fetch — quota against the **10,000 rules/profile
 cap**, cross-folder collisions fail fast (exit `6`, nothing written) — chunks of **500** with
 scalar params first, **full desired-state verification** after every chunk plus a final full-scope
@@ -41,7 +41,7 @@ pass (the silent ~1001-var truncation makes 200 meaningless alone), idempotent r
 delete-first needs `--force-delete-first` and writes a versioned JSON restore manifest
 (`rule restore` replays it). One request per deletion (no bulk delete). Missing hostnames are
 created via `POST` — `PUT /rules` rejects targets with no existing rule
-([write-verification](reference/write-verification.md)). HaGeZi-scale lists (~100k) **cannot
+([write-verification](reference/write-verification.md#put-rules-does-not-upsert-via-case-is-preserved--reject-at-create-probed-2026-07-18)). HaGeZi-scale lists (~100k) **cannot
 fit** — point users at Control D's native filters.
 
 **Parked decisions for this slice:**
@@ -88,7 +88,7 @@ fit** — point users at Control D's native filters.
 `filter list/enable/disable/set`, `service list/set/categories/catalog`
 
 - Live probes owed **before the gate**: the `dropdown` option write and the level-less filter
-  write (Open items 5 and 7, [decisions.md](decisions.md)) — captured as sanitized fixtures.
+  write (Open items 5 and 7, [decisions.md](decisions.md#open)) — captured as sanitized fixtures.
 
 **Gate** *(v0.1 global gates inherited)*:
 
@@ -106,10 +106,10 @@ fit** — point users at Control D's native filters.
 
 `device list/get/create/update/delete/types`, `access list/add/remove`, `proxy list`,
 `analytics levels/regions`, `account get`, `billing products/subscriptions` *(payments deferred
-— no verifiable schema, [D2](decisions.md))*, `network`, `ip`
+— no verifiable schema, [D2](decisions.md#d2--the-cli-is-the-stability-layer-own-the-output-schema))*, `network`, `ip`
 
 - `device get` is a **client-side filter** — no `GET /devices/{id}` exists.
-- Multi-target cap ([D11](decisions.md)): **50 IPs** on `access add/remove`.
+- Multi-target cap ([D11](decisions.md#d11--form-encoded-hostnames-resolved-live)): **50 IPs** on `access add/remove`.
 
 **Gate** *(v0.1 global gates inherited)*:
 
@@ -123,12 +123,12 @@ fit** — point users at Control D's native filters.
 
 ## 1.0
 
-The full mapped surface: 40/46 operations — org ([D15](decisions.md)) and `billing payments`
-([D2](decisions.md)) stay deferred, reachable via `cdctl api`. 1.0 declares the contracts, frozen
+The full mapped surface: 40/46 operations — org ([D15](decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes)) and `billing payments`
+([D2](decisions.md#d2--the-cli-is-the-stability-layer-own-the-output-schema)) stay deferred, reachable via `cdctl api`. 1.0 declares the contracts, frozen
 since v0.1, semver-guaranteed.
 
 ## Post-1.0 candidates
 
 - **Machine-readable command spec** — generate a versioned schema from the same centralized
   metadata that drives clap and `cdctl reference`; implement only when a concrete consumer
-  exists. No handwritten parallel contract ([D3](decisions.md)).
+  exists. No handwritten parallel contract ([D3](decisions.md#d3--no-tty-based-format-switching)).

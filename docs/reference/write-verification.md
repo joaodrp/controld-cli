@@ -1,7 +1,7 @@
 # Write Verification
 
 Live `POST`/`PUT`/`DELETE` against a throwaway trial account (personal, plan "Try Control").
-Probed across multiple sessions (latest 2026-07-11); the account is left empty after each.
+Probed across multiple sessions (latest 2026-07-18); the account is left empty after each.
 
 ## Array encoding — there was never a contradiction
 
@@ -38,9 +38,9 @@ can be multi-line. Never parse it.**
 ## Content-Type is ignored
 
 JSON body + form header -> 200. Form body + JSON header -> 200. The server sniffs the body.
-**We don't rely on it** — send what the spec declares ([D16](../decisions.md)).
+**We don't rely on it** — send what the spec declares ([D16](../decisions.md#d16--documented-surface-only)).
 
-## :warning: The 1001-variable silent truncation
+## The 1001-variable silent truncation
 
 **The server parses at most ~1001 form variables and silently discards the rest.** The request
 still returns 200. Measured on `POST /rules` (`do` + `status` + N `hostnames[]`):
@@ -101,7 +101,7 @@ No read-modify-write needed to toggle one field.
 only clearing mechanism is the action flip, whose intermediate state (a spoof rule momentarily
 bypassing) is an unprotected window `cdctl` never enters implicitly. Consequence: a desired state of
 `via6: null` against a live rule with `via_v6` set is **unconvergeable** — plans that require it
-fail fast before any mutation ([commands.md](../commands.md#rule-import-semantics)).
+fail fast before any mutation ([commands.md](../commands.md#rule-import-semantics-v02)).
 
 ## Folders
 
@@ -120,9 +120,9 @@ fail fast before any mutation ([commands.md](../commands.md#rule-import-semantic
   | spoof folder (`do=2, via=...`) -> `do=0` only | action changed and **`via` cleared** :white_check_mark: — same as rules; no stale remnant (fixture `write_folder_update.json`) |
 
   The PUT response carries the **full folder object** (the spec's empty response schema is wrong),
-  and the `{folder}` path segment must be the **integer `PK`** — the folder *name* 404s
-  (`40003 This folder does not exist`). In the create/update response, `group` holds the name and
-  `PK` the id.
+  and the `{folder}` path segment must be the **integer `PK`** — the folder *name* is rejected
+  (HTTP 400, `40003 This folder does not exist`). In the create/update response, `group` holds the
+  name and `PK` the id.
 - `DELETE /groups/{folder}` **without a body** -> :white_check_mark: 200. The spec's four required body fields are a
   copy-paste artifact from the PUT page.
 
@@ -188,7 +188,7 @@ disabled** — no removal exists. Invalid service -> 400 `40003 Invalid service 
 | `{"config":{}}` | 400 `40003 Invalid import file` |
 | any plausible `{"config":{group,rules}}` | **500, 0-byte body** |
 
-It validates, then 500s on every shape tried. Undocumented *and* broken -> **unused** (D16).
+It validates, then 500s on every shape tried. Undocumented *and* broken -> **unused** ([D16](../decisions.md#d16--documented-surface-only)).
 
 > **Robustness case, now a fixture:** a response can send `content-type: application/json` with a
 > **0-byte body**. Trusting the header and calling a JSON parser fails uselessly.

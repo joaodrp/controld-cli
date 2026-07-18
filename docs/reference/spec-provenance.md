@@ -44,7 +44,7 @@ The spec settles this: **18 writes are `application/x-www-form-urlencoded`; exac
 (`PUT /profiles/{id}/filters`) is `application/json`.**
 
 Live, the API **ignores `Content-Type` and sniffs the body** — undocumented, so we send what the spec
-declares ([D16](../decisions.md)).
+declares ([D16](../decisions.md#d16--documented-surface-only)).
 
 ## What the spec gets wrong or omits
 
@@ -63,5 +63,5 @@ Verified against the live API — see [read-verification.md](read-verification.m
 
 > *"The API has no versioning... breaking changes can be introduced without warning."*
 
-A design input, not a footnote. It justifies `cdctl api` (D9) and CI that re-fetches the spec and
+A design input, not a footnote. It justifies `cdctl api` ([D9](../decisions.md#d9--cdctl-api-separately-gateable-get-by-default)) and CI that re-fetches the spec and
 fails on drift.

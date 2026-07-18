@@ -107,7 +107,7 @@ Organization or Billing scopes is **[GAP]**.
 > :warning: So `body` has **three** shapes, not two. The unwrap key must be per-operation configuration
 > supporting *keyed*, *flat*, and *keyed-plus-siblings*. And on **error**, `body` is `[]` — an
 > **array** — regardless of the success shape. See
-> [read-verification.md section 1](read-verification.md#1-the-response-envelope-is-not-what-the-docs-describe).
+> [read-verification.md section 1](read-verification.md#the-envelope-has-three-shapes-not-one).
 
 ### Error envelope **[SPEC]**
 ```json
@@ -613,7 +613,7 @@ Delete folder **and all custom rules inside it**.
 ### `GET /profiles/{profile_id}/rules/{folder_id}` — Custom Rules - List
 Return custom rules in a folder. **For the root folder, OMIT the folder ID.**
 > :warning: **The docs also say you may pass `0`. You may not — it returns `404 "No such group exists."`**
-> Verified live. `0` is not a real folder. See [read-verification.md section 3](read-verification.md).
+> Verified live. `0` is not a real folder. See [read-verification.md section 3](read-verification.md#listing-root-rules-the-docs-offer-two-ways-one-is-false--and-the-working-one-isnt-all-rules).
 - Path: `profile_id` (string, required), `folder_id` (string, required in the schema, but the description
   says "Folder ID (**0 or omit for root**)" and the operation description says "For root folder, omit the
   folder ID"). So `GET /profiles/{profile_id}/rules` (no trailing segment) is valid. **[SPEC]**
