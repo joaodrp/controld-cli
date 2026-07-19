@@ -96,25 +96,27 @@ fn parse_timeout_secs(raw: &str) -> Result<u64, String> {
     }
 }
 
+// Declaration order is display order: the everyday commands lead, the
+// escape hatch and artifact commands trail.
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Raw request against the API origin (escape hatch, GET by default)
-    Api(ApiArgs),
     /// Authenticate cdctl with an API token
     #[command(subcommand)]
     Auth(AuthCommand),
     /// Inspect the account's profiles
     #[command(subcommand)]
     Profile(ProfileCommand),
-    /// Manage a profile's rule folders (API: groups)
-    #[command(subcommand)]
-    Folder(FolderCommand),
     /// Manage a profile's DNS rules
     #[command(subcommand)]
     Rule(RuleCommand),
+    /// Manage a profile's rule folders (API: groups)
+    #[command(subcommand)]
+    Folder(FolderCommand),
     /// Read and write cdctl's own configuration
     #[command(subcommand)]
     Config(ConfigCommand),
+    /// Raw request against the API origin (escape hatch, GET by default)
+    Api(ApiArgs),
     /// Shell completion script (works without a token)
     #[command(after_long_help = "Install:\n  \
         bash  cdctl completions bash > ~/.local/share/bash-completion/completions/cdctl\n  \

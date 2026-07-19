@@ -16,12 +16,12 @@ fn help_for(dir: &std::path::Path, args: &[&str]) -> String {
 fn help_snapshots() {
     let dir = tempdir();
     let nouns = [
-        "api",
         "auth",
         "profile",
-        "folder",
         "rule",
+        "folder",
         "config",
+        "api",
         "completions",
         "reference",
     ];
