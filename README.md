@@ -1,7 +1,7 @@
 <div align="center">
 
-![cdctl — Control D, from the command line](docs/assets/logo-dark.svg#gh-dark-mode-only)
-![cdctl — Control D, from the command line](docs/assets/logo-light.svg#gh-light-mode-only)
+![cdctl - Control D, from the command line](docs/assets/logo-dark.svg#gh-dark-mode-only)
+![cdctl - Control D, from the command line](docs/assets/logo-light.svg#gh-light-mode-only)
 
 [![CI](https://github.com/joaodrp/controld-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/joaodrp/controld-cli/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
@@ -14,6 +14,62 @@ CLI for the [Control D](https://controld.com) REST API. For humans, scripts, and
 > [!IMPORTANT]
 > Not [`ctrld`](https://github.com/Control-D-Inc/ctrld): that daemon runs your DNS; `cdctl` manages your account.
 > An independent project, not affiliated with Control D.
+
+`cdctl` manages a Control D account from the terminal: profiles, custom DNS rules, and rule
+folders, over the documented REST API. People get tables, everything else gets stable JSON.
+
+## A quick look
+
+```console
+$ cdctl rule create ads.example.com trackers.example.net --action block
+┌──────────────────────┬────────┬─────┬─────────┬────────┐
+│ HOSTNAME             ┆ ACTION ┆ VIA ┆ ENABLED ┆ FOLDER │
+╞══════════════════════╪════════╪═════╪═════════╪════════╡
+│ ads.example.com      ┆ block  ┆ -   ┆ true    ┆ -      │
+│ trackers.example.net ┆ block  ┆ -   ┆ true    ┆ -      │
+└──────────────────────┴────────┴─────┴─────────┴────────┘
+
+$ cdctl rule create tv.example.com --action spoof --via 192.0.2.10
+┌────────────────┬────────┬────────────┬─────────┬────────┐
+│ HOSTNAME       ┆ ACTION ┆ VIA        ┆ ENABLED ┆ FOLDER │
+╞════════════════╪════════╪════════════╪═════════╪════════╡
+│ tv.example.com ┆ spoof  ┆ 192.0.2.10 ┆ true    ┆ -      │
+└────────────────┴────────┴────────────┴─────────┴────────┘
+
+$ cdctl rule list --fields hostname,action
+[
+  {
+    "hostname": "ads.example.com",
+    "action": "block"
+  },
+  {
+    "hostname": "trackers.example.net",
+    "action": "block"
+  },
+  {
+    "hostname": "tv.example.com",
+    "action": "spoof"
+  }
+]
+```
+
+## Highlights
+
+- Verified writes. The API can acknowledge a write it did not apply, so every mutation is read
+  back and compared before `cdctl` reports success.
+- Safe by default. Every mutation takes `-n`/`--dry-run`, deletes ask for confirmation, and a
+  failed write says whether retrying is safe.
+- Built for scripts and agents. `--json` everywhere, stdout carries only data, errors have
+  stable slugs, and the [exit codes](docs/decisions.md#d5--nine-exit-codes-exactly-one-retryable)
+  are a documented contract: 8 means retry, nothing else does.
+- Careful with the token. Read from the environment or a hidden prompt, never argv; stored in a
+  `0600` file; redacted in `--debug` traces.
+- One static binary, with shell completions and man pages. Config follows XDG.
+- The whole documented API is reachable: `cdctl api` sends raw requests through the same auth,
+  retries, and error mapping as the typed commands.
+- Personal accounts, documented API surface only. Organization endpoints are
+  [deferred](docs/decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes),
+  additively.
 
 ## Install
 
@@ -38,23 +94,13 @@ Or from source:
 cargo install controld-cli
 ```
 
-### Uninstall
+Prebuilt archives ship completions and man pages; `cdctl completions <shell>` generates a script
+for bash, elvish, fish, powershell, or zsh, and `cdctl completions --help` shows where to put it.
 
-Remove the binary the way it arrived: `brew uninstall cdctl`, `cargo uninstall controld-cli`, or
-delete `cdctl` from where the installer put it (`~/.cargo/bin` by default). The config file —
-`cdctl config path` prints where it lives, and it holds your token if you ran `auth login` — is
-yours to delete too.
-
-### Shell completions and man pages
-
-Prebuilt archives ship generated completions and man pages. To generate a script yourself:
-
-```sh
-cdctl completions <shell>
-```
-
-The script goes to stdout; `cdctl completions --help` shows the install paths for bash, zsh, and
-fish. Supported: `bash`, `elvish`, `fish`, `powershell`, `zsh`.
+To uninstall, remove the binary the way it arrived: `brew uninstall cdctl`,
+`cargo uninstall controld-cli`, or delete `cdctl` from where the installer put it
+(`~/.cargo/bin` by default). The config file, at the path `cdctl config path` prints, holds your
+token if you ran `auth login`; delete it too.
 
 ## Quickstart
 
@@ -85,24 +131,8 @@ cdctl rule delete ads.example.com
 
 From here, every command answers `--help`, `cdctl reference` prints the whole surface as one
 document, and [commands.md](docs/commands.md) specifies each flag, output column, and exit code.
-Scripts and agents get `--json` (stdout is data-only) and the
-[documented exit codes](docs/decisions.md#d5--nine-exit-codes-exactly-one-retryable).
 
-## For agents as well as humans
-
-- `--json` everywhere; stdout is data-only, diagnostics on stderr.
-- Structured errors with stable slugs and an explicit `retryable` flag.
-- Exit `8` is retryable; everything else is terminal.
-- No hidden prompts: a non-interactive run without `--yes` fails loudly.
-- No silent degradation: a read-only token used for a write errors.
-- `cdctl api` escape hatch, as a separate verb so a sandbox can allow `cdctl` but deny `cdctl api`.
-
-## Scope
-
-Personal accounts. Organization endpoints are deferred ([D15](docs/decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes)): untestable on a
-personal account. The design keeps them additive.
-
-## Docs
+## Documentation
 
 | | |
 | --- | --- |
@@ -114,45 +144,10 @@ personal account. The design keeps them additive.
 | [reference/](docs/reference/) | OpenAPI spec + provenance, live/write verification, error codes |
 | [AGENTS.md](AGENTS.md) | Instructions for coding agents |
 
-### The spec
+## Contributing
 
-Control D publish no downloadable OpenAPI spec, but every rendered docs page embeds it.
-[`scripts/fetch-spec.sh`](scripts/fetch-spec.sh) extracts it and asserts all 46 endpoint pages ship a
-byte-identical copy.
-
-```console
-$ ./scripts/fetch-spec.sh
-==> Fetching reference sidebar
-==> Found 46 endpoint pages
-==> Fetching all endpoint pages
-==> Extracting and cross-verifying embedded spec
-    all 46 pages agree (sha256 0404ebecf30b38f9)
-    35 paths, 46 operations
-==> Unchanged (matches docs/reference/controld-openapi.json)
-```
-
-The Control D API is unversioned (*"[breaking changes can be introduced without warning](https://docs.controld.com/reference/get-started)"*), so it's worth re-running and diffing regularly; CI does exactly that every week.
-
-## Development
-
-```sh
-cargo test
-cargo clippy --all-targets -- -D warnings
-cargo fmt --check
-
-cp .env.example .env
-```
-
-The token from `.env` is for the live suite and manual probes only; plain `cargo test` stays
-network-free.
-
-> [!WARNING]
-> Live tests confine their writes to a temporary `cdctl-test-*` profile they create and delete
-> ([Live-test isolation](docs/testing.md#live-test-isolation)); manual probes
-> mutate whatever you point them at. A free trial account is the safe default.
-
-`tests/fixtures/api/` holds real API responses (sanitized), covering every deserialization hazard
-the live API throws, catalogued in [`docs/reference/`](docs/reference/).
+Bug reports and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers setup, the
+test gates, and the rules for running anything against the live API.
 
 ## License
 
