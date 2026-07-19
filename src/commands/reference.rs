@@ -25,8 +25,21 @@ pub fn run(globals: &Globals) -> Result<(), Error> {
             2,
         );
     }
+    write_environment(&mut doc);
     write_exit_codes(&mut doc);
     crate::output::print_raw(doc.as_bytes())
+}
+
+fn write_environment(doc: &mut String) {
+    let _ = writeln!(doc, "## Environment\n");
+    let _ = writeln!(doc, "```");
+    // Drop the "Environment:" heading line — the Markdown heading above
+    // already says it.
+    for line in crate::cli::ENV_HELP.lines().skip(1) {
+        let _ = writeln!(doc, "{}", line.trim_start());
+    }
+    let _ = writeln!(doc, "```");
+    let _ = writeln!(doc);
 }
 
 fn write_exit_codes(doc: &mut String) {

@@ -178,6 +178,14 @@ Shell completion script (works without a token)
 
 The full command surface as one Markdown document (works without a token)
 
+## Environment
+
+```
+CONTROLD_API_TOKEN  API token (alternative to cdctl auth login)
+CONTROLD_PROFILE    Profile to operate on, as --profile
+CONTROLD_OUTPUT     "json" makes JSON the default output
+```
+
 ## Exit codes
 
 ```

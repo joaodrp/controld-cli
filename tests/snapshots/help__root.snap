@@ -58,6 +58,11 @@ Examples:
   cdctl rule create ads.example.com --action block --profile Home
   cdctl rule list --json
 
+Environment:
+  CONTROLD_API_TOKEN  API token (alternative to cdctl auth login)
+  CONTROLD_PROFILE    Profile to operate on, as --profile
+  CONTROLD_OUTPUT     "json" makes JSON the default output
+
 Exit codes:
   0    ok
   1    generic error
