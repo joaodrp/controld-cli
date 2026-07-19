@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping out. This page is the practical part; the design docs under
+Thanks for helping out. This page is the practical part. The design docs under
 [`docs/`](docs/) explain why things are the way they are.
 
 ## Setup
@@ -24,7 +24,7 @@ cargo fmt --check
 ```
 
 `cargo test` never touches the network. Test layers and the fixture policy are in
-[testing.md](docs/testing.md); new fixtures in `tests/fixtures/api/` must be sanitized (no
+[testing.md](docs/testing.md). New fixtures in `tests/fixtures/api/` must be sanitized (no
 emails, device names, real domains, public IPs, or account PKs).
 
 ## The live suite
@@ -38,7 +38,7 @@ CONTROLD_LIVE_TESTS=1 cargo test --test live
 
 > [!WARNING]
 > Live tests confine their writes to a temporary `cdctl-test-*` profile they create and delete
-> ([Live-test isolation](docs/testing.md#live-test-isolation)); manual probes mutate whatever
+> ([Live-test isolation](docs/testing.md#live-test-isolation)). Manual probes mutate whatever
 > you point them at. A free trial account is the safe default.
 
 ## The API spec
@@ -67,7 +67,7 @@ Where the spec came from and how far to trust it:
 ## Conventions
 
 - [decisions.md](docs/decisions.md) is authoritative. Several decisions look wrong until you
-  read the reasoning; changing one needs the maintainer's explicit approval, recorded by
+  read the reasoning. Changing one needs the maintainer's explicit approval, recorded by
   amending that file.
 - Commit messages and PR titles follow [Conventional Commits](https://www.conventionalcommits.org/).
 - Two contracts are public API and semver-major to break: the exit codes and the stdout-is-data

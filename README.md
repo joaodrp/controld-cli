@@ -12,7 +12,7 @@ CLI for the [Control D](https://controld.com) REST API. For humans, scripts, and
 </div>
 
 > [!IMPORTANT]
-> Not [`ctrld`](https://github.com/Control-D-Inc/ctrld): that daemon runs your DNS; `cdctl` manages your account.
+> Not [`ctrld`](https://github.com/Control-D-Inc/ctrld): that daemon runs your DNS. `cdctl` manages your account.
 > An independent project, not affiliated with Control D.
 
 `cdctl` manages a Control D account from the terminal: profiles, custom DNS rules, and rule
@@ -62,8 +62,8 @@ $ cdctl rule list --fields hostname,action
 - Built for scripts and agents. `--json` everywhere, stdout carries only data, errors have
   stable slugs, and the [exit codes](docs/decisions.md#d5--nine-exit-codes-exactly-one-retryable)
   are a documented contract: 8 means retry, nothing else does.
-- Careful with the token. Read from the environment or a hidden prompt, never argv; stored in a
-  `0600` file; redacted in `--debug` traces.
+- Careful with the token. Read from the environment or a hidden prompt, never argv. Stored in a
+  `0600` file, redacted in `--debug` traces.
 - One static binary, with shell completions and man pages. Config follows XDG.
 - The whole documented API is reachable: `cdctl api` sends raw requests through the same auth,
   retries, and error mapping as the typed commands.
@@ -73,8 +73,8 @@ $ cdctl rule list --fields hostname,action
 
 ## Install
 
-The package is `controld-cli`; every method below installs the `cdctl` binary. Installer script
-(Linux and macOS):
+The package is `controld-cli`, and every method below installs the `cdctl` binary. Installer
+script (Linux and macOS):
 
 ```sh
 curl --proto '=https' --tlsv1.2 -LsSf \
@@ -94,13 +94,13 @@ Or from source:
 cargo install controld-cli
 ```
 
-Prebuilt archives ship completions and man pages; `cdctl completions <shell>` generates a script
+Prebuilt archives ship completions and man pages. `cdctl completions <shell>` generates a script
 for bash, elvish, fish, powershell, or zsh, and `cdctl completions --help` shows where to put it.
 
 To uninstall, remove the binary the way it arrived: `brew uninstall cdctl`,
 `cargo uninstall controld-cli`, or delete `cdctl` from where the installer put it
 (`~/.cargo/bin` by default). The config file, at the path `cdctl config path` prints, holds your
-token if you ran `auth login`; delete it too.
+token if you ran `auth login`. Delete it too.
 
 ## Quickstart
 
@@ -112,7 +112,7 @@ echo -n "$CONTROLD_API_TOKEN" | cdctl auth login --token-stdin
 cdctl auth status
 ```
 
-Most commands operate on one profile; set a default once instead of passing `--profile` every
+Most commands operate on one profile. Set a default once instead of passing `--profile` every
 time:
 
 ```sh
