@@ -989,14 +989,9 @@ mod tests {
     #[test]
     fn captured_400_envelopes_classify_as_documented() {
         fn parts(name: &str) -> (Option<i64>, Option<String>) {
-            let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("tests/fixtures/api")
-                .join(name);
-            let raw = std::fs::read_to_string(&path)
-                .unwrap_or_else(|e| panic!("fixture {name} unreadable: {e}"));
-            let envelope: crate::api::envelope::Envelope = serde_json::from_str(&raw)
-                .unwrap_or_else(|e| panic!("fixture {name} must deserialize: {e}"));
-            let error = envelope.error.expect("error member");
+            let error = crate::api::envelope::fixture(name)
+                .error
+                .expect("error member");
             (error.code, error.message)
         }
 

@@ -117,22 +117,23 @@ fn shape_error(expected: &str) -> Error {
     crate::error::upstream_shape(format_args!("expected {expected}"))
 }
 
+/// Test-only fixture loader, shared with the error classifier's tests.
+#[cfg(test)]
+pub(crate) fn fixture(name: &str) -> Envelope {
+    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/api")
+        .join(name);
+    let raw =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("fixture {name} unreadable: {e}"));
+    serde_json::from_str(&raw).unwrap_or_else(|e| panic!("fixture {name} must deserialize: {e}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::error::Exit;
     use std::fs;
     use std::path::PathBuf;
-
-    fn fixture(name: &str) -> Envelope {
-        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures/api")
-            .join(name);
-        let raw =
-            fs::read_to_string(&path).unwrap_or_else(|e| panic!("fixture {name} unreadable: {e}"));
-        serde_json::from_str(&raw)
-            .unwrap_or_else(|e| panic!("fixture {name} must deserialize: {e}"))
-    }
 
     /// Every read fixture deserializes strictly — the drift tripwire.
     #[test]
