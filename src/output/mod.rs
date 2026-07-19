@@ -19,10 +19,12 @@ pub enum Mode {
 /// `--quiet` gate live in a single place. Callers with a `Globals` in hand
 /// use [`Globals::info`](crate::cli::Globals::info); this free function
 /// serves the ones that only carry the flag (the API client, `confirm`).
-/// A failed stderr write is ignored — advisories must never fail a command.
+/// A failed stderr write is ignored — advisories must never fail a command,
+/// and `eprintln!` would panic instead.
 pub fn info(quiet: bool, message: impl std::fmt::Display) {
+    use std::io::Write;
     if !quiet {
-        eprintln!("info: {message}");
+        let _ = writeln!(std::io::stderr().lock(), "info: {message}");
     }
 }
 

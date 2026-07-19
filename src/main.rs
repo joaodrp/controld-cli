@@ -33,7 +33,10 @@ fn install_panic_report() {
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         default_hook(info);
-        eprintln!(
+        // Checked write: `eprintln!` panicking here would be a panic inside
+        // the panic hook — an abort (SIGABRT, exit 134) instead of the 101.
+        let _ = writeln!(
+            std::io::stderr(),
             "error: cdctl crashed - this is a bug, please report it: {}/issues",
             env!("CARGO_PKG_REPOSITORY")
         );

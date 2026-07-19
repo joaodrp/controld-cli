@@ -54,7 +54,9 @@ async fn read_token(globals: &Globals) -> Result<Vec<u8>, Error> {
     // prompt stays live.
     tokio::task::spawn_blocking(|| {
         use std::io::Write;
-        eprint!("Token (input hidden): ");
+        // Best-effort prompt: input stays hidden either way, and a panic
+        // over a lost prompt would be worse than the lost prompt.
+        let _ = write!(std::io::stderr(), "Token (input hidden): ");
         let _ = std::io::stderr().flush();
         rpassword::read_password().map(String::into_bytes)
     })

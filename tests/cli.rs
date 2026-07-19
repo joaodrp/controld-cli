@@ -2297,6 +2297,34 @@ fn a_stdout_write_failure_is_exit_1_not_a_panic() {
     );
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+fn a_stderr_write_failure_never_fails_the_command() {
+    // `config set current_context` prints an info advisory. Advisories are
+    // best-effort: with stderr full the line is lost but the command must
+    // still succeed - never panic (101) or abort inside the panic hook (134).
+    let full = std::fs::OpenOptions::new()
+        .write(true)
+        .open("/dev/full")
+        .expect("/dev/full exists on linux");
+
+    let dir = tempdir();
+    let output = std::process::Command::new(assert_cmd::cargo::cargo_bin("cdctl"))
+        .env_clear()
+        .env("XDG_CONFIG_HOME", dir.path())
+        .args(["config", "set", "current_context", "work"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::from(full))
+        .output()
+        .expect("spawns");
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "a lost advisory must not fail the mutation"
+    );
+}
+
 // --- folder: list/create/update/delete, action-flag validation, dry-run,
 // D8 confirmation ---
 
