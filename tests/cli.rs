@@ -3427,10 +3427,10 @@ async fn quiet_never_suppresses_warnings() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn http_proxy_env_routes_the_request_through_the_proxy() {
-    // A proxied plain-HTTP request reaches the proxy in absolute-URI form;
-    // the origin must see nothing. Guards the reqwest `system-proxy`
-    // feature — without it HTTP_PROXY/HTTPS_PROXY/NO_PROXY are silently
-    // ignored and corporate-proxy users cannot use the tool.
+    // The request goes to the proxy and the origin sees nothing. Guards
+    // reqwest's env-proxy support (hyper-util reads HTTP_PROXY/HTTPS_PROXY/
+    // NO_PROXY unconditionally, no Cargo feature involved) against a
+    // regression such as building the client with `.no_proxy()`.
     let origin = MockServer::start().await;
     let proxy = MockServer::start().await;
     Mock::given(method("GET"))
