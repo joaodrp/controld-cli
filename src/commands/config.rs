@@ -34,7 +34,7 @@ pub enum ConfigCommand {
 pub enum Key {
     #[value(name = "current_context")]
     CurrentContext,
-    /// Stored per context; `--profile`/`CONTROLD_PROFILE` override it
+    /// Stored per context (`--profile`/`CONTROLD_PROFILE` override it)
     #[value(name = "default_profile")]
     DefaultProfile,
 }
