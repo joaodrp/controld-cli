@@ -73,7 +73,7 @@ Create a folder (omitting --action makes an action-less folder)
 
 - `<NAME>` — Folder name
 - `--action <ACTION>` — Action to apply
-- `--via <IP|CNAME|proxy>` — Spoof target (IP or CNAME), or the redirect proxy PK (see `proxy list`)
+- `--via <IP|CNAME|proxy>` — Spoof target (IP or CNAME), or the redirect proxy PK (cdctl api /proxies lists them)
 - `--via6 <IPv6>` — Spoof-only IPv6 target (the API documents no via6 field on folders or the profile default)
 - `--enabled` — Enable
 - `--disabled` — Disable
@@ -86,7 +86,7 @@ Rename a folder or change its action (sends only the flags given)
 - `<SELECTOR>` — Folder id or name (case-insensitive, an ambiguous name is an error)
 - `--name <NAME>` — New name
 - `--action <ACTION>` — Action to apply
-- `--via <IP|CNAME|proxy>` — Spoof target (IP or CNAME), or the redirect proxy PK (see `proxy list`)
+- `--via <IP|CNAME|proxy>` — Spoof target (IP or CNAME), or the redirect proxy PK (cdctl api /proxies lists them)
 - `--via6 <IPv6>` — Spoof-only IPv6 target (the API documents no via6 field on folders or the profile default)
 - `--enabled` — Enable
 - `--disabled` — Disable
@@ -115,7 +115,7 @@ Create rules
 
 - `<HOSTNAME>` — Hostnames to create (wildcards like *.example.com are legal)
 - `--action <ACTION>` — Action to apply
-- `--via <IP|CNAME|proxy>` — Spoof target (IP or CNAME), or the redirect proxy PK (see `proxy list`)
+- `--via <IP|CNAME|proxy>` — Spoof target (IP or CNAME), or the redirect proxy PK (cdctl api /proxies lists them)
 - `--via6 <IPv6>` — Spoof-only IPv6 target (the API documents no via6 field on folders or the profile default)
 - `--enabled` — Enable
 - `--disabled` — Disable
@@ -128,7 +128,7 @@ Update rules (sends only the flags given — `PUT /rules` merges)
 
 - `<HOSTNAME>` — Hostnames to update
 - `--action <ACTION>` — Action to apply
-- `--via <IP|CNAME|proxy>` — Spoof target (IP or CNAME), or the redirect proxy PK (see `proxy list`)
+- `--via <IP|CNAME|proxy>` — Spoof target (IP or CNAME), or the redirect proxy PK (cdctl api /proxies lists them)
 - `--via6 <IPv6>` — Spoof-only IPv6 target (the API documents no via6 field on folders or the profile default)
 - `--enabled` — Enable
 - `--disabled` — Disable

@@ -26,7 +26,7 @@ pub struct ActionFlags {
     /// Action to apply
     #[arg(long, value_enum)]
     pub action: Option<Action>,
-    /// Spoof target (IP or CNAME), or the redirect proxy PK (see `proxy list`)
+    /// Spoof target (IP or CNAME), or the redirect proxy PK (cdctl api /proxies lists them)
     #[arg(long, value_name = "IP|CNAME|proxy")]
     pub via: Option<String>,
     /// Spoof-only IPv6 target (the API documents no via6 field on folders
@@ -290,7 +290,7 @@ async fn validate_redirect_via(via: &str, client: &Client) -> Result<(), Error> 
         .collect();
 
     let mut error = Error::usage(format!(
-        "--via {via:?} is not a known proxy PK; see `cdctl proxy list`"
+        "--via {via:?} is not a known proxy PK (list them with `cdctl api /proxies`)"
     ));
     if !hints.is_empty() {
         error = error.with_hint(format!("nearest matches: {}", hints.join(", ")));
