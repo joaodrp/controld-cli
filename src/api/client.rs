@@ -363,24 +363,24 @@ impl Client {
         // timeout (D12), which reads as a hang. One advisory line after 2s,
         // at a TTY only (a script's stderr is no place for liveness chatter)
         // and never under --quiet. Per attempt, and only while genuinely on
-        // the wire — backoff sleeps have the retry notice instead.
+        // the wire — backoff sleeps have the retry notice instead. Covers
+        // connect through response headers; a slow body read stays mute but
+        // bounded by the request timeout.
         let send = request.send();
-        let response = if self.quiet || !std::io::stderr().is_terminal() {
-            send.await
-        } else {
-            tokio::pin!(send);
-            match tokio::time::timeout(SLOW_REQUEST_NOTICE_AFTER, &mut send).await {
-                Ok(result) => result,
-                Err(_still_in_flight) => {
+        tokio::pin!(send);
+        let response = match tokio::time::timeout(SLOW_REQUEST_NOTICE_AFTER, &mut send).await {
+            Ok(result) => result,
+            Err(_still_in_flight) => {
+                if !self.quiet && std::io::stderr().is_terminal() {
                     crate::output::info(
-                        false,
+                        self.quiet,
                         format_args!(
                             "waiting on {} ...",
                             self.base_url.host_str().unwrap_or("the API")
                         ),
                     );
-                    send.await
                 }
+                send.await
             }
         }
         .map_err(|e| classify_transport(&e))?;
