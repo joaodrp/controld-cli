@@ -3398,6 +3398,55 @@ async fn quiet_never_suppresses_warnings() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn http_proxy_env_routes_the_request_through_the_proxy() {
+    // A proxied plain-HTTP request reaches the proxy in absolute-URI form;
+    // the origin must see nothing. Guards the reqwest `system-proxy`
+    // feature — without it HTTP_PROXY/HTTPS_PROXY/NO_PROXY are silently
+    // ignored and corporate-proxy users cannot use the tool.
+    let origin = MockServer::start().await;
+    let proxy = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(fixture("users.json"), "application/json"),
+        )
+        .mount(&proxy)
+        .await;
+
+    let origin_uri = origin.uri();
+    let proxy_uri = proxy.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl_against(&origin_uri, dir.path())
+            // Both spellings: tooling conventions differ on the uppercase
+            // form for plain HTTP (CGI's HTTP_PROXY hijack).
+            .env("http_proxy", &proxy_uri)
+            .env("HTTP_PROXY", &proxy_uri)
+            .args(["auth", "status", "--json"])
+            .assert()
+            .success();
+    })
+    .await
+    .expect("command runs");
+
+    assert!(
+        !proxy
+            .received_requests()
+            .await
+            .unwrap_or_default()
+            .is_empty(),
+        "HTTP_PROXY routes the request through the proxy"
+    );
+    assert!(
+        origin
+            .received_requests()
+            .await
+            .unwrap_or_default()
+            .is_empty(),
+        "the origin is never contacted directly"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn quiet_suppresses_the_retry_notice() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
