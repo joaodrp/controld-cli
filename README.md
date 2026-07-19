@@ -38,6 +38,13 @@ Or from source:
 cargo install controld-cli
 ```
 
+### Uninstall
+
+Remove the binary the way it arrived: `brew uninstall cdctl`, `cargo uninstall controld-cli`, or
+delete `cdctl` from where the installer put it (`~/.cargo/bin` by default). The config file —
+`cdctl config path` prints where it lives, and it holds your token if you ran `auth login` — is
+yours to delete too.
+
 ### Shell completions and man pages
 
 Prebuilt archives ship generated completions and man pages. To generate a script yourself:
