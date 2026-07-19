@@ -40,18 +40,20 @@ pub async fn run(command: AuthCommand, globals: &Globals) -> Result<(), Error> {
 
 /// The token bytes for `--token-stdin`. A pipe or redirect reads stdin
 /// verbatim (the `op read ... |` flow, D6). At a TTY the token would echo
-/// while typed, so a hidden prompt reads it instead — still stdin, still no
-/// argv (D6), just without the secret ending up on screen or in the
-/// terminal's scrollback.
+/// while typed, so a hidden prompt reads from the controlling terminal
+/// (`/dev/tty`) instead — still no argv (D6), and the secret never lands
+/// on screen or in the terminal's scrollback.
 async fn read_token(globals: &Globals) -> Result<Vec<u8>, Error> {
     use std::io::IsTerminal;
 
     if !std::io::stdin().is_terminal() {
         return super::read_stdin("token", globals).await;
     }
-    // Prompt on stderr (stdout stays data-only) and read off the runtime
-    // thread, same as every other blocking stdin read, so Ctrl-C at the
-    // prompt stays live.
+    // Prompt on stderr (stdout stays data-only), read off the runtime
+    // thread. Ctrl-C at the prompt is rpassword's to handle: raw mode
+    // clears ISIG, so it traps the raw 0x03, restores the termios, and
+    // re-raises SIGINT itself — the read returns `Interrupted`, mapped
+    // below so the exit stays the documented 130 whichever side wins.
     tokio::task::spawn_blocking(|| {
         use std::io::Write;
         // Best-effort prompt: input stays hidden either way, and a panic
@@ -62,7 +64,10 @@ async fn read_token(globals: &Globals) -> Result<Vec<u8>, Error> {
     })
     .await
     .map_err(|e| Error::generic(format!("the token prompt task failed: {e}")))?
-    .map_err(|e| Error::generic(format!("could not read the token: {e}")))
+    .map_err(|e| match e.kind() {
+        std::io::ErrorKind::Interrupted => Error::interrupted(),
+        _ => super::stdin_read_error("token", &e),
+    })
 }
 
 async fn login(args: &LoginArgs, globals: &Globals) -> Result<(), Error> {
