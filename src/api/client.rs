@@ -5,6 +5,7 @@
 //! cdctl's: GETs retry with full-jitter backoff under 3-attempt/30-second
 //! caps; **writes are sent exactly once, always**.
 
+use std::io::IsTerminal;
 use std::time::{Duration, Instant, SystemTime};
 
 use bytes::Bytes;
@@ -22,6 +23,9 @@ use crate::error::{
 pub const DEFAULT_BASE_URL: &str = "https://api.controld.com";
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 pub const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// A request still on the wire after this long draws a one-line stderr
+/// notice (TTY-only, dropped by `--quiet`).
+const SLOW_REQUEST_NOTICE_AFTER: Duration = Duration::from_secs(2);
 const MAX_REDIRECTS: usize = 5;
 
 /// The GET-only retry contract. Fields are configurable so tests can shrink
@@ -355,7 +359,31 @@ impl Client {
             None => {}
         }
 
-        let response = request.send().await.map_err(|e| classify_transport(&e))?;
+        // Responsiveness over silence: a slow link can sit mute for the full
+        // timeout (D12), which reads as a hang. One advisory line after 2s,
+        // at a TTY only (a script's stderr is no place for liveness chatter)
+        // and never under --quiet. Per attempt, and only while genuinely on
+        // the wire — backoff sleeps have the retry notice instead.
+        let send = request.send();
+        let response = if self.quiet || !std::io::stderr().is_terminal() {
+            send.await
+        } else {
+            tokio::pin!(send);
+            match tokio::time::timeout(SLOW_REQUEST_NOTICE_AFTER, &mut send).await {
+                Ok(result) => result,
+                Err(_still_in_flight) => {
+                    crate::output::info(
+                        false,
+                        format_args!(
+                            "waiting on {} ...",
+                            self.base_url.host_str().unwrap_or("the API")
+                        ),
+                    );
+                    send.await
+                }
+            }
+        }
+        .map_err(|e| classify_transport(&e))?;
         let status = response.status();
         let retry_after = parse_retry_after(response.headers());
         if self.debug {
