@@ -36,9 +36,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --locked
 
-  # The MSRV claim (rust-version in Cargo.toml) is untested until a job
-  # enforces it (docs/plan.md Phase 3). The toolchain is read from Cargo.toml
-  # so the manifest stays the only place the MSRV is stated.
+  # The MSRV claim (rust-version in Cargo.toml) is enforced here: a full
+  # `cargo check` on exactly that toolchain. The version is read from
+  # Cargo.toml so the manifest stays the only place the MSRV is stated.
   msrv:
     runs-on: ubuntu-latest
     steps:
