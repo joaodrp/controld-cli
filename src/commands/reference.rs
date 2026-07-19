@@ -33,11 +33,7 @@ pub fn run(globals: &Globals) -> Result<(), Error> {
 fn write_environment(doc: &mut String) {
     let _ = writeln!(doc, "## Environment\n");
     let _ = writeln!(doc, "```");
-    // Drop the "Environment:" heading line — the Markdown heading above
-    // already says it.
-    for line in crate::cli::ENV_HELP.lines().skip(1) {
-        let _ = writeln!(doc, "{}", line.trim_start());
-    }
+    let _ = writeln!(doc, "{}", crate::cli::ENV_HELP);
     let _ = writeln!(doc, "```");
     let _ = writeln!(doc);
 }

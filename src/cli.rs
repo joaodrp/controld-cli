@@ -17,11 +17,11 @@ const ROOT_EXAMPLES: &str = "Examples:
   cdctl rule create ads.example.com --action block --profile Home
   cdctl rule list --json";
 
-/// The env vars a user is meant to know about. The test-only overrides
-/// (`CONTROLD_API_URL`, `CONTROLD_UNSAFE_BASE_URL`, `CONTROLD_UNIX_NOW`)
-/// stay out on purpose — each surfaces via its own error hint when relevant.
-pub const ENV_HELP: &str = "Environment:
-  CONTROLD_API_TOKEN  API token (alternative to cdctl auth login)
+/// The env vars a user is meant to know about, heading-free like
+/// [`EXIT_CODES_HELP`](crate::error::EXIT_CODES_HELP) so `reference` can
+/// embed it verbatim. The test-only overrides (`CONTROLD_API_URL`,
+/// `CONTROLD_UNSAFE_BASE_URL`, `CONTROLD_UNIX_NOW`) stay out on purpose.
+pub const ENV_HELP: &str = "  CONTROLD_API_TOKEN  API token (alternative to cdctl auth login)
   CONTROLD_PROFILE    Profile to operate on, as --profile
   CONTROLD_OUTPUT     \"json\" makes JSON the default output";
 
@@ -35,7 +35,7 @@ rule folders, with JSON output for scripts and agents. Not ctrld, the Control D 
 daemon: that runs your DNS, cdctl manages your account.",
     after_help = ROOT_EXAMPLES,
     after_long_help = format!(
-        "{ROOT_EXAMPLES}\n\n{ENV_HELP}\n\nExit codes:\n{}\nDocs and issues: {}",
+        "{ROOT_EXAMPLES}\n\nEnvironment:\n{ENV_HELP}\n\nExit codes:\n{}\nDocs and issues: {}",
         crate::error::EXIT_CODES_HELP,
         env!("CARGO_PKG_REPOSITORY")
     )
