@@ -447,30 +447,45 @@ async fn sigint_during_a_request_exits_130() {
 
     let uri = server.uri();
     let dir = tempdir();
-    let status = tokio::task::spawn_blocking(move || {
-        let mut child = std::process::Command::new(assert_cmd::cargo::cargo_bin("cdctl"))
-            .env_clear()
-            .env("XDG_CONFIG_HOME", dir.path())
-            .env("CONTROLD_API_URL", &uri)
-            .env("CONTROLD_UNSAFE_BASE_URL", "1")
-            .env("CONTROLD_API_TOKEN", "api.test-token")
-            .args(["auth", "status"])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("spawns");
+    let mut child = std::process::Command::new(assert_cmd::cargo::cargo_bin("cdctl"))
+        .env_clear()
+        .env("XDG_CONFIG_HOME", dir.path())
+        .env("CONTROLD_API_URL", &uri)
+        .env("CONTROLD_UNSAFE_BASE_URL", "1")
+        .env("CONTROLD_API_TOKEN", "api.test-token")
+        .args(["auth", "status"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawns");
 
-        // Let it get the request in flight, then interrupt.
-        std::thread::sleep(Duration::from_millis(800));
-        kill(
-            Pid::from_raw(i32::try_from(child.id()).expect("pid fits")),
-            Signal::SIGINT,
-        )
-        .expect("signal delivered");
-        child.wait().expect("wait")
+    // Deterministic sync, no sleep: the SIGINT handler is installed before
+    // dispatch runs, so the server seeing the request proves the handler is
+    // live — signaling earlier could hit the default disposition instead.
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            if server
+                .received_requests()
+                .await
+                .is_some_and(|requests| !requests.is_empty())
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
     })
     .await
-    .expect("task runs");
+    .expect("the request reached the server");
+
+    kill(
+        Pid::from_raw(i32::try_from(child.id()).expect("pid fits")),
+        Signal::SIGINT,
+    )
+    .expect("signal delivered");
+    let status = tokio::task::spawn_blocking(move || child.wait())
+        .await
+        .expect("task runs")
+        .expect("wait");
 
     assert_eq!(status.code(), Some(130), "SIGINT contract");
 }
