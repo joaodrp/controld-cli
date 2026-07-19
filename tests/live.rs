@@ -241,13 +241,50 @@ impl ProfileGuard {
     }
 
     fn delete(&self) -> std::io::Result<std::process::Output> {
+        use std::io::Read;
         let path = format!("/profiles/{}", self.pk);
-        std::process::Command::new(env!("CARGO_BIN_EXE_cdctl"))
+        let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_cdctl"))
             .env_clear()
             .env("XDG_CONFIG_HOME", &self.config_home)
             .env("CONTROLD_API_TOKEN", &self.token)
             .args(["api", &path, "-X", "DELETE", "--yes"])
-            .output()
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()?;
+        // Bounded like `live_cdctl`'s 60s: a hung API must not stall
+        // teardown — and with it the leak guard — indefinitely. The DELETE
+        // ack is tiny, so try-wait polling cannot pipe-buffer deadlock.
+        let deadline = std::time::Instant::now() + Duration::from_secs(60);
+        loop {
+            if let Some(status) = child.try_wait()? {
+                let mut stdout = Vec::new();
+                let mut stderr = Vec::new();
+                child
+                    .stdout
+                    .take()
+                    .expect("piped")
+                    .read_to_end(&mut stdout)?;
+                child
+                    .stderr
+                    .take()
+                    .expect("piped")
+                    .read_to_end(&mut stderr)?;
+                return Ok(std::process::Output {
+                    status,
+                    stdout,
+                    stderr,
+                });
+            }
+            if std::time::Instant::now() >= deadline {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "cdctl api DELETE timed out after 60s",
+                ));
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
     }
 
     /// Explicit happy-path teardown: delete, confirm the name is gone.
@@ -291,7 +328,7 @@ impl Drop for ProfileGuard {
                 output.status, self.name, self.pk
             ),
             Err(e) => eprintln!(
-                "leak guard: failed to spawn cdctl to delete profile {} ({}) — delete it manually: {e}",
+                "leak guard: could not delete profile {} ({}) — delete it manually: {e}",
                 self.name, self.pk
             ),
         }
