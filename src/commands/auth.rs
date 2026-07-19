@@ -38,6 +38,31 @@ pub async fn run(command: AuthCommand, globals: &Globals) -> Result<(), Error> {
     }
 }
 
+/// The token bytes for `--token-stdin`. A pipe or redirect reads stdin
+/// verbatim (the `op read ... |` flow, D6). At a TTY the token would echo
+/// while typed, so a hidden prompt reads it instead — still stdin, still no
+/// argv (D6), just without the secret ending up on screen or in the
+/// terminal's scrollback.
+async fn read_token(globals: &Globals) -> Result<Vec<u8>, Error> {
+    use std::io::IsTerminal;
+
+    if !std::io::stdin().is_terminal() {
+        return super::read_stdin("token", globals).await;
+    }
+    // Prompt on stderr (stdout stays data-only) and read off the runtime
+    // thread, same as every other blocking stdin read, so Ctrl-C at the
+    // prompt stays live.
+    tokio::task::spawn_blocking(|| {
+        use std::io::Write;
+        eprint!("Token (input hidden): ");
+        let _ = std::io::stderr().flush();
+        rpassword::read_password().map(String::into_bytes)
+    })
+    .await
+    .map_err(|e| Error::generic(format!("the token prompt task failed: {e}")))?
+    .map_err(|e| Error::generic(format!("could not read the token: {e}")))
+}
+
 async fn login(args: &LoginArgs, globals: &Globals) -> Result<(), Error> {
     super::reject_explicit_json(globals, "auth login", "nothing on stdout")?;
     if !args.token_stdin {
@@ -48,7 +73,7 @@ async fn login(args: &LoginArgs, globals: &Globals) -> Result<(), Error> {
         );
     }
 
-    let raw_bytes = super::read_stdin("token", globals).await?;
+    let raw_bytes = read_token(globals).await?;
     // Not `read_stdin`'s job: an invalid-UTF-8 token is still the same
     // environmental, argv-innocent failure ("stdin carried no token" and the
     // control-character rejection below stay usage errors; only I/O and
