@@ -41,16 +41,30 @@ fn error_envelope(status: u16, code: i64, message: &str) -> ResponseTemplate {
 
 #[test]
 fn completions_work_without_a_token() {
-    let dir = tempdir();
-    let assert = cdctl(dir.path())
-        .args(["completions", "bash"])
-        .assert()
-        .success();
-    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
-    assert!(
-        stdout.contains("cdctl"),
-        "a completion script mentions the binary"
-    );
+    // Every supported shell, with the marker that actually registers the
+    // completer there: a broken zsh or fish script must not hide behind a
+    // bash-only smoke check.
+    for (shell, marker) in [
+        ("bash", "complete -F _cdctl"),
+        ("elvish", "edit:completion:arg-completer[cdctl]"),
+        ("fish", "complete -c cdctl"),
+        (
+            "powershell",
+            "Register-ArgumentCompleter -Native -CommandName 'cdctl'",
+        ),
+        ("zsh", "#compdef cdctl"),
+    ] {
+        let dir = tempdir();
+        let assert = cdctl(dir.path())
+            .args(["completions", shell])
+            .assert()
+            .success();
+        let stdout = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+        assert!(
+            stdout.contains(marker),
+            "the {shell} completion script mentions {marker:?}"
+        );
+    }
 }
 
 #[test]
