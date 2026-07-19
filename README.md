@@ -16,7 +16,7 @@ CLI for the [Control D](https://controld.com) REST API. For humans, scripts, and
 > An independent project, not affiliated with Control D.
 
 `cdctl` manages a Control D account from the terminal: profiles, custom DNS rules, and rule
-folders, over the documented REST API. People get tables, everything else gets stable JSON.
+folders, over the documented REST API.
 
 ## A quick look
 
