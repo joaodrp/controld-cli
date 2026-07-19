@@ -19,7 +19,9 @@ use assert_cmd::Command;
 /// a private tempdir, no `CONTROLD_API_URL` override — the default base URL
 /// is part of what this suite verifies.
 fn live_cdctl(config_home: &Path, token: &str) -> Command {
-    let mut cmd = Command::cargo_bin("cdctl").expect("binary builds");
+    // Compile-time binary path, not `cargo_bin` - this also runs from
+    // `ProfileGuard`'s `Drop`, where a panic during unwind would abort.
+    let mut cmd = Command::from_std(std::process::Command::new(env!("CARGO_BIN_EXE_cdctl")));
     cmd.env_clear()
         .env("XDG_CONFIG_HOME", config_home)
         .env("CONTROLD_API_TOKEN", token)
@@ -241,50 +243,12 @@ impl ProfileGuard {
     }
 
     fn delete(&self) -> std::io::Result<std::process::Output> {
-        use std::io::Read;
+        // Bounded by `live_cdctl`'s 60s timeout: a hung API must not stall
+        // teardown - and with it the leak guard - indefinitely.
         let path = format!("/profiles/{}", self.pk);
-        let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_cdctl"))
-            .env_clear()
-            .env("XDG_CONFIG_HOME", &self.config_home)
-            .env("CONTROLD_API_TOKEN", &self.token)
+        live_cdctl(&self.config_home, &self.token)
             .args(["api", &path, "-X", "DELETE", "--yes"])
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .spawn()?;
-        // Bounded like `live_cdctl`'s 60s: a hung API must not stall
-        // teardown — and with it the leak guard — indefinitely. The DELETE
-        // ack is tiny, so try-wait polling cannot pipe-buffer deadlock.
-        let deadline = std::time::Instant::now() + Duration::from_secs(60);
-        loop {
-            if let Some(status) = child.try_wait()? {
-                let mut stdout = Vec::new();
-                let mut stderr = Vec::new();
-                child
-                    .stdout
-                    .take()
-                    .expect("piped")
-                    .read_to_end(&mut stdout)?;
-                child
-                    .stderr
-                    .take()
-                    .expect("piped")
-                    .read_to_end(&mut stderr)?;
-                return Ok(std::process::Output {
-                    status,
-                    stdout,
-                    stderr,
-                });
-            }
-            if std::time::Instant::now() >= deadline {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::TimedOut,
-                    "cdctl api DELETE timed out after 60s",
-                ));
-            }
-            std::thread::sleep(Duration::from_millis(50));
-        }
+            .output()
     }
 
     /// Explicit happy-path teardown: delete, confirm the name is gone.
