@@ -24,8 +24,9 @@ const ROOT_EXAMPLES: &str = "Examples:
     about = "Manage a Control D account over its REST API",
     after_help = ROOT_EXAMPLES,
     after_long_help = format!(
-        "{ROOT_EXAMPLES}\n\nExit codes:\n{}",
-        crate::error::EXIT_CODES_HELP
+        "{ROOT_EXAMPLES}\n\nExit codes:\n{}\nDocs and issues: {}",
+        crate::error::EXIT_CODES_HELP,
+        env!("CARGO_PKG_REPOSITORY")
     )
 )]
 pub struct Cli {

@@ -70,3 +70,4 @@ Exit codes:
   8    retryable (the only retryable code)
   130  interrupted (SIGINT)
   141  broken pipe (SIGPIPE, Unix)
+Docs and issues: https://github.com/joaodrp/controld-cli
