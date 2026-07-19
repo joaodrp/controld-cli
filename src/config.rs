@@ -45,10 +45,12 @@ pub struct Context {
 /// interface, and this version's writes must not destroy what its reads
 /// already tolerate ([`tests::unknown_keys_are_tolerated`]).
 fn merge_into_document(config: &Config, doc: &mut toml_edit::DocumentMut) {
-    fn set_or_remove(table: &mut toml_edit::Table, key: &str, value: Option<&str>) {
+    use toml_edit::{Item, Table, TableLike};
+
+    fn set_or_remove(table: &mut dyn TableLike, key: &str, value: Option<&str>) {
         match value {
             Some(value) => {
-                table[key] = toml_edit::value(value);
+                table.insert(key, toml_edit::value(value));
             }
             None => {
                 table.remove(key);
@@ -56,28 +58,41 @@ fn merge_into_document(config: &Config, doc: &mut toml_edit::DocumentMut) {
         }
     }
 
-    set_or_remove(doc, "current_context", config.current_context.as_deref());
+    /// The item as an editable table: standard and inline tables (both legal
+    /// on disk) are edited in place. Anything else — this document is an
+    /// independent re-read, so `load`'s shape checks say nothing about it —
+    /// gets the same posture as an unparseable file: rebuilt from scratch.
+    fn ensure_table(item: &mut Item, implicit: bool) -> &mut dyn TableLike {
+        if !item.is_table_like() {
+            let mut table = Table::new();
+            // A bare `[contexts]` header would be noise — only the
+            // per-context `[contexts.<name>]` sections should appear.
+            table.set_implicit(implicit);
+            *item = Item::Table(table);
+        }
+        item.as_table_like_mut().expect("just made table-like")
+    }
+
+    set_or_remove(
+        doc.as_table_mut(),
+        "current_context",
+        config.current_context.as_deref(),
+    );
 
     if config.contexts.is_empty() {
         return;
     }
-    // A fresh `[contexts]` header would be noise — only the per-context
-    // `[contexts.<name>]` sections should appear, as before the merge.
     if !doc.contains_key("contexts") {
-        let mut implicit = toml_edit::Table::new();
+        let mut implicit = Table::new();
         implicit.set_implicit(true);
-        doc["contexts"] = toml_edit::Item::Table(implicit);
+        doc.insert("contexts", Item::Table(implicit));
     }
+    let contexts = ensure_table(doc.get_mut("contexts").expect("just inserted"), true);
     for (name, context) in &config.contexts {
-        let contexts = doc["contexts"]
-            .as_table_mut()
-            .expect("load rejected a non-table contexts key");
-        if !contexts.contains_key(name) {
-            contexts[name] = toml_edit::Item::Table(toml_edit::Table::new());
+        if contexts.get(name).is_none() {
+            contexts.insert(name, Item::Table(Table::new()));
         }
-        let table = contexts[name]
-            .as_table_mut()
-            .expect("load rejected a non-table context");
+        let table = ensure_table(contexts.get_mut(name).expect("just inserted"), false);
         set_or_remove(
             table,
             "token",
@@ -465,6 +480,66 @@ mod tests {
             raw.contains("default_profile = \"Home\""),
             "the mutation lands:\n{raw}"
         );
+    }
+
+    #[test]
+    fn save_accepts_inline_table_contexts() {
+        // Inline tables are legal TOML and `load` accepts them, so a save
+        // must edit them in place, not panic. Unknown keys inside survive.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = store_in(dir.path());
+        std::fs::create_dir_all(store.path().parent().expect("parent")).expect("mkdir");
+        for raw in [
+            "contexts = { personal = { token = \"api.x\", future_key = true } }\n",
+            "[contexts]\npersonal = { token = \"api.x\", future_key = true }\n",
+        ] {
+            std::fs::write(store.path(), raw).expect("write");
+            let mut config = store.load().expect("load accepts inline tables").config;
+            config.active_context_mut().default_profile = Some("Home".into());
+            store
+                .save(&config)
+                .expect("save edits inline tables in place");
+
+            let raw_after = std::fs::read_to_string(store.path()).expect("readable");
+            assert!(
+                raw_after.contains("future_key = true"),
+                "kept:\n{raw_after}"
+            );
+            assert!(
+                raw_after.contains("default_profile = \"Home\""),
+                "the mutation lands:\n{raw_after}"
+            );
+            let reloaded = store.load().expect("reload").config;
+            assert_eq!(reloaded.default_profile(), Some("Home"));
+        }
+    }
+
+    #[test]
+    fn save_replaces_a_non_table_contexts_key() {
+        // `contexts = 1` never survives a `load`, but `save` re-reads the
+        // file independently, so a file changed underneath us must get the
+        // same rebuild-it posture as an unparseable one - never a panic.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = store_in(dir.path());
+        std::fs::create_dir_all(store.path().parent().expect("parent")).expect("mkdir");
+        for raw in [
+            "contexts = 1\n",
+            "[contexts]\npersonal = 1\n",
+            "contexts = \"nope\"\n",
+        ] {
+            std::fs::write(store.path(), raw).expect("write");
+            store
+                .save(&config_with_token("api.rebuilt"))
+                .expect("save rebuilds a wrong-shape key");
+            let reloaded = store.load().expect("the result is well-formed").config;
+            assert_eq!(
+                reloaded
+                    .active_context()
+                    .and_then(|c| c.token.as_ref())
+                    .map(|t| t.expose_secret().to_owned()),
+                Some("api.rebuilt".to_owned())
+            );
+        }
     }
 
     #[test]
