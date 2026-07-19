@@ -52,8 +52,8 @@ pub fn run(command: ConfigCommand, globals: &Globals) -> Result<(), Error> {
             // print before the file exists — but a path that `cat` can't open
             // reads as a lie without this.
             if !store.path().exists() {
-                eprintln!(
-                    "info: not created yet (`cdctl auth login` or `cdctl config set` will create it)"
+                globals.info(
+                    "not created yet (`cdctl auth login` or `cdctl config set` will create it)",
                 );
             }
             Ok(())
@@ -85,7 +85,7 @@ fn set(store: &Store, key: Key, value: String, globals: &Globals) -> Result<(), 
             // Switch-then-login is the intended flow, but a typo'd name would
             // otherwise surface much later as a misleading auth.missing_token.
             if !config.contexts.contains_key(&value) {
-                eprintln!("info: context \"{value}\" has no stored token yet");
+                globals.info(format_args!("context \"{value}\" has no stored token yet"));
             }
             config.current_context = Some(value);
         }

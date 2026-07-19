@@ -76,6 +76,7 @@ pub struct ClientConfig {
     pub connect_timeout: Duration,
     pub retry: RetryPolicy,
     pub debug: bool,
+    pub quiet: bool,
     /// D9 escape hatch: lets a token accompany a non-default origin. Set from
     /// `CONTROLD_UNSAFE_BASE_URL=1`, or explicitly by tests aiming at wiremock.
     pub allow_unpinned_origin: bool,
@@ -89,6 +90,7 @@ impl ClientConfig {
         timeout_secs: Option<u64>,
         no_retry: bool,
         debug: bool,
+        quiet: bool,
     ) -> Result<Self, Error> {
         let base_url = base_url_from_raw(crate::config::env_var("CONTROLD_API_URL")?)?;
 
@@ -102,6 +104,7 @@ impl ClientConfig {
                 ..RetryPolicy::default()
             },
             debug,
+            quiet,
             allow_unpinned_origin: crate::config::env_var("CONTROLD_UNSAFE_BASE_URL")?
                 .is_some_and(|v| v == "1"),
         })
@@ -163,6 +166,7 @@ pub struct Client {
     token: Option<SecretString>,
     retry: RetryPolicy,
     debug: bool,
+    quiet: bool,
 }
 
 impl Client {
@@ -200,6 +204,7 @@ impl Client {
             token: config.token,
             retry: config.retry,
             debug: config.debug,
+            quiet: config.quiet,
         })
     }
 
@@ -236,11 +241,14 @@ impl Client {
                 return Err(error);
             }
             attempt += 1;
-            eprintln!(
-                "info: GET {path} failed ({code}); retrying in {secs:.1}s (attempt {attempt}/{max})",
-                code = error.code,
-                secs = delay.as_secs_f64(),
-                max = self.retry.max_attempts,
+            crate::output::info(
+                self.quiet,
+                format_args!(
+                    "GET {path} failed ({code}); retrying in {secs:.1}s (attempt {attempt}/{max})",
+                    code = error.code,
+                    secs = delay.as_secs_f64(),
+                    max = self.retry.max_attempts,
+                ),
             );
             tokio::time::sleep(delay).await;
         }
@@ -655,6 +663,7 @@ mod tests {
             connect_timeout: Duration::from_secs(2),
             retry,
             debug: false,
+            quiet: false,
             allow_unpinned_origin: true, // deliberately pointed at wiremock
         }
     }

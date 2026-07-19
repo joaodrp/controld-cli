@@ -95,11 +95,11 @@ pub(crate) async fn resolve_profile(
     if !explicit {
         // The caller may have forgotten the ambient default is in play
         // (D8's rationale for treating it as a lesser trust level).
-        eprintln!(
-            "info: using default profile \"{}\" ({}) from config",
+        globals.info(format_args!(
+            "using default profile \"{}\" ({}) from config",
             escape_controls(&scope.name),
             escape_controls(&scope.id)
-        );
+        ));
     }
     // The resolved id enters URL paths (profile-scoped commands build
     // `/profiles/{id}/...` paths); every caller pays this check once, here.

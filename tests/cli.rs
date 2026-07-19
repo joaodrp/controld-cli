@@ -3331,6 +3331,109 @@ async fn folder_list_with_an_implicit_default_profile_prints_an_info_line() {
     .expect("command runs");
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn quiet_suppresses_the_info_line_but_not_the_data() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups(&server, 1).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl(dir.path())
+            .args(["config", "set", "default_profile", AGGRESSIVE_PK])
+            .assert()
+            .success();
+
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["folder", "list", "--json", "-q"])
+            .assert()
+            .success();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            !stderr.contains("info:"),
+            "-q drops the advisory line: {stderr}"
+        );
+        let stdout = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+        serde_json::from_str::<serde_json::Value>(&stdout).expect("-q never touches the data");
+    })
+    .await
+    .expect("command runs");
+}
+
+/// `--quiet` gates only `info:` lines — a config holding the API token with
+/// lax permissions still draws its warning.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn quiet_never_suppresses_warnings() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups(&server, 1).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        use std::os::unix::fs::PermissionsExt;
+        cdctl(dir.path())
+            .args(["config", "set", "default_profile", AGGRESSIVE_PK])
+            .assert()
+            .success();
+        let config_path = dir.path().join("cdctl").join("config.toml");
+        std::fs::set_permissions(&config_path, std::fs::Permissions::from_mode(0o644))
+            .expect("chmod");
+
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["folder", "list", "-q"])
+            .assert()
+            .success();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            stderr.contains("warning:") && stderr.contains("chmod 600"),
+            "-q must not swallow the permissions warning: {stderr}"
+        );
+        assert!(!stderr.contains("info:"), "info still dropped: {stderr}");
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn quiet_suppresses_the_retry_notice() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/users"))
+        .respond_with(ResponseTemplate::new(500))
+        .up_to_n_times(1)
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/users"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(fixture("users.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["auth", "status", "--json", "-q"])
+            .timeout(Duration::from_secs(20))
+            .assert()
+            .success();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            !stderr.contains("retrying in"),
+            "-q silences the backoff notice: {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
 /// Guards a regression from `--profile` no longer carrying clap's own `env`
 /// plumbing (D8's fallback is resolved manually in `Globals::resolve`
 /// instead, via `config::env_var`): an exported-but-empty `CONTROLD_PROFILE`

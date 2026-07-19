@@ -45,7 +45,7 @@ async fn login(args: &LoginArgs, globals: &Globals) -> Result<(), Error> {
         );
     }
 
-    let raw_bytes = super::read_stdin("token").await?;
+    let raw_bytes = super::read_stdin("token", globals).await?;
     // Not `read_stdin`'s job: an invalid-UTF-8 token is still the same
     // environmental, argv-innocent failure ("stdin carried no token" and the
     // control-character rejection below stay usage errors; only I/O and
@@ -69,10 +69,10 @@ async fn login(args: &LoginArgs, globals: &Globals) -> Result<(), Error> {
     let context = config.current_context_name().to_owned();
     config.active_context_mut().token = Some(SecretString::from(token.to_owned()));
     store.save(&config)?;
-    eprintln!(
-        "info: token stored for context \"{context}\" in {}",
+    globals.info(format_args!(
+        "token stored for context \"{context}\" in {}",
         store.path().display()
-    );
+    ));
     Ok(())
 }
 
@@ -130,12 +130,12 @@ fn logout(globals: &Globals) -> Result<(), Error> {
 
     let stored = config.active_context().is_some_and(|c| c.token.is_some());
     if !stored {
-        eprintln!("info: no token stored for context \"{context}\"");
+        globals.info(format_args!("no token stored for context \"{context}\""));
         return Ok(());
     }
     config.active_context_mut().token = None;
     store.save(&config)?;
-    eprintln!("info: token removed for context \"{context}\"");
+    globals.info(format_args!("token removed for context \"{context}\""));
     Ok(())
 }
 

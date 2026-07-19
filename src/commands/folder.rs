@@ -230,14 +230,14 @@ async fn delete(selector: &str, dry_run: bool, globals: &Globals) -> Result<(), 
         folder.rules,
         escape_controls(&scope.name),
     );
-    confirm(&prompt, globals.yes, &scope).await?;
+    confirm(&prompt, globals.yes, globals.quiet, &scope).await?;
 
     client.write(Method::DELETE, &path, &[], "folder").await?;
-    eprintln!(
-        "info: deleted folder \"{}\" (id {})",
+    globals.info(format_args!(
+        "deleted folder \"{}\" (id {})",
         escape_controls(&folder.name),
         folder.id
-    );
+    ));
     Ok(())
 }
 

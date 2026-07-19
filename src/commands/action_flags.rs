@@ -338,6 +338,7 @@ pub(crate) mod tests {
                 ..RetryPolicy::default()
             },
             debug: false,
+            quiet: false,
             allow_unpinned_origin: true,
         })
         .expect("client builds")
@@ -600,6 +601,7 @@ pub(crate) mod tests {
                 ..RetryPolicy::default()
             },
             debug: false,
+            quiet: false,
             allow_unpinned_origin: true,
         })
         .expect("client builds");

@@ -382,7 +382,7 @@ async fn verify_create(
 
     if reconciled.absent.is_empty() && reconciled.mismatched.is_empty() {
         print_rules(globals, &reconciled.landed)?;
-        announce_if_ambiguous_write_landed(write_error.as_ref());
+        announce_if_ambiguous_write_landed(globals, write_error.as_ref());
         return Ok(());
     }
     if let Some(original) = resolve_ambiguous_write(&mut reconciled, write_error.as_ref()) {
@@ -664,7 +664,7 @@ async fn verify_update(
 
     if reconciled.absent.is_empty() && reconciled.mismatched.is_empty() {
         print_rules(globals, &reconciled.landed)?;
-        announce_if_ambiguous_write_landed(write_error.as_ref());
+        announce_if_ambiguous_write_landed(globals, write_error.as_ref());
         return Ok(());
     }
     if let Some(original) = resolve_ambiguous_write(&mut reconciled, write_error.as_ref()) {
@@ -773,7 +773,7 @@ async fn delete(raw_hostnames: &[String], dry_run: bool, globals: &Globals) -> R
     .await?;
 
     let prompt = delete_prompt(&resolved, &scope.name);
-    confirm(&prompt, globals.yes, &scope).await?;
+    confirm(&prompt, globals.yes, globals.quiet, &scope).await?;
 
     let mut results: Vec<(String, TargetResult)> = Vec::with_capacity(resolved.len());
     let mut aborted = false;
@@ -796,12 +796,12 @@ async fn delete(raw_hostnames: &[String], dry_run: bool, globals: &Globals) -> R
     // on the first failure and skips the rest, so a partial batch always
     // trips `aborted`).
     if !aborted {
-        eprintln!(
-            "info: deleted {} rule{} from profile \"{}\"",
+        globals.info(format_args!(
+            "deleted {} rule{} from profile \"{}\"",
             resolved.len(),
             if resolved.len() == 1 { "" } else { "s" },
             escape_controls(&scope.name)
-        );
+        ));
         return Ok(());
     }
 
@@ -959,7 +959,7 @@ async fn resolve_targets(
     // stays envelope-only for agents (D4).
     if !globals.json() {
         for (target, pk) in &resolution.substitutions {
-            eprintln!("info: {target:?} matches the stored rule {pk:?}");
+            globals.info(format_args!("{target:?} matches the stored rule {pk:?}"));
         }
     }
     Ok(resolution.resolved)
@@ -1209,11 +1209,9 @@ fn resolve_ambiguous_write(
 
 /// The case (a) info line (module doc): printed only when the read-back
 /// resolved a retryable write error, never on the ordinary success path.
-fn announce_if_ambiguous_write_landed(write_error: Option<&Error>) {
+fn announce_if_ambiguous_write_landed(globals: &Globals, write_error: Option<&Error>) {
     if write_error.is_some() {
-        eprintln!(
-            "info: the write reported an error but the read-back confirms every target landed"
-        );
+        globals.info("the write reported an error but the read-back confirms every target landed");
     }
 }
 

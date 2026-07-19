@@ -47,6 +47,7 @@ mod tests {
             no_retry: false,
             timeout: None,
             debug: false,
+            quiet: false,
         }
     }
 

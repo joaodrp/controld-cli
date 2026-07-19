@@ -53,6 +53,7 @@ fn build_client(token: Option<SecretString>, globals: &Globals) -> Result<Client
         globals.timeout,
         globals.no_retry,
         globals.debug,
+        globals.quiet,
     )?)
 }
 
@@ -203,11 +204,13 @@ pub(crate) fn landed_write_unverified(error: Error, noun: &'static str) -> Error
 /// Off the runtime thread: a blocking read here would starve `main`'s select
 /// of its SIGINT branch and make Ctrl-C appear dead until the read completes
 /// — or, at a terminal, until Ctrl-D.
-pub(crate) async fn read_stdin(what: &str) -> Result<Vec<u8>, Error> {
+pub(crate) async fn read_stdin(what: &str, globals: &Globals) -> Result<Vec<u8>, Error> {
     use std::io::{IsTerminal, Read};
 
     if std::io::stdin().is_terminal() {
-        eprintln!("info: reading the {what} from stdin; end with Ctrl-D");
+        globals.info(format_args!(
+            "reading the {what} from stdin; end with Ctrl-D"
+        ));
     }
     tokio::task::spawn_blocking(|| {
         let mut raw = Vec::new();

@@ -39,6 +39,9 @@ Global options:
       --debug
           Request/response trace on stderr (token always redacted)
 
+  -q, --quiet
+          Suppress info lines on stderr (warnings and errors still print)
+
 Install:
   bash  cdctl completions bash > ~/.local/share/bash-completion/completions/cdctl
   zsh   cdctl completions zsh > ~/.zfunc/_cdctl   (add fpath+=~/.zfunc before compinit)

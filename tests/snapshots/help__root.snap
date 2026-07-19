@@ -49,6 +49,9 @@ Global options:
       --debug
           Request/response trace on stderr (token always redacted)
 
+  -q, --quiet
+          Suppress info lines on stderr (warnings and errors still print)
+
 Exit codes:
   0    ok
   1    generic error

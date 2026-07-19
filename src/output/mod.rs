@@ -15,6 +15,17 @@ pub enum Mode {
     Json,
 }
 
+/// The one emitter of advisory `info:` stderr lines, so the prefix and the
+/// `--quiet` gate live in a single place. Callers with a `Globals` in hand
+/// use [`Globals::info`](crate::cli::Globals::info); this free function
+/// serves the ones that only carry the flag (the API client, `confirm`).
+/// A failed stderr write is ignored — advisories must never fail a command.
+pub fn info(quiet: bool, message: impl std::fmt::Display) {
+    if !quiet {
+        eprintln!("info: {message}");
+    }
+}
+
 /// Checked data write, `println!` semantics: `doc` plus a trailing newline.
 /// A write failure is `Error::stdout_write_failed` (exit 1), never a
 /// `println!` panic leaking the undocumented 101 (D5). EPIPE never reaches

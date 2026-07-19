@@ -36,6 +36,7 @@ cdctl device list --json                        # v0.4
 | `--no-retry` | | Disable automatic retries. |
 | `--timeout <secs>` | | Per-request cap; default 30 s total, 10 s connect ([D12](decisions.md#d12--rate-limiting-reactive-not-predictive)). A hang is worse than a fast failure. |
 | `--debug` | | Request/response trace to stderr, including `x-controld-pop`/`x-controld-srv`. Token always redacted; upstream bytes JSON-escaped — control sequences never reach the terminal raw. |
+| `-q, --quiet` | | Suppress `info:` advisories on stderr (the implicit-profile notice, retry backoff, post-write confirmations). Warnings and errors always print; stdout is untouched. |
 
 **No `--token` flag** — argv is world-readable ([D6](decisions.md#d6--auth-env-or-stdin-no---token-flag-no-keyring)). Use `CONTROLD_API_TOKEN` or `cdctl auth login --token-stdin`.
 
@@ -48,6 +49,9 @@ are explicit.
 $ cdctl rule list
 info: using default profile "Home" (123456abcdefg) from config     # <- stderr, keeps implicit state honest
 ```
+
+`-q, --quiet` drops these advisories for callers that find them noisy; warnings and errors are
+not gated.
 
 ---
 

@@ -25,3 +25,4 @@ Global options:
       --no-retry           Disable automatic retries
       --timeout <SECS>     Per-request timeout in seconds
       --debug              Request/response trace on stderr (token always redacted)
+  -q, --quiet              Suppress info lines on stderr (warnings and errors still print)

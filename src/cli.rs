@@ -69,6 +69,10 @@ pub struct GlobalArgs {
     /// Request/response trace on stderr (token always redacted)
     #[arg(long, global = true)]
     pub debug: bool,
+
+    /// Suppress info lines on stderr (warnings and errors still print)
+    #[arg(short = 'q', long, global = true)]
+    pub quiet: bool,
 }
 
 impl GlobalArgs {
@@ -147,6 +151,7 @@ pub struct Globals {
     pub no_retry: bool,
     pub timeout: Option<u64>,
     pub debug: bool,
+    pub quiet: bool,
 }
 
 impl Globals {
@@ -188,11 +193,18 @@ impl Globals {
             no_retry: args.no_retry,
             timeout: args.timeout,
             debug: args.debug,
+            quiet: args.quiet,
         })
     }
 
     pub fn json(&self) -> bool {
         self.mode == Mode::Json
+    }
+
+    /// An advisory `info:` line on stderr, dropped under `--quiet`.
+    /// Warnings and errors never route through here — they always print.
+    pub fn info(&self, message: impl std::fmt::Display) {
+        crate::output::info(self.quiet, message);
     }
 }
 

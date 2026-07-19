@@ -67,7 +67,7 @@ pub async fn run(args: ApiArgs, globals: &Globals) -> Result<(), Error> {
         client.get_raw(&args.path, "resource").await?
     } else {
         let body = match body {
-            Some(pending) => Some(read_body(pending).await?),
+            Some(pending) => Some(read_body(pending, globals).await?),
             None => None,
         };
         client
@@ -88,11 +88,11 @@ enum PendingBody {
     Stdin,
 }
 
-async fn read_body(body: PendingBody) -> Result<RawBody, Error> {
+async fn read_body(body: PendingBody, globals: &Globals) -> Result<RawBody, Error> {
     match body {
         PendingBody::Ready(body) => Ok(body),
         PendingBody::Stdin => {
-            let raw = super::read_stdin("JSON body").await?;
+            let raw = super::read_stdin("JSON body", globals).await?;
             // Emptiness is the absence of a body, not a body to forward
             // verbatim (D9b) — the classic cause is a failed upstream
             // pipeline stage, and firing the mutation anyway could exit 0
