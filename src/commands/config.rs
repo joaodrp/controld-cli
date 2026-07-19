@@ -8,7 +8,7 @@ use serde_json::json;
 use crate::cli::Globals;
 use crate::config::{Store, TOKEN_ENV_VAR, env_var, resolve_token};
 use crate::error::Error;
-use crate::output::{self, emit, print_key_values};
+use crate::output::{self, emit, print_doc, print_key_values};
 
 #[derive(Debug, Subcommand)]
 pub enum ConfigCommand {
@@ -47,7 +47,7 @@ pub fn run(command: ConfigCommand, globals: &Globals) -> Result<(), Error> {
         ConfigCommand::List => list(&store, globals),
         ConfigCommand::Path => {
             super::reject_explicit_json(globals, "config path", "a path")?;
-            println!("{}", store.path().display());
+            print_doc(&store.path().display().to_string())?;
             // The path is the contract (where cdctl reads and writes) and must
             // print before the file exists — but a path that `cat` can't open
             // reads as a lie without this.
@@ -65,11 +65,11 @@ fn get(store: &Store, key: Key, globals: &Globals) -> Result<(), Error> {
     super::reject_explicit_json(globals, "config get", "a raw value")?;
     let config = super::load_config(store)?;
     match key {
-        Key::CurrentContext => println!("{}", config.current_context_name()),
+        Key::CurrentContext => print_doc(config.current_context_name())?,
         Key::DefaultProfile => {
             // Unset prints nothing: raw values stay pipe-safe.
             if let Some(profile) = config.default_profile() {
-                println!("{profile}");
+                print_doc(profile)?;
             }
         }
     }
@@ -166,7 +166,7 @@ fn list(store: &Store, globals: &Globals) -> Result<(), Error> {
                     .map_or_else(|| "(not set)".to_owned(), |s| format!("(set, {s})")),
             ),
             ("default_profile", show(&default_profile)),
-        ]);
+        ])
     })
 }
 

@@ -117,7 +117,7 @@ async fn status(globals: &Globals) -> Result<(), Error> {
                 ("email", auth_status.email.clone().unwrap_or_default()),
                 ("region", auth_status.region.clone().unwrap_or_default()),
                 ("token_source", auth_status.token_source.clone()),
-            ]);
+            ])
         },
     )
 }

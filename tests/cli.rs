@@ -2261,6 +2261,42 @@ fn a_closed_pipe_kills_quietly_with_sigpipe() {
     );
 }
 
+// --- A non-EPIPE stdout write failure is exit 1, never a panic's 101 ---
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_stdout_write_failure_is_exit_1_not_a_panic() {
+    // /dev/full fails every write with ENOSPC — the non-EPIPE failure mode
+    // D5's exit-code set must not leak as a `println!` panic (exit 101).
+    // Linux-only: macOS has no /dev/full.
+    let full = std::fs::OpenOptions::new()
+        .write(true)
+        .open("/dev/full")
+        .expect("/dev/full exists on linux");
+
+    let dir = tempdir();
+    let output = std::process::Command::new(assert_cmd::cargo::cargo_bin("cdctl"))
+        .env_clear()
+        .env("XDG_CONFIG_HOME", dir.path())
+        .arg("reference")
+        .stdout(std::process::Stdio::from(full))
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .expect("spawns");
+
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "a failed stdout write maps to exit 1, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("could not write to stdout"),
+        "the failure is diagnosed on stderr: {stderr}"
+    );
+}
+
 // --- folder: list/create/update/delete, action-flag validation, dry-run,
 // D8 confirmation ---
 

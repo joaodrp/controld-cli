@@ -26,8 +26,7 @@ pub fn run(globals: &Globals) -> Result<(), Error> {
         );
     }
     write_exit_codes(&mut doc);
-    print!("{doc}");
-    Ok(())
+    crate::output::print_raw(doc.as_bytes())
 }
 
 fn write_exit_codes(doc: &mut String) {

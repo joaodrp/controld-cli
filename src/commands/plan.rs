@@ -11,7 +11,7 @@ use super::action_flags::ActionSpec;
 use crate::cli::Globals;
 use crate::error::Error;
 use crate::model::action::Action;
-use crate::output::{emit, print_key_values};
+use crate::output::{emit, print_doc, print_key_values};
 
 /// The `-n, --dry-run` flag (the clig.dev standard flag), flattened into
 /// typed remote-mutation commands (commands.md#dry-run).
@@ -169,9 +169,10 @@ pub struct RuleDeleteIntent {
 pub fn print(globals: &Globals, plan: &Plan) -> Result<(), Error> {
     emit(globals.mode, globals.fields.as_deref(), plan, || {
         for request in &plan.requests {
-            println!("would send: {} {}", request.method, request.path);
-            render_intent(&request.intent);
+            print_doc(&format!("would send: {} {}", request.method, request.path))?;
+            render_intent(&request.intent)?;
         }
+        Ok(())
     })
 }
 
@@ -194,19 +195,18 @@ pub fn print_one(
     )
 }
 
-fn render_intent(intent: &Value) {
+fn render_intent(intent: &Value) -> Result<(), Error> {
     let Value::Object(map) = intent else {
         // Unreachable today (every intent type is an object), but a dry-run
         // renderer for DNS mutations must never print nothing for a payload
         // the user never saw.
-        println!("{}", render_value(intent));
-        return;
+        return print_doc(&render_value(intent));
     };
     let pairs: Vec<(&str, String)> = map
         .iter()
         .map(|(key, value)| (key.as_str(), render_value(value)))
         .collect();
-    print_key_values(&pairs);
+    print_key_values(&pairs)
 }
 
 fn render_value(value: &Value) -> String {

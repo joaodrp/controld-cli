@@ -15,9 +15,30 @@ pub enum Mode {
     Json,
 }
 
-pub fn print_json<T: Serialize>(value: &T) {
+/// Checked data write, `println!` semantics: `doc` plus a trailing newline.
+/// A write failure is `Error::stdout_write_failed` (exit 1), never a
+/// `println!` panic leaking the undocumented 101 (D5). EPIPE never reaches
+/// here on Unix — SIGPIPE keeps its default disposition, so a closed pipe
+/// kills the process with 141 before the write returns.
+pub fn print_doc(doc: &str) -> Result<(), Error> {
+    use std::io::Write;
+    writeln!(std::io::stdout().lock(), "{doc}").map_err(|e| Error::stdout_write_failed(&e))
+}
+
+/// Verbatim variant of [`print_doc`] for artifacts that own their trailing
+/// bytes (`reference`, `completions`, the `api` passthrough) — no added
+/// newline, binary-safe.
+pub fn print_raw(bytes: &[u8]) -> Result<(), Error> {
+    use std::io::Write;
+    std::io::stdout()
+        .lock()
+        .write_all(bytes)
+        .map_err(|e| Error::stdout_write_failed(&e))
+}
+
+pub fn print_json<T: Serialize>(value: &T) -> Result<(), Error> {
     let doc = serde_json::to_string_pretty(value).expect("output types serialize");
-    println!("{doc}");
+    print_doc(&doc)
 }
 
 /// The one data-output entry point: JSON mode always honors `--fields`,
@@ -39,7 +60,7 @@ pub fn emit<T: Serialize>(
     mode: Mode,
     fields: Option<&[String]>,
     value: &T,
-    human: impl FnOnce(),
+    human: impl FnOnce() -> Result<(), Error>,
 ) -> Result<(), Error> {
     match mode {
         Mode::Json => {
@@ -62,9 +83,9 @@ pub fn emit<T: Serialize>(
                     }
                 }
             }
-            print_json(&doc);
+            print_json(&doc)?;
         }
-        Mode::Human => human(),
+        Mode::Human => human()?,
     }
     Ok(())
 }
@@ -142,11 +163,15 @@ pub fn escape_controls(text: &str) -> Cow<'_, str> {
 }
 
 /// Human-mode key/value lines (e.g. `auth status`), aligned and escaped.
-pub fn print_key_values(pairs: &[(&str, String)]) {
+pub fn print_key_values(pairs: &[(&str, String)]) -> Result<(), Error> {
+    use std::io::Write;
     let width = pairs.iter().map(|(k, _)| k.len()).max().unwrap_or(0);
+    let mut out = std::io::stdout().lock();
     for (key, value) in pairs {
-        println!("{key:width$}  {}", escape_controls(value));
+        writeln!(out, "{key:width$}  {}", escape_controls(value))
+            .map_err(|e| Error::stdout_write_failed(&e))?;
     }
+    Ok(())
 }
 
 /// Default human view. `plain` drops borders for `awk`/`cut` (D3: piping

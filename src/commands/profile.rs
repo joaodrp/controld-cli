@@ -6,7 +6,7 @@ use clap::Subcommand;
 use crate::cli::Globals;
 use crate::error::Error;
 use crate::model::profile::Profile;
-use crate::output::{self, emit, print_key_values, render_table, time};
+use crate::output::{self, emit, print_doc, print_key_values, render_table, time};
 
 #[derive(Debug, Subcommand)]
 pub enum ProfileCommand {
@@ -49,10 +49,9 @@ async fn list(globals: &Globals) -> Result<(), Error> {
                 ]
             })
             .collect();
-        println!(
-            "{}",
-            render_table(&["NAME", "ID", "RULES", "UPDATED"], rows, globals.plain)
-        );
+        print_doc(
+            &render_table(&["NAME", "ID", "RULES", "UPDATED"], rows, globals.plain).to_string(),
+        )
     })
 }
 
@@ -82,6 +81,6 @@ async fn get(selector: &str, globals: &Globals) -> Result<(), Error> {
                     .unwrap_or_else(|| "-".to_owned()),
             ),
             ("updated", profile.updated.clone()),
-        ]);
+        ])
     })
 }

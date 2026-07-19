@@ -1526,7 +1526,7 @@ fn render_rules_table(rules: &[Rule], plain: bool) -> comfy_table::Table {
 
 fn print_rules(globals: &Globals, rules: &[Rule]) -> Result<(), Error> {
     emit(globals.mode, globals.fields.as_deref(), &rules, || {
-        println!("{}", render_rules_table(rules, globals.plain));
+        crate::output::print_doc(&render_rules_table(rules, globals.plain).to_string())
     })
 }
 

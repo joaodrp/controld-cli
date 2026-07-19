@@ -5,8 +5,6 @@
 //! pairs are forwarded raw by design — the escape hatch must not reshape
 //! what it carries.
 
-use std::io::Write;
-
 use clap::Args;
 use reqwest::{Method, Url};
 
@@ -79,10 +77,7 @@ pub async fn run(args: ApiArgs, globals: &Globals) -> Result<(), Error> {
 
     // The upstream body verbatim — no added newline; piping the binary
     // /mobileconfig response to a file must not corrupt it.
-    std::io::stdout()
-        .write_all(&bytes)
-        .map_err(|e| Error::stdout_write_failed(&e))?;
-    Ok(())
+    crate::output::print_raw(&bytes)
 }
 
 /// The validated-but-unread body: stdin is consumed only after every

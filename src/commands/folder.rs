@@ -15,7 +15,7 @@ use super::plan::{
 use crate::cli::Globals;
 use crate::error::Error;
 use crate::model::folder::{ApiFolder, Folder};
-use crate::output::{self, emit, escape_controls, print_key_values, render_table};
+use crate::output::{self, emit, escape_controls, print_doc, print_key_values, render_table};
 
 #[derive(Debug, Subcommand)]
 pub enum FolderCommand {
@@ -99,14 +99,14 @@ async fn list(globals: &Globals) -> Result<(), Error> {
                 ]
             })
             .collect();
-        println!(
-            "{}",
-            render_table(
+        print_doc(
+            &render_table(
                 &["NAME", "ID", "RULES", "ACTION", "ENABLED"],
                 rows,
-                globals.plain
+                globals.plain,
             )
-        );
+            .to_string(),
+        )
     })
 }
 
@@ -272,7 +272,7 @@ fn print_folder(globals: &Globals, folder: &Folder) -> Result<(), Error> {
             ("via", folder.via.clone().unwrap_or_else(|| "-".to_owned())),
             ("enabled", folder.enabled.to_string()),
             ("rules", folder.rules.to_string()),
-        ]);
+        ])
     })
 }
 
