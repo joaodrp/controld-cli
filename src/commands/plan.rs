@@ -169,7 +169,10 @@ pub struct RuleDeleteIntent {
 pub fn print(globals: &Globals, plan: &Plan) -> Result<(), Error> {
     emit(globals.mode, globals.fields.as_deref(), plan, || {
         for request in &plan.requests {
-            print_doc(&format!("would send: {} {}", request.method, request.path))?;
+            print_doc(format_args!(
+                "would send: {} {}",
+                request.method, request.path
+            ))?;
             render_intent(&request.intent)?;
         }
         Ok(())
@@ -200,7 +203,7 @@ fn render_intent(intent: &Value) -> Result<(), Error> {
         // Unreachable today (every intent type is an object), but a dry-run
         // renderer for DNS mutations must never print nothing for a payload
         // the user never saw.
-        return print_doc(&render_value(intent));
+        return print_doc(render_value(intent));
     };
     let pairs: Vec<(&str, String)> = map
         .iter()

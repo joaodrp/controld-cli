@@ -47,7 +47,7 @@ pub fn run(command: ConfigCommand, globals: &Globals) -> Result<(), Error> {
         ConfigCommand::List => list(&store, globals),
         ConfigCommand::Path => {
             super::reject_explicit_json(globals, "config path", "a path")?;
-            print_doc(&store.path().display().to_string())?;
+            print_doc(store.path().display())?;
             // The path is the contract (where cdctl reads and writes) and must
             // print before the file exists — but a path that `cat` can't open
             // reads as a lie without this.

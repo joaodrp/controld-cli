@@ -99,14 +99,11 @@ async fn list(globals: &Globals) -> Result<(), Error> {
                 ]
             })
             .collect();
-        print_doc(
-            &render_table(
-                &["NAME", "ID", "RULES", "ACTION", "ENABLED"],
-                rows,
-                globals.plain,
-            )
-            .to_string(),
-        )
+        print_doc(render_table(
+            &["NAME", "ID", "RULES", "ACTION", "ENABLED"],
+            rows,
+            globals.plain,
+        ))
     })
 }
 

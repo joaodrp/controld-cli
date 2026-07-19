@@ -33,7 +33,7 @@ pub fn info(quiet: bool, message: impl std::fmt::Display) {
 /// `println!` panic leaking the undocumented 101 (D5). EPIPE never reaches
 /// here on Unix — SIGPIPE keeps its default disposition, so a closed pipe
 /// kills the process with 141 before the write returns.
-pub fn print_doc(doc: &str) -> Result<(), Error> {
+pub fn print_doc(doc: impl std::fmt::Display) -> Result<(), Error> {
     use std::io::Write;
     writeln!(std::io::stdout().lock(), "{doc}").map_err(|e| Error::stdout_write_failed(&e))
 }
