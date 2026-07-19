@@ -129,6 +129,11 @@ since v0.1, semver-guaranteed.
 
 ## Post-1.0 candidates
 
+- **PTY test harness** — the three TTY-gated behaviors (hidden token prompt, slow-request
+  notice, interactive confirmation) are manual-test only. A `portable-pty` dev-dependency
+  would let one integration test pin the highest-risk property: a slow write still sends
+  exactly one request while the notice fires (the notice wrapper re-awaits the same future,
+  and only a test can keep it that way).
 - **Machine-readable command spec** — generate a versioned schema from the same centralized
   metadata that drives clap and `cdctl reference`; implement only when a concrete consumer
   exists. No handwritten parallel contract ([D3](decisions.md#d3--no-tty-based-format-switching)).
