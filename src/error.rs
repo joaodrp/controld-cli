@@ -981,4 +981,67 @@ mod tests {
         assert_eq!(value["kind"], "unconvergeable");
         assert_eq!(value["rules"][0]["desired_via6"], serde_json::Value::Null);
     }
+
+    /// The live-captured 400 envelopes classify by the documented rules
+    /// (error-codes.md): an "already exists" message refines to exit 6,
+    /// every other 400 is request.invalid, exit 1. Each fixture names its
+    /// expectation so a classifier shift fails loudly against the capture.
+    #[test]
+    fn captured_400_envelopes_classify_as_documented() {
+        fn parts(name: &str) -> (Option<i64>, Option<String>) {
+            let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/api")
+                .join(name);
+            let raw = std::fs::read_to_string(&path)
+                .unwrap_or_else(|e| panic!("fixture {name} unreadable: {e}"));
+            let envelope: crate::api::envelope::Envelope = serde_json::from_str(&raw)
+                .unwrap_or_else(|e| panic!("fixture {name} must deserialize: {e}"));
+            let error = envelope.error.expect("error member");
+            (error.code, error.message)
+        }
+
+        for (name, resource, slug, exit) in [
+            (
+                "err_duplicate.json",
+                "rule",
+                "rule.conflict",
+                Exit::Conflict,
+            ),
+            (
+                "err_device_exists.json",
+                "device",
+                "device.conflict",
+                Exit::Conflict,
+            ),
+            (
+                "err_max_rules.json",
+                "rule",
+                "request.invalid",
+                Exit::Generic,
+            ),
+            (
+                "err_name_too_short.json",
+                "folder",
+                "request.invalid",
+                Exit::Generic,
+            ),
+            (
+                "err_config_required.json",
+                "profile",
+                "request.invalid",
+                Exit::Generic,
+            ),
+            (
+                "err_via6_clear.json",
+                "rule",
+                "request.invalid",
+                Exit::Generic,
+            ),
+        ] {
+            let (code, message) = parts(name);
+            let error = classify_response(400, code, message.as_deref(), resource, None);
+            assert_eq!(error.code, slug, "{name}");
+            assert_eq!(error.exit(), exit, "{name}");
+        }
+    }
 }
