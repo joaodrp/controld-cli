@@ -30,6 +30,9 @@ pub const ENV_HELP: &str = "Environment:
     name = "cdctl",
     version,
     about = "Manage a Control D account over its REST API",
+    long_about = "Manage a Control D account over its REST API: profiles, DNS rules, and \
+rule folders, with JSON output for scripts and agents. Not ctrld, the Control D DNS \
+daemon: that runs your DNS, cdctl manages your account.",
     after_help = ROOT_EXAMPLES,
     after_long_help = format!(
         "{ROOT_EXAMPLES}\n\n{ENV_HELP}\n\nExit codes:\n{}\nDocs and issues: {}",
@@ -120,19 +123,41 @@ fn parse_timeout_secs(raw: &str) -> Result<u64, String> {
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Authenticate cdctl with an API token
-    #[command(subcommand)]
+    #[command(
+        subcommand,
+        long_about = "Authenticate cdctl with an API token. Tokens are accepted from stdin \
+or CONTROLD_API_TOKEN, never argv (a token in argv is world-readable)."
+    )]
     Auth(AuthCommand),
     /// Inspect the account's profiles
-    #[command(subcommand)]
+    #[command(
+        subcommand,
+        long_about = "Inspect the account's profiles. A profile is Control D's unit of DNS \
+configuration. Rule and folder commands operate within one, chosen with --profile or \
+the config's default_profile."
+    )]
     Profile(ProfileCommand),
     /// Manage a profile's DNS rules
-    #[command(subcommand)]
+    #[command(
+        subcommand,
+        long_about = "Manage a profile's custom DNS rules: block, bypass, spoof, or \
+redirect individual hostnames. Every write is verified by reading the profile back, \
+because the API can acknowledge writes it did not fully apply."
+    )]
     Rule(RuleCommand),
     /// Manage a profile's rule folders (API: groups)
-    #[command(subcommand)]
+    #[command(
+        subcommand,
+        long_about = "Manage a profile's rule folders (the API calls them groups). A folder \
+groups rules and can carry a default action applied to the rules inside it."
+    )]
     Folder(FolderCommand),
     /// Read and write cdctl's own configuration
-    #[command(subcommand)]
+    #[command(
+        subcommand,
+        long_about = "Read and write cdctl's own configuration: the current context and \
+each context's default profile. The file lives where `cdctl config path` points."
+    )]
     Config(ConfigCommand),
     /// Raw request against the API origin (escape hatch, GET by default)
     Api(ApiArgs),

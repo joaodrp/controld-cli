@@ -13,6 +13,11 @@ use crate::cli::Globals;
 use crate::error::{Error, Exit};
 
 #[derive(Debug, Args)]
+#[command(
+    long_about = "Send one raw request to the Control D API with cdctl's auth, \
+retries, and error mapping, but no schema knowledge — the escape hatch for endpoints \
+without a typed command. GET by default. Any other method also requires --yes."
+)]
 #[command(after_help = "Examples:
   cdctl api /profiles
   cdctl api /profiles/123456abcdefg/devices

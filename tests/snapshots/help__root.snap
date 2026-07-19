@@ -2,7 +2,9 @@
 source: tests/help.rs
 expression: root
 ---
-Manage a Control D account over its REST API
+Manage a Control D account over its REST API: profiles, DNS rules, and rule folders, with JSON
+output for scripts and agents. Not ctrld, the Control D DNS daemon: that runs your DNS, cdctl
+manages your account.
 
 Usage: cdctl [OPTIONS] <COMMAND>
 

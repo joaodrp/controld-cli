@@ -2,7 +2,8 @@
 source: tests/help.rs
 expression: "help_for(dir.path(), &[noun])"
 ---
-Read and write cdctl's own configuration
+Read and write cdctl's own configuration: the current context and each context's default profile.
+The file lives where `cdctl config path` points.
 
 Usage: cdctl config [OPTIONS] <COMMAND>
 
@@ -14,15 +15,33 @@ Commands:
   help  Print this message or the help of the given subcommand(s)
 
 Options:
-  -h, --help  Print help
+  -h, --help
+          Print help (see a summary with '-h')
 
 Global options:
-  -p, --profile <PK|name>  Profile to operate on (name or PK) [env: CONTROLD_PROFILE]
-      --json               Emit JSON (full document) instead of a table
-      --fields <a,b>       Comma-separated JSON fields to keep (implies --json)
-      --plain              Tables without borders, for awk/cut
-  -y, --yes                Skip confirmation prompts (ignored when the target profile is implicit)
-      --no-retry           Disable automatic retries
-      --timeout <SECS>     Per-request timeout in seconds
-      --debug              Request/response trace on stderr (token always redacted)
-  -q, --quiet              Suppress info lines on stderr (warnings and errors still print)
+  -p, --profile <PK|name>
+          Profile to operate on (name or PK) [env: CONTROLD_PROFILE]
+
+      --json
+          Emit JSON (full document) instead of a table
+
+      --fields <a,b>
+          Comma-separated JSON fields to keep (implies --json)
+
+      --plain
+          Tables without borders, for awk/cut
+
+  -y, --yes
+          Skip confirmation prompts (ignored when the target profile is implicit)
+
+      --no-retry
+          Disable automatic retries
+
+      --timeout <SECS>
+          Per-request timeout in seconds
+
+      --debug
+          Request/response trace on stderr (token always redacted)
+
+  -q, --quiet
+          Suppress info lines on stderr (warnings and errors still print)

@@ -4,7 +4,7 @@ expression: stdout
 ---
 # cdctl reference
 
-Manage a Control D account over its REST API
+Manage a Control D account over its REST API: profiles, DNS rules, and rule folders, with JSON output for scripts and agents. Not ctrld, the Control D DNS daemon: that runs your DNS, cdctl manages your account.
 
 ## Global flags
 
@@ -20,7 +20,7 @@ Manage a Control D account over its REST API
 
 ## cdctl auth
 
-Authenticate cdctl with an API token
+Authenticate cdctl with an API token. Tokens are accepted from stdin or CONTROLD_API_TOKEN, never argv (a token in argv is world-readable).
 
 ### cdctl auth login
 
@@ -38,7 +38,7 @@ Remove the stored token for the active context
 
 ## cdctl profile
 
-Inspect the account's profiles
+Inspect the account's profiles. A profile is Control D's unit of DNS configuration. Rule and folder commands operate within one, chosen with --profile or the config's default_profile.
 
 ### cdctl profile list
 
@@ -52,7 +52,7 @@ Show one profile by id or name
 
 ## cdctl rule
 
-Manage a profile's DNS rules
+Manage a profile's custom DNS rules: block, bypass, spoof, or redirect individual hostnames. Every write is verified by reading the profile back, because the API can acknowledge writes it did not fully apply.
 
 ### cdctl rule list
 
@@ -96,7 +96,7 @@ Delete rules
 
 ## cdctl folder
 
-Manage a profile's rule folders (API: groups)
+Manage a profile's rule folders (the API calls them groups). A folder groups rules and can carry a default action applied to the rules inside it.
 
 ### cdctl folder list
 
@@ -136,7 +136,7 @@ Delete a folder and its contained rules
 
 ## cdctl config
 
-Read and write cdctl's own configuration
+Read and write cdctl's own configuration: the current context and each context's default profile. The file lives where `cdctl config path` points.
 
 ### cdctl config get
 
