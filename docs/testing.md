@@ -22,7 +22,9 @@ drift tripwire for an unversioned API.
 
 `tests/fixtures/api/` holds **real, sanitized API responses** — prefer them to hand-written
 mocks; they carry every hazard in the [API-hazards index](reference/hazards.md). Sanitize any
-new fixture: no emails, device names, real domains, public IPs, or account PKs.
+new fixture: no emails, device names, real domains, public IPs, or account PKs. PK-shaped hex
+strings and resolver URLs must be synthetic stand-ins, never values copied from a live account —
+a real DoH resolver URL is usable by anyone who has it.
 
 ## Live-test isolation
 

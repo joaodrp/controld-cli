@@ -46,8 +46,8 @@ Prebuilt archives ship generated completions and man pages. To generate a script
 cdctl completions <shell>
 ```
 
-The script goes to stdout; `cdctl completions --help` shows each shell's install path. Supported:
-`bash`, `elvish`, `fish`, `powershell`, `zsh`.
+The script goes to stdout; `cdctl completions --help` shows the install paths for bash, zsh, and
+fish. Supported: `bash`, `elvish`, `fish`, `powershell`, `zsh`.
 
 ## Quickstart
 

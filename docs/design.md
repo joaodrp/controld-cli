@@ -19,8 +19,8 @@ cdctl <noun> <verb> [args] [flags]
 ```sh
 cdctl profile list
 cdctl rule create ads.example.com --action block
-cdctl filter enable ads_medium --profile Home
-cdctl device list --json
+cdctl filter enable ads_medium --profile Home   # v0.3
+cdctl device list --json                        # v0.4
 ```
 
 ### Global flags
