@@ -7,16 +7,13 @@
 
 use std::io::{IsTerminal, Write};
 
+use crate::cli::Globals;
 use crate::commands::scope::ProfileScope;
 use crate::error::{Error, Exit};
 
 /// `prompt` is the full question, without the `[y/N]` suffix (added here).
-pub async fn confirm(
-    prompt: &str,
-    yes: bool,
-    quiet: bool,
-    scope: &ProfileScope,
-) -> Result<(), Error> {
+pub async fn confirm(prompt: &str, globals: &Globals, scope: &ProfileScope) -> Result<(), Error> {
+    let yes = globals.yes;
     if yes && scope.explicit {
         return Ok(());
     }
@@ -28,8 +25,7 @@ pub async fn confirm(
         // ignores it". The non-interactive path says the same thing inside
         // its error instead — one explanation per stream, never both.
         if yes {
-            crate::output::info(
-                quiet,
+            globals.info(
                 "--yes is ignored: the target profile is implicit (config's \
                  default_profile); pass --profile or set CONTROLD_PROFILE to confirm \
                  non-interactively",
@@ -81,6 +77,21 @@ pub async fn confirm(
 mod tests {
     use super::*;
 
+    fn globals(yes: bool) -> Globals {
+        Globals {
+            profile: None,
+            mode: crate::output::Mode::Human,
+            json_explicit: false,
+            fields: None,
+            plain: false,
+            yes,
+            no_retry: false,
+            timeout: None,
+            debug: false,
+            quiet: false,
+        }
+    }
+
     // `cargo test` never runs attached to a TTY, so every case here exercises
     // the non-interactive branch — the interactive prompt path is covered by
     // manual testing only.
@@ -95,14 +106,14 @@ mod tests {
 
     #[tokio::test]
     async fn yes_with_an_explicit_scope_needs_no_prompt() {
-        confirm("delete it?", true, false, &scope(true))
+        confirm("delete it?", &globals(true), &scope(true))
             .await
             .expect("explicit --yes is honored");
     }
 
     #[tokio::test]
     async fn yes_with_an_implicit_scope_is_ignored() {
-        let error = confirm("delete it?", true, false, &scope(false))
+        let error = confirm("delete it?", &globals(true), &scope(false))
             .await
             .expect_err("yes ignored, non-interactive");
         assert_eq!(error.exit(), Exit::ConfirmationRequired);
@@ -112,7 +123,7 @@ mod tests {
 
     #[tokio::test]
     async fn no_yes_at_all_is_confirmation_required() {
-        let error = confirm("delete it?", false, false, &scope(true))
+        let error = confirm("delete it?", &globals(false), &scope(true))
             .await
             .expect_err("no --yes, non-interactive");
         assert_eq!(error.exit(), Exit::ConfirmationRequired);

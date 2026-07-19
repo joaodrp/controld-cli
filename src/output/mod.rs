@@ -18,7 +18,7 @@ pub enum Mode {
 /// The one emitter of advisory `info:` stderr lines, so the prefix and the
 /// `--quiet` gate live in a single place. Callers with a `Globals` in hand
 /// use [`Globals::info`](crate::cli::Globals::info); this free function
-/// serves the ones that only carry the flag (the API client, `confirm`).
+/// serves the one caller below `Globals` (the API client).
 /// A failed stderr write is ignored — advisories must never fail a command,
 /// and `eprintln!` would panic instead.
 pub fn info(quiet: bool, message: impl std::fmt::Display) {

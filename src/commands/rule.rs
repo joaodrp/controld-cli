@@ -779,7 +779,7 @@ async fn delete(raw_hostnames: &[String], dry_run: bool, globals: &Globals) -> R
     .await?;
 
     let prompt = delete_prompt(&resolved, &scope.name);
-    confirm(&prompt, globals.yes, globals.quiet, &scope).await?;
+    confirm(&prompt, globals, &scope).await?;
 
     let mut results: Vec<(String, TargetResult)> = Vec::with_capacity(resolved.len());
     let mut aborted = false;

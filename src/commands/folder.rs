@@ -227,7 +227,7 @@ async fn delete(selector: &str, dry_run: bool, globals: &Globals) -> Result<(), 
         folder.rules,
         escape_controls(&scope.name),
     );
-    confirm(&prompt, globals.yes, globals.quiet, &scope).await?;
+    confirm(&prompt, globals, &scope).await?;
 
     client.write(Method::DELETE, &path, &[], "folder").await?;
     globals.info(format_args!(
