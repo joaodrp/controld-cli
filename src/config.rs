@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 use etcetera::BaseStrategy;
 use secrecy::{ExposeSecret, SecretString};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::error::Error;
 
@@ -21,7 +21,7 @@ pub const DEFAULT_CONTEXT: &str = "personal";
 pub const TOKEN_ENV_VAR: &str = "CONTROLD_API_TOKEN";
 
 /// Deliberately not `Serialize`: a config holds the token, and the only
-/// serializer allowed to see it is the private disk view inside
+/// writer allowed to see it is [`merge_into_document`] inside
 /// [`Store::save`] — no output path can print a `Config` by accident.
 #[derive(Debug, Default, Deserialize)]
 pub struct Config {
@@ -38,45 +38,53 @@ pub struct Context {
     pub org: Option<String>,
 }
 
-/// The disk form of [`Config`] — the single place the token deliberately
-/// leaves [`secrecy`]'s guard; that is what the 0600 file is for.
-#[derive(Serialize)]
-struct DiskConfig<'a> {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    current_context: Option<&'a str>,
-    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
-    contexts: BTreeMap<&'a str, DiskContext<'a>>,
-}
-
-#[derive(Serialize)]
-struct DiskContext<'a> {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    token: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    default_profile: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    org: Option<&'a str>,
-}
-
-impl<'a> From<&'a Config> for DiskConfig<'a> {
-    fn from(config: &'a Config) -> Self {
-        Self {
-            current_context: config.current_context.as_deref(),
-            contexts: config
-                .contexts
-                .iter()
-                .map(|(name, context)| {
-                    (
-                        name.as_str(),
-                        DiskContext {
-                            token: context.token.as_ref().map(ExposeSecret::expose_secret),
-                            default_profile: context.default_profile.as_deref(),
-                            org: context.org.as_deref(),
-                        },
-                    )
-                })
-                .collect(),
+/// The known fields merged into the on-disk TOML document — the single place
+/// the token deliberately leaves [`secrecy`]'s guard; that is what the 0600
+/// file is for. Merging (rather than serializing a struct from scratch)
+/// keeps hand-written comments and keys a newer cdctl wrote: the file is an
+/// interface, and this version's writes must not destroy what its reads
+/// already tolerate ([`tests::unknown_keys_are_tolerated`]).
+fn merge_into_document(config: &Config, doc: &mut toml_edit::DocumentMut) {
+    fn set_or_remove(table: &mut toml_edit::Table, key: &str, value: Option<&str>) {
+        match value {
+            Some(value) => {
+                table[key] = toml_edit::value(value);
+            }
+            None => {
+                table.remove(key);
+            }
         }
+    }
+
+    set_or_remove(doc, "current_context", config.current_context.as_deref());
+
+    if config.contexts.is_empty() {
+        return;
+    }
+    // A fresh `[contexts]` header would be noise — only the per-context
+    // `[contexts.<name>]` sections should appear, as before the merge.
+    if !doc.contains_key("contexts") {
+        let mut implicit = toml_edit::Table::new();
+        implicit.set_implicit(true);
+        doc["contexts"] = toml_edit::Item::Table(implicit);
+    }
+    for (name, context) in &config.contexts {
+        let contexts = doc["contexts"]
+            .as_table_mut()
+            .expect("load rejected a non-table contexts key");
+        if !contexts.contains_key(name) {
+            contexts[name] = toml_edit::Item::Table(toml_edit::Table::new());
+        }
+        let table = contexts[name]
+            .as_table_mut()
+            .expect("load rejected a non-table context");
+        set_or_remove(
+            table,
+            "token",
+            context.token.as_ref().map(ExposeSecret::expose_secret),
+        );
+        set_or_remove(table, "default_profile", context.default_profile.as_deref());
+        set_or_remove(table, "org", context.org.as_deref());
     }
 }
 
@@ -188,8 +196,17 @@ impl Store {
         let dir = self.path.parent().unwrap_or_else(|| Path::new("."));
         create_private_dir(dir)?;
 
-        let serialized = toml::to_string_pretty(&DiskConfig::from(config))
-            .map_err(|e| Error::config_invalid(format!("could not serialize the config: {e}")))?;
+        // Merge into the existing document so comments and unknown keys
+        // survive. A missing or unparseable file starts fresh — every save
+        // in a command follows a successful `load`, so unparseable here
+        // means the file changed underneath us and a full rewrite matches
+        // the old behavior.
+        let mut doc = std::fs::read_to_string(&self.path)
+            .ok()
+            .and_then(|raw| raw.parse::<toml_edit::DocumentMut>().ok())
+            .unwrap_or_default();
+        merge_into_document(config, &mut doc);
+        let serialized = doc.to_string();
 
         // Same-directory tempfile (0600 on Unix by construction) + atomic
         // rename: readers see the old file or the new one, never a torn write.
@@ -415,6 +432,57 @@ mod tests {
 
         let loaded = store.load().expect("lenient load");
         assert_eq!(loaded.config.contexts["acme"].org.as_deref(), Some("o1"));
+    }
+
+    #[test]
+    fn save_preserves_comments_and_unknown_keys() {
+        // The config file is an interface: keys a newer cdctl wrote and
+        // comments a person left must survive this version's writes, not
+        // just its reads.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = store_in(dir.path());
+        std::fs::create_dir_all(store.path().parent().expect("parent")).expect("mkdir");
+        std::fs::write(
+            store.path(),
+            "# hand-written note\nfuture_top_level = 1\n\n[contexts.personal]\ntoken = \"api.x\"\nfuture_key = true\n",
+        )
+        .expect("write");
+
+        let mut config = store.load().expect("load").config;
+        config.active_context_mut().default_profile = Some("Home".into());
+        store.save(&config).expect("save");
+
+        let raw = std::fs::read_to_string(store.path()).expect("readable");
+        for kept in [
+            "# hand-written note",
+            "future_top_level = 1",
+            "future_key = true",
+            "token = \"api.x\"",
+        ] {
+            assert!(raw.contains(kept), "{kept:?} must survive a save:\n{raw}");
+        }
+        assert!(
+            raw.contains("default_profile = \"Home\""),
+            "the mutation lands:\n{raw}"
+        );
+    }
+
+    #[test]
+    fn save_removes_a_cleared_known_key() {
+        // Logout sets the token to None: the merge must delete the key, not
+        // leave the old secret on disk.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = store_in(dir.path());
+        store
+            .save(&config_with_token("api.doomed"))
+            .expect("first save");
+
+        let mut config = store.load().expect("load").config;
+        config.active_context_mut().token = None;
+        store.save(&config).expect("save");
+
+        let raw = std::fs::read_to_string(store.path()).expect("readable");
+        assert!(!raw.contains("api.doomed"), "cleared token is gone:\n{raw}");
     }
 
     #[test]

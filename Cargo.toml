@@ -38,6 +38,8 @@ tempfile = "3.27.0"
 thiserror = "2.0.18"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "signal", "time"] }
 toml = "1.1.2"
+# Config writes edit the existing document in place - comments and unknown keys survive.
+toml_edit = "0.23.10"
 
 [dev-dependencies]
 assert_cmd = "2.2.2"
