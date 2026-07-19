@@ -52,6 +52,12 @@ Global options:
   -q, --quiet
           Suppress info lines on stderr (warnings and errors still print)
 
+Examples:
+  cdctl auth login --token-stdin < token.txt
+  cdctl profile list
+  cdctl rule create ads.example.com --action block --profile Home
+  cdctl rule list --json
+
 Exit codes:
   0    ok
   1    generic error

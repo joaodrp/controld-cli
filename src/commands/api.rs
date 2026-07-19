@@ -13,6 +13,10 @@ use crate::cli::Globals;
 use crate::error::{Error, Exit};
 
 #[derive(Debug, Args)]
+#[command(after_help = "Examples:
+  cdctl api /profiles
+  cdctl api /profiles/123456abcdefg/devices
+  cdctl api /profiles/123456abcdefg/rules -X POST -F 'do=0' -F 'hostnames[]=ads.example.com' --yes")]
 pub struct ApiArgs {
     /// Path relative to the API origin, query string included
     /// (e.g. '/access?device_id=abc')

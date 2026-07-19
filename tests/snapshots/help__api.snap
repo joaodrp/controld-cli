@@ -27,3 +27,8 @@ Global options:
       --timeout <SECS>     Per-request timeout in seconds
       --debug              Request/response trace on stderr (token always redacted)
   -q, --quiet              Suppress info lines on stderr (warnings and errors still print)
+
+Examples:
+  cdctl api /profiles
+  cdctl api /profiles/123456abcdefg/devices
+  cdctl api /profiles/123456abcdefg/rules -X POST -F 'do=0' -F 'hostnames[]=ads.example.com' --yes

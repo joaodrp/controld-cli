@@ -11,12 +11,22 @@ use crate::commands::{
 use crate::error::Error;
 use crate::output::Mode;
 
+const ROOT_EXAMPLES: &str = "Examples:
+  cdctl auth login --token-stdin < token.txt
+  cdctl profile list
+  cdctl rule create ads.example.com --action block --profile Home
+  cdctl rule list --json";
+
 #[derive(Debug, Parser)]
 #[command(
     name = "cdctl",
     version,
     about = "Manage a Control D account over its REST API",
-    after_long_help = format!("Exit codes:\n{}", crate::error::EXIT_CODES_HELP)
+    after_help = ROOT_EXAMPLES,
+    after_long_help = format!(
+        "{ROOT_EXAMPLES}\n\nExit codes:\n{}",
+        crate::error::EXIT_CODES_HELP
+    )
 )]
 pub struct Cli {
     #[command(flatten)]

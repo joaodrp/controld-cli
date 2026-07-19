@@ -13,6 +13,9 @@ use crate::output::{self, emit, print_key_values};
 #[derive(Debug, Subcommand)]
 pub enum AuthCommand {
     /// Store an API token read from stdin
+    #[command(after_help = "Examples:
+  cdctl auth login --token-stdin < token.txt
+  op read op://Private/controld/token | cdctl auth login --token-stdin")]
     Login(LoginArgs),
     /// Whether a token is configured, where from, and who it authenticates
     Status,

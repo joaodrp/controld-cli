@@ -142,12 +142,18 @@ where
 #[derive(Debug, Subcommand)]
 pub enum RuleCommand {
     /// List a profile's rules
+    #[command(after_help = "Examples:
+  cdctl rule list --profile Home
+  cdctl rule list --folder Streaming --json")]
     List {
         /// Folder id or name (omitted lists the whole profile)
         #[arg(long, value_name = "id|name")]
         folder: Option<String>,
     },
     /// Create rules
+    #[command(after_help = "Examples:
+  cdctl rule create ads.example.com trackers.example.net --action block
+  cdctl rule create tv.example.com --action spoof --via 192.0.2.10 --folder Streaming")]
     Create {
         /// Hostnames to create (wildcards like *.example.com are legal)
         #[arg(required = true, value_name = "HOSTNAME")]
