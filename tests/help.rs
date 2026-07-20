@@ -50,6 +50,39 @@ fn help_snapshots() {
     }
 }
 
+/// The README's Usage block is hand-pasted, so it can drift from the real
+/// command surface. Assert every command clap advertises (minus the `help`
+/// builtin) appears there verbatim, and vice versa, so a new or renamed
+/// noun fails CI until the README catches up.
+#[test]
+fn readme_usage_block_matches_the_command_surface() {
+    let dir = tempdir();
+    let help = help_for(dir.path(), &[]);
+    let command_lines: Vec<&str> = help
+        .lines()
+        .skip_while(|line| *line != "Commands:")
+        .skip(1)
+        .take_while(|line| !line.trim().is_empty())
+        .filter(|line| !line.starts_with("  help "))
+        .collect();
+
+    let readme =
+        std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("README.md"))
+            .expect("README.md is readable");
+
+    assert!(
+        readme.contains("Usage: cdctl [OPTIONS] <COMMAND>"),
+        "the README Usage block dropped the usage line"
+    );
+    for line in &command_lines {
+        assert!(
+            readme.contains(line),
+            "the README Usage block is missing a command clap advertises:\n{line}\n\
+             regenerate it from `cdctl --help`"
+        );
+    }
+}
+
 #[test]
 fn reference_snapshot() {
     let dir = tempdir();

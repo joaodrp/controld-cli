@@ -50,6 +50,24 @@ $ cdctl rule list --fields hostname,action
 ]
 ```
 
+## Usage
+
+```text
+Usage: cdctl [OPTIONS] <COMMAND>
+
+Commands:
+  auth         Authenticate cdctl with an API token
+  profile      Inspect the account's profiles
+  rule         Manage a profile's DNS rules
+  folder       Manage a profile's rule folders (API: groups)
+  config       Read and write cdctl's own configuration
+  api          Raw request against the API origin (escape hatch, GET by default)
+  completions  Shell completion script (works without a token)
+  reference    The full command surface as one Markdown document (works without a token)
+```
+
+Every command answers `--help`, and `cdctl reference` prints the whole surface as one document.
+
 ## Highlights
 
 - Verified writes. The API can acknowledge a write it did not apply, so every mutation is read
