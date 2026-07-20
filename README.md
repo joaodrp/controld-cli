@@ -15,7 +15,7 @@ CLI for the [Control D](https://controld.com) REST API. For humans, scripts, and
 > Not [`ctrld`](https://github.com/Control-D-Inc/ctrld): that daemon runs your DNS. `cdctl` manages your account.
 > An independent project, not affiliated with Control D.
 
-## A quick look
+## Demo
 
 ```console
 $ cdctl rule create ads.example.com trackers.example.net --action block
