@@ -83,6 +83,81 @@ fn readme_usage_block_matches_the_command_surface() {
     }
 }
 
+/// The README's resource/action matrix is hand-pasted too. For each row,
+/// assert a ticked cell means the resource really has that verb and a blank
+/// one means it does not — so a verb landing (or leaving) in a later version
+/// fails CI until the matrix is corrected.
+#[test]
+fn readme_action_matrix_matches_the_verbs() {
+    const ACTIONS: [&str; 5] = ["list", "get", "create", "update", "delete"];
+    let dir = tempdir();
+
+    let readme =
+        std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("README.md"))
+            .expect("README.md is readable");
+    assert!(
+        readme.contains("| Resource | list | get | create | update | delete |"),
+        "the matrix header changed shape; the column order this test assumes no longer holds"
+    );
+
+    let commands = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/commands.md"),
+    )
+    .expect("docs/commands.md is readable");
+
+    for (resource, anchor, heading) in [
+        ("profile", "docs/commands.md#profile", "## profile"),
+        ("rule", "docs/commands.md#rule", "## rule"),
+        (
+            "folder",
+            "docs/commands.md#folder-api-groups",
+            "## folder (API: \"groups\")",
+        ),
+    ] {
+        let verbs: Vec<String> = help_for(dir.path(), &[resource])
+            .lines()
+            .skip_while(|line| *line != "Commands:")
+            .skip(1)
+            .take_while(|line| !line.trim().is_empty())
+            .filter_map(|line| line.split_whitespace().next())
+            .filter(|verb| *verb != "help")
+            .map(str::to_owned)
+            .collect();
+
+        // The row links the resource name; assert both the link target and
+        // the heading it resolves to actually exist.
+        assert!(
+            readme.contains(&format!("| [{resource}]({anchor}) |")),
+            "the matrix row for {resource} lost its {anchor} link"
+        );
+        assert!(
+            commands.contains(heading),
+            "{anchor} points at a heading commands.md no longer has: {heading:?}"
+        );
+
+        let row = readme
+            .lines()
+            .find(|line| line.starts_with(&format!("| [{resource}]")))
+            .unwrap_or_else(|| panic!("no matrix row for {resource}"));
+        // Cells between the pipes, dropping the leading empty split and the
+        // resource-name cell — what remains lines up with ACTIONS.
+        let cells: Vec<&str> = row.split('|').skip(2).map(str::trim).collect();
+
+        for (action, cell) in ACTIONS.iter().zip(&cells) {
+            let ticked = cell.contains(":white_check_mark:");
+            let supported = verbs.iter().any(|v| v == action);
+            assert_eq!(
+                ticked,
+                supported,
+                "matrix disagrees with `cdctl {resource} --help`: {action} \
+                 is {} in the CLI but {} in the README",
+                if supported { "present" } else { "absent" },
+                if ticked { "ticked" } else { "blank" },
+            );
+        }
+    }
+}
+
 #[test]
 fn reference_snapshot() {
     let dir = tempdir();

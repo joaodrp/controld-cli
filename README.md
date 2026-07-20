@@ -68,6 +68,17 @@ Commands:
 
 Every command answers `--help`, and `cdctl reference` prints the whole surface as one document.
 
+The account resources and what you can do to each:
+
+| Resource | list | get | create | update | delete |
+| --- | :-: | :-: | :-: | :-: | :-: |
+| [profile](docs/commands.md#profile) | :white_check_mark: | :white_check_mark: | | | |
+| [rule](docs/commands.md#rule) | :white_check_mark: | | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| [folder](docs/commands.md#folder-api-groups) | :white_check_mark: | | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+
+Profiles are read-only for now (writes land in a later version). `auth`, `config`, and the `cdctl
+api` escape hatch are in the Usage list above.
+
 ## Highlights
 
 - Verified writes. The API can acknowledge a write it did not apply, so every mutation is read
