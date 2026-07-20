@@ -81,8 +81,8 @@ api` escape hatch are in the Usage list above.
 
 ## Highlights
 
-- Verified writes. The API can acknowledge a write it did not apply, so every mutation is read
-  back and compared before `cdctl` reports success.
+- Verified writes. The API can acknowledge a write it did not apply, so `cdctl` reads every
+  mutation back and compares it before reporting success.
 - Safe by default. Every mutation takes `-n`/`--dry-run`, deletes ask for confirmation, and a
   failed write says whether retrying is safe.
 - Built for scripts and agents. `--json` everywhere, stdout carries only data, errors have
@@ -91,11 +91,11 @@ api` escape hatch are in the Usage list above.
 - Careful with the token. Read from the environment or a hidden prompt, never argv. Stored in a
   `0600` file, redacted in `--debug` traces.
 - One static binary, with shell completions and man pages. Config follows XDG.
-- The whole documented API is reachable: `cdctl api` sends raw requests through the same auth,
+- `cdctl api` reaches the whole documented API, sending raw requests through the same auth,
   retries, and error mapping as the typed commands.
-- Personal accounts, documented API surface only. Organization endpoints are
-  [deferred](docs/decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes),
-  additively.
+- Personal accounts, documented API surface only. Organization endpoints aren't here yet, and
+  [adding them later](docs/decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes)
+  won't break anything.
 
 ## Install
 
