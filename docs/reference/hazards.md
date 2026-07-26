@@ -1,4 +1,4 @@
-# API hazards — index
+# API hazards
 
 The Control D API is unversioned. Everything below was verified live and contradicts their docs or
 spec. Read this before touching `src/api/` or any write path. Evidence:

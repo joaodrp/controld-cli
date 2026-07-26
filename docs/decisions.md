@@ -27,7 +27,7 @@ The API is unversioned ("breaking changes... without warning"), returns 400 for 
 actions as bare ints, and has three envelope shapes. **Never pass that through.** Unwrap, map ints to
 names, rename `PK`, normalize timestamps to RFC-3339.
 
-**Cost:** new API fields need a release. D9 (`cdctl api`) is the pressure valve that makes this affordable.
+**Cost accepted:** new API fields need a release. D9 (`cdctl api`) is the pressure valve that makes this affordable.
 
 ## D3 — No TTY-based format switching
 
