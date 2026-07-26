@@ -66,8 +66,6 @@ Commands:
   reference    The full command surface as one Markdown document
 ```
 
-Every command answers `--help`, and `cdctl reference` prints the whole surface as one document.
-
 The account resources and what you can do to each:
 
 | Resource | list | get | create | update | delete |
@@ -76,8 +74,7 @@ The account resources and what you can do to each:
 | [rule](docs/commands.md#rule) | :white_check_mark: | | :white_check_mark: | :white_check_mark: | :white_check_mark: |
 | [folder](docs/commands.md#folder-api-groups) | :white_check_mark: | | :white_check_mark: | :white_check_mark: | :white_check_mark: |
 
-Profiles are read-only for now (writes land in a later version). `auth`, `config`, and the `cdctl
-api` escape hatch are in the Usage list above.
+Empty cells aren't shipped yet — see the [roadmap](docs/roadmap.md).
 
 ## Highlights
 
