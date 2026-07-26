@@ -158,6 +158,80 @@ fn readme_action_matrix_matches_the_verbs() {
     }
 }
 
+/// First cell of every row under `header`, backticks stripped. The tables in
+/// the README end at the first line that is not a row, so a section that
+/// grows past its table does not leak into the result.
+fn table_keys(readme: &str, header: &str) -> Vec<String> {
+    let mut lines = readme.lines().skip_while(|line| *line != header);
+    assert!(
+        lines.next().is_some(),
+        "the README has no table with the header {header:?}"
+    );
+    lines
+        .skip(1) // the `| --- | --- |` separator
+        .take_while(|line| line.starts_with('|'))
+        .filter_map(|line| line.split('|').nth(1))
+        .map(|cell| cell.trim().trim_matches('`').to_owned())
+        .collect()
+}
+
+/// The README's Configuration tables are hand-pasted like the matrix above.
+/// Pin each to what the binary really accepts — `ENV_HELP` for the variables,
+/// the `config set` value enum for the keys — so a setting added, renamed, or
+/// dropped fails CI until the README catches up.
+#[test]
+fn readme_configuration_tables_match_the_real_settings() {
+    let dir = tempdir();
+    let readme =
+        std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("README.md"))
+            .expect("README.md is readable");
+
+    let documented: Vec<String> = help_for(dir.path(), &[])
+        .lines()
+        .skip_while(|line| *line != "Environment:")
+        .skip(1)
+        .take_while(|line| !line.trim().is_empty())
+        .filter_map(|line| line.split_whitespace().next())
+        .map(str::to_owned)
+        .collect();
+    assert!(
+        !documented.is_empty(),
+        "the root long help lost its Environment section"
+    );
+    assert_eq!(
+        table_keys(&readme, "| Variable | Meaning |"),
+        documented,
+        "the README variable table disagrees with `cdctl --help`"
+    );
+
+    // Long help renders each variant as `- name` or `- name: <doc comment>`.
+    let keys: Vec<String> = help_for(dir.path(), &["config", "set"])
+        .lines()
+        .skip_while(|line| line.trim() != "Possible values:")
+        .skip(1)
+        .map(str::trim)
+        .take_while(|line| line.starts_with("- "))
+        .filter_map(|line| line.trim_start_matches("- ").split(':').next())
+        .map(str::to_owned)
+        .collect();
+    assert!(
+        !keys.is_empty(),
+        "`cdctl config set --help` lost its possible-values list"
+    );
+    // The table documents the file, so it carries one key `config set` does
+    // not accept: `token`. That omission is D6 — `config set token <value>`
+    // would put the token in argv — so `auth login` writes it instead.
+    let mut expected = keys;
+    expected.push("token".to_owned());
+    expected.sort();
+    let mut listed = table_keys(&readme, "| Key | Meaning | Notes |");
+    listed.sort();
+    assert_eq!(
+        listed, expected,
+        "the README key table disagrees with `cdctl config set --help` plus `token`"
+    );
+}
+
 #[test]
 fn reference_snapshot() {
     let dir = tempdir();
