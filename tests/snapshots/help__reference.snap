@@ -2,7 +2,7 @@
 source: tests/help.rs
 expression: "help_for(dir.path(), &[noun])"
 ---
-The full command surface as one Markdown document (works without a token)
+The full command surface as one Markdown document
 
 Usage: cdctl reference [OPTIONS]
 

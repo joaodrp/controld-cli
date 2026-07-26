@@ -161,7 +161,7 @@ each context's default profile. The file lives where `cdctl config path` points.
     Config(ConfigCommand),
     /// Raw request against the API origin (escape hatch, GET by default)
     Api(ApiArgs),
-    /// Shell completion script (works without a token)
+    /// Shell completion script
     #[command(after_long_help = "Install:\n  \
         bash  cdctl completions bash > ~/.local/share/bash-completion/completions/cdctl\n  \
         zsh   cdctl completions zsh > ~/.zfunc/_cdctl   (add fpath+=~/.zfunc before compinit)\n  \
@@ -169,7 +169,7 @@ each context's default profile. The file lives where `cdctl config path` points.
         Create the target directory first if missing (mkdir -p). Open a new \
         shell afterwards. Regenerate after upgrading cdctl.")]
     Completions { shell: clap_complete::Shell },
-    /// The full command surface as one Markdown document (works without a token)
+    /// The full command surface as one Markdown document
     Reference,
     /// Roff man pages for the whole command tree (packaging only, laid out like `completions`)
     #[command(hide = true)]

@@ -170,13 +170,13 @@ Raw request against the API origin (escape hatch, GET by default)
 
 ## cdctl completions
 
-Shell completion script (works without a token)
+Shell completion script
 
 - `<SHELL>`
 
 ## cdctl reference
 
-The full command surface as one Markdown document (works without a token)
+The full command surface as one Markdown document
 
 ## Environment
 

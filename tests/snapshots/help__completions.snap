@@ -2,7 +2,7 @@
 source: tests/help.rs
 expression: "help_for(dir.path(), &[noun])"
 ---
-Shell completion script (works without a token)
+Shell completion script
 
 Usage: cdctl completions [OPTIONS] <SHELL>
 
