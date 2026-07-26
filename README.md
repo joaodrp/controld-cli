@@ -78,7 +78,7 @@ The account resources and what you can do to each:
 | [rule](docs/commands.md#rule) | ✅ | | ✅ | ✅ | ✅ |
 | [folder](docs/commands.md#folder-api-groups) | ✅ | | ✅ | ✅ | ✅ |
 
-Empty cells aren't shipped yet — see the [roadmap.md](docs/roadmap.md).
+Empty cells aren't shipped yet — see the [roadmap](docs/roadmap.md).
 
 ## Highlights
 
@@ -149,7 +149,7 @@ cdctl rule delete ads.example.com
 ```
 
 From here, every command answers `--help`, `cdctl reference` prints the whole surface as one
-document, and [commands.md](docs/commands.md) specifies each flag, output column, and exit code.
+document, and [commands](docs/commands.md) specifies each flag, output column, and exit code.
 
 ## Configuration
 
@@ -199,17 +199,17 @@ When a setting has more than one source, the first one that is set wins:
 
 | | |
 | --- | --- |
-| [design.md](docs/design.md) | Command surface |
-| [commands.md](docs/commands.md) | Per-command flags, columns, JSON fields |
-| [decisions.md](docs/decisions.md) | What was decided, why, what it cost |
-| [roadmap.md](docs/roadmap.md) | What ships next, and its test gates |
-| [testing.md](docs/testing.md) | Test layers, fixture policy, live-test isolation |
+| [design](docs/design.md) | Command surface |
+| [commands](docs/commands.md) | Per-command flags, columns, JSON fields |
+| [decisions](docs/decisions.md) | What was decided, why, what it cost |
+| [roadmap](docs/roadmap.md) | What ships next, and its test gates |
+| [testing](docs/testing.md) | Test layers, fixture policy, live-test isolation |
 | [reference/](docs/reference/) | OpenAPI spec + provenance, live/write verification, error codes |
-| [AGENTS.md](AGENTS.md) | Instructions for coding agents |
+| [AGENTS](AGENTS.md) | Instructions for coding agents |
 
 ## Contributing
 
-Bug reports and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers setup, the
+Bug reports and pull requests are welcome. [CONTRIBUTING](CONTRIBUTING.md) covers setup, the
 test gates, and the rules for running anything against the live API.
 
 ## License

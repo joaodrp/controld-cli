@@ -1,7 +1,7 @@
 # `cdctl` — Design
 
-Command surface and contracts. Rationale lives in [decisions.md](decisions.md), verified API
-behavior in [reference/read-verification.md](reference/read-verification.md).
+Command surface and contracts. Rationale lives in [decisions](decisions.md), verified API
+behavior in [reference/read-verification](reference/read-verification.md).
 
 > **`cdctl` is a client for the Control D REST API.** It is **not** [`ctrld`](https://github.com/Control-D-Inc/ctrld),
 > Control D's DNS proxy daemon. Different tools that coexist.
@@ -32,7 +32,7 @@ cdctl device list --json                        # v0.4
 | `--fields <a,b>` | | Select JSON fields, implies `--json`. |
 | `--plain` | | Tables without borders/color, for `awk`/`cut`. |
 | `-y, --yes` | | Skip confirmation. **Ignored when the target is implicit** ([D8](decisions.md#d8--tiered-confirmation)). |
-| `-n, --dry-run` | | **Every typed remote mutation** (`rule import`/`restore` join in v0.2): resolve and validate everything, print the request/domain plan, persist nothing: no HTTP write, no config change, no file created. Exit `0`. Excluded from `cdctl api` ([D9](decisions.md#d9--cdctl-api-separately-gateable-get-by-default)). Contract in [commands.md](commands.md#dry-run). |
+| `-n, --dry-run` | | **Every typed remote mutation** (`rule import`/`restore` join in v0.2): resolve and validate everything, print the request/domain plan, persist nothing: no HTTP write, no config change, no file created. Exit `0`. Excluded from `cdctl api` ([D9](decisions.md#d9--cdctl-api-separately-gateable-get-by-default)). Contract in [commands](commands.md#dry-run). |
 | `--no-retry` | | Disable automatic retries. |
 | `--timeout <secs>` | | Per-request cap, default 30 s total, 10 s connect ([D12](decisions.md#d12--rate-limiting-reactive-not-predictive)). A hang is worse than a fast failure. |
 | `--debug` | | Request/response trace to stderr, including `x-controld-pop`/`x-controld-srv`. Token always redacted. Upstream bytes are JSON-escaped, so control sequences never reach the terminal raw. |
@@ -185,7 +185,7 @@ Until then, `cdctl api /organizations/organization` reaches them.
 | --- | --- |
 | `auth login --token-stdin`, `auth status`, `auth logout` | Tokens are dashboard-issued only: **no OAuth/device flow is possible** |
 | `config get/set/list/path` | `$XDG_CONFIG_HOME/cdctl/config.toml`, mode `0600` |
-| `api <path> [-X <method>] [-F k=v]... [--input -]` | Raw passthrough ([D9](decisions.md#d9--cdctl-api-separately-gateable-get-by-default)). **GET by default**. Non-GET needs `-X <method>` **and** `--yes`. Both body forms (`-F`, `--input -`) require a non-GET `-X`. A distinct verb so sandboxes can deny `Bash(cdctl api:*)` while allowing `Bash(cdctl:*)`. Encoding is explicit, never sniffed: [commands.md](commands.md#cdctl-api-request-encoding) |
+| `api <path> [-X <method>] [-F k=v]... [--input -]` | Raw passthrough ([D9](decisions.md#d9--cdctl-api-separately-gateable-get-by-default)). **GET by default**. Non-GET needs `-X <method>` **and** `--yes`. Both body forms (`-F`, `--input -`) require a non-GET `-X`. A distinct verb so sandboxes can deny `Bash(cdctl api:*)` while allowing `Bash(cdctl:*)`. Encoding is explicit, never sniffed: [commands](commands.md#cdctl-api-request-encoding) |
 | `completions <shell>`, `reference` | Must work **without a token** ([D7](decisions.md#d7--resolve-auth-lazily)) |
 
 **Coverage: 40/46 operations mapped for v1. The 5 `organizations/*` operations are deferred by scope
@@ -279,7 +279,7 @@ $ echo $?
 **Exit code 8 is retryable. Everything else is terminal.** The full set: `0` ok, `1` generic,
 `2` usage, `3` not found, `4` auth, `5` forbidden/plan, `6` conflict, `7` confirmation required,
 `8` retryable, `130` SIGINT, `141` SIGPIPE (Unix). Rationale:
-[decisions.md](decisions.md#d5--nine-exit-codes-exactly-one-retryable).
+[decisions](decisions.md#d5--nine-exit-codes-exactly-one-retryable).
 
 An empty result is **exit 0**, not an error. A read-scoped token used for a write **fails loudly**
 with exit `5`, never a silently filtered result.
@@ -302,7 +302,7 @@ with exit `5`, never a silently filtered result.
   bad parameter fails locally, with the real error, before it reaches the API.
 - **Inputs assumed adversarial**: control characters anywhere, and `?`/`#`/`%` in path-bound
   identifiers, are rejected with exit `2` before any request is built
-  ([commands.md](commands.md#input-hardening)).
+  ([commands](commands.md#input-hardening)).
 - `cdctl reference`: the entire command surface as one pipeable Markdown document. Works without
   a token.
 - **No machine-readable command manifest in v1.** Command metadata stays centralized and derivable so
@@ -318,6 +318,6 @@ with exit `5`, never a silently filtered result.
 
 ## Hazards & bulk import
 
-Deserialization hazards: [reference/read-verification.md](reference/read-verification.md).
-Write constraints (batch ceiling, no bulk delete, encoding): [reference/write-verification.md](reference/write-verification.md).
-Phasing: [roadmap.md](roadmap.md).
+Deserialization hazards: [reference/read-verification](reference/read-verification.md).
+Write constraints (batch ceiling, no bulk delete, encoding): [reference/write-verification](reference/write-verification.md).
+Phasing: [roadmap](roadmap.md).

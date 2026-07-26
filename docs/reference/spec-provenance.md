@@ -48,8 +48,8 @@ declares ([D16](../decisions.md#d16--documented-surface-only)).
 
 ## What the spec gets wrong or omits
 
-Verified against the live API: see [read-verification.md](read-verification.md) and
-[write-verification.md](write-verification.md):
+Verified against the live API: see [read-verification](read-verification.md) and
+[write-verification](write-verification.md):
 
 - `body` has **three** shapes, not one (`/users` and `/ip` are flat, and `/network` has siblings).
 - Auth failures are **HTTP 400**, not 401.
