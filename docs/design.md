@@ -89,7 +89,7 @@ spec's folder path parameter is literally `{folder}`).
 
 | Command | API |
 | --- | --- |
-| `rule list [--folder <id>]` | No `--folder`: **`GET /profiles/{id}/rules`** (segment **omitted**), returning *root rules only*, unioned client-side with one `GET .../rules/{folder_id}` per folder (ids from `GET /profiles/{id}/groups`), since the root listing alone omits every foldered rule. :warning: The docs also offer `folder_id=0` for root, but **that 404s**. With `--folder`, just `GET /profiles/{id}/rules/{folder_id}` |
+| `rule list [--folder <id>]` | No `--folder`: **`GET /profiles/{id}/rules`** (segment **omitted**), returning *root rules only*, unioned client-side with one `GET .../rules/{folder_id}` per folder (ids from `GET /profiles/{id}/groups`), since the root listing alone omits every foldered rule. ⚠️ The docs also offer `folder_id=0` for root, but **that 404s**. With `--folder`, just `GET /profiles/{id}/rules/{folder_id}` |
 | `rule create <hostname>... --action <a>` | `POST /profiles/{profile_id}/rules` |
 | `rule update <hostname>...` | `PUT /profiles/{profile_id}/rules` |
 | `rule delete <hostname>...` | `DELETE /profiles/{profile_id}/rules/{hostname}`: hostname may be a wildcard, so **percent-encode carefully** |
@@ -166,7 +166,7 @@ but **not implemented in v1**. They are a business feature, and a personal accou
 | --- | --- |
 | `org get`, `org members` | `GET /organizations/organization`, `GET /organizations/members` |
 | `org suborg list`, `org suborg create <name>` | `GET /organizations/sub_organizations` (**underscored**), `POST /organizations/suborg` |
-| `org update ...` | `PUT /organizations` (:warning: **billable event**) |
+| `org update ...` | `PUT /organizations` (⚠️ **billable event**) |
 
 **They must be addable without a breaking change.** Two things make that true and ship in v1:
 

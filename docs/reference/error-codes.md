@@ -15,7 +15,7 @@ is a refinement layer, not the mechanism.
 
 | Prefix | Slug family | Exit | Retryable |
 | --- | --- | --- | --- |
-| `400` | `request.invalid`, :warning: except `40001`, and **also covers conflicts** | 1 | no |
+| `400` | `request.invalid`, ⚠️ except `40001`, and **also covers conflicts** | 1 | no |
 | `401` / `403` | `auth.*` / `permission.denied` *(never observed)* | 4 / 5 | no |
 | `402` | `plan.upgrade_required` | 5 | no |
 | `404` | `*.not_found` | 3 | no |
@@ -23,7 +23,7 @@ is a refinement layer, not the mechanism.
 | `5xx` | `upstream.error` | 8 | **yes** |
 | *(no response)* | `network.error` | 8 | **yes** |
 
-**:warning: The `400` trap.** Auth runs *before* routing, so a missing/invalid token returns **400 / `40001`**,
+**⚠️ The `400` trap.** Auth runs *before* routing, so a missing/invalid token returns **400 / `40001`**,
 not 401. Special-case it to `auth.*` (exit 4). Every other `400xx` is genuine validation.
 
 **`409` is never used.** A duplicate rule returns **400 / `40003`**. Don't branch on `409`.

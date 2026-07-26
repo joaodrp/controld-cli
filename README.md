@@ -74,9 +74,9 @@ The account resources and what you can do to each:
 
 | Resource | list | get | create | update | delete |
 | --- | :-: | :-: | :-: | :-: | :-: |
-| [profile](docs/commands.md#profile) | :white_check_mark: | :white_check_mark: | | | |
-| [rule](docs/commands.md#rule) | :white_check_mark: | | :white_check_mark: | :white_check_mark: | :white_check_mark: |
-| [folder](docs/commands.md#folder-api-groups) | :white_check_mark: | | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| [profile](docs/commands.md#profile) | ✅ | ✅ | | | |
+| [rule](docs/commands.md#rule) | ✅ | | ✅ | ✅ | ✅ |
+| [folder](docs/commands.md#folder-api-groups) | ✅ | | ✅ | ✅ | ✅ |
 
 Empty cells aren't shipped yet — see the [roadmap](docs/roadmap.md).
 

@@ -144,7 +144,7 @@ fn readme_action_matrix_matches_the_verbs() {
         let cells: Vec<&str> = row.split('|').skip(2).map(str::trim).collect();
 
         for (action, cell) in ACTIONS.iter().zip(&cells) {
-            let ticked = cell.contains(":white_check_mark:");
+            let ticked = cell.contains('✅');
             let supported = verbs.iter().any(|v| v == action);
             assert_eq!(
                 ticked,

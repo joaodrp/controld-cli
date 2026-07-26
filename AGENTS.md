@@ -86,7 +86,8 @@ change `dist-workspace.toml` and regenerate.
 - ASCII in prose: `->` not an arrow, `...` not an ellipsis, `!=`, `x`, hyphen not an en dash. Em
   dashes are the exception, never the default connector. Verbatim CLI output keeps what the
   binary prints.
-- Emoji in docs only as GitHub shortcodes (`:warning:`), never raw unicode.
+- Emoji as raw unicode, never GitHub shortcodes: only GitHub renders `:shortcode:`, and these
+  files are also read on crates.io (the README) and by whatever docs site comes later.
 
 ## API hazards
 

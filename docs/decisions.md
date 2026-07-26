@@ -8,12 +8,12 @@ accepted.
 Control D's DNS daemon is already `ctrld`. Ours is a different tool and will sit
 beside it on `PATH`.
 
-- :x: `controld`: a trailing `-d` means *daemon* in Unix (`sshd`, `systemd`, `cloudflared`, `ctrld`).
+- ❌ `controld`: a trailing `-d` means *daemon* in Unix (`sshd`, `systemd`, `cloudflared`, `ctrld`).
   Two daemon-looking binaries neither a human nor an agent can tell apart. Also squats the name
   Control D would want.
-- :x: `ctrld-cli`: names the *daemon* as its parent (but `ctrld` already has a CLI), and prefix-collides
+- ❌ `ctrld-cli`: names the *daemon* as its parent (but `ctrld` already has a CLI), and prefix-collides
   with `ctrld` in tab-completion.
-- :white_check_mark: `cdctl`: `*ctl` (kubectl, systemctl) reads as *client tool*. No prefix collision.
+- ✅ `cdctl`: `*ctl` (kubectl, systemctl) reads as *client tool*. No prefix collision.
 
 **Cost accepted:** cryptic, unguessable. Discoverability rests on docs. Lead the README with the
 `ctrld` disambiguation.
@@ -391,7 +391,7 @@ MSRV 1.85, the first release with edition-2024 support. Development uses latest 
 `reqwest::blocking` is *not* tokio-free (it spawns a runtime thread), so "blocking to avoid tokio" is a
 myth, hence async.
 
-:warning: **reqwest's built-in retries are disabled** (`retry::never()`). They replay immediately with no
+⚠️ **reqwest's built-in retries are disabled** (`retry::never()`). They replay immediately with no
 backoff and no `Retry-After`, and the default policy is not GET-only: a retried `POST /rules`
 duplicates rules, a retried `DELETE` double-deletes. D12's loop is hand-rolled and owned by `cdctl`.
 
@@ -506,7 +506,7 @@ its integration point.
    e.g. `noai`): unprobed, verify before v0.3.
 8. **The `ips[]` form-variable ceiling** (`POST /access`): unprobed, the 50-IP cap keeps it
    unreachable.
-9. **Percent-encoded bracket keys** :white_check_mark: *resolved* — form bodies are hand-built:
+9. **Percent-encoded bracket keys** ✅ *resolved* — form bodies are hand-built:
    keys verbatim, values percent-encoded. Every write (typed and `cdctl api -F`) sends the literal
    `hostnames[]=` form live verification proved, so the probe of the `%5B%5D` form is moot. (The
    original note claimed `cdctl api -F` already sent literal keys, but it did not: reqwest's form

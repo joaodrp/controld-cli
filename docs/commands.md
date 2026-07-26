@@ -338,7 +338,7 @@ as-is, never error. `default` is **raw JSON**: an integer for toggles/fields, an
 **`profile option set <name> --enabled|--disabled [--value <v>]`** (v0.3): the API write takes a
 required `status` plus an optional `value`. A single positional value cannot express
 enable/disable/select unambiguously. Validate `--value` per type against the live catalogue
-(field -> number, dropdown -> a key of its map). :warning: The dropdown write is **unprobed**.
+(field -> number, dropdown -> a key of its map). ⚠️ The dropdown write is **unprobed**.
 Verify before v0.3. Prints the new state `{name, value, enabled}` via read-back (no verified write
 response exists).
 
@@ -480,7 +480,7 @@ add/converge/delete plan and exits `0`.
   would do upstream is unprobed, and irrelevant: the plan refuses first.)
 - **`--replace` adds first, deletes last.** Deleting up front would leave the profile unprotected
   if anything then fails. So: converge and add (all verified), and only then delete the in-scope
-  rules missing from the file, :warning: one request per deletion (no bulk delete). Deletions state the
+  rules missing from the file, ⚠️ one request per deletion (no bulk delete). Deletions state the
   exact count and go through the `rule delete` confirmation tier (prompt on TTY, `--yes` in
   scripts). A failure at any point leaves a **superset** of the previous rules, never a gap.
   Re-running converges. When old + new cannot fit inside the quota together, **fail with the
@@ -567,7 +567,7 @@ add/converge/delete plan and exits `0`.
 - What `enable`/`disable`/`set` take: for a leveled family, a **level name** from `levels[]`
   (`ads_small`, `ads_medium`, `ads`, `porn_strict`: the suffixes follow **no derivable rule**,
   never construct names). A level-less family is addressed by its **family id**. It has no other
-  name. :warning: Level-less writes are **unprobed** ([Open](decisions.md#open)). Leveled writes are
+  name. ⚠️ Level-less writes are **unprobed** ([Open](decisions.md#open)). Leveled writes are
   verified on both endpoints.
 - Level names are valid on both write endpoints (verified live). Enabling a level of an
   already-enabled family **swaps atomically**, since levels never stack, so `filter enable` needs no

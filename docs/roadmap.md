@@ -36,7 +36,7 @@ Full semantics in [commands.md](commands.md#rule-import-semantics-v02): **folder
 diff -> converge -> add over one **profile-wide** fetch (quota against the **10,000 rules/profile
 cap**), cross-folder collisions fail fast (exit `6`, nothing written), chunks of **500** with
 scalar params first, **full desired-state verification** after every chunk plus a final full-scope
-pass (the silent ~1001-var truncation makes 200 meaningless alone), idempotent re-run. :warning:
+pass (the silent ~1001-var truncation makes 200 meaningless alone), idempotent re-run. ⚠️
 `--replace` is **add-first, delete-last**: a failure leaves a superset, never a protection gap.
 Delete-first needs `--force-delete-first` and writes a versioned JSON restore manifest
 (`rule restore` replays it). One request per deletion (no bulk delete). Missing hostnames are
