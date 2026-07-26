@@ -397,7 +397,8 @@ duplicates rules, a retried `DELETE` double-deletes. D12's loop is hand-rolled a
 
 ## D14 — Distribution
 
-`cargo-dist` (linux gnu/musl, macOS arm64/x64, Windows) + Homebrew tap. `release-plz` -> crates.io.
+`cargo-dist` (linux gnu/musl and macOS on aarch64/x86_64, Windows x86_64; shell and powershell
+installers) + Homebrew tap. `release-plz` -> crates.io.
 
 Two traps, each sprung exactly once, at first release:
 
