@@ -1,7 +1,11 @@
 <div align="center">
 
-![cdctl - Control D, from the command line](docs/assets/logo-dark.svg#gh-dark-mode-only)
-![cdctl - Control D, from the command line](docs/assets/logo-light.svg#gh-light-mode-only)
+<picture>
+  <source media="(prefers-color-scheme: dark)"
+          srcset="https://raw.githubusercontent.com/joaodrp/controld-cli/main/docs/assets/logo-dark.svg">
+  <img alt="cdctl - Control D, from the command line"
+       src="https://raw.githubusercontent.com/joaodrp/controld-cli/main/docs/assets/logo-light.svg">
+</picture>
 
 [![CI](https://github.com/joaodrp/controld-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/joaodrp/controld-cli/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
