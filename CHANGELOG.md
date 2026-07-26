@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/joaodrp/controld-cli/compare/v0.1.1...v0.1.2) - 2026-07-26
+
+### Added
+
+- *(cargo)* declare binstall metadata
+- *(dist)* ship aarch64 Linux archives and a PowerShell installer
+
+### Other
+
+- drop the .md extension from link text
+- *(readme)* document configuration, and tighten Install and Highlights
+- use raw unicode emoji instead of GitHub shortcodes
+
 ## [0.1.1](https://github.com/joaodrp/controld-cli/compare/v0.1.0...v0.1.1) - 2026-07-26
 
 ### Other
