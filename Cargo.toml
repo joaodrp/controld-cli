@@ -14,6 +14,17 @@ categories = ["command-line-utilities"]
 name = "cdctl"
 path = "src/main.rs"
 
+# Binstall cannot infer these: the binary is not named after the crate.
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }{ archive-suffix }"
+bin-dir = "{ name }-{ target }/{ bin }{ binary-ext }"
+pkg-fmt = "txz"
+
+# The Windows zip has no wrapping directory.
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+bin-dir = "{ bin }{ binary-ext }"
+pkg-fmt = "zip"
+
 [dependencies]
 bytes = "1.12.1"
 clap = { version = "4.6.1", features = ["derive", "env", "wrap_help"] }
