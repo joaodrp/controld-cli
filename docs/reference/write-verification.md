@@ -9,10 +9,10 @@ Probed across multiple sessions (latest 2026-07-18). The account is left empty a
 
 | Encoding | Result |
 | --- | --- |
-| `hostnames[]=a&hostnames[]=b` *(documented)* | :white_check_mark: 200 |
-| `hostnames[0]=a&hostnames[1]=b` *(`ctrld-sync`)* | :white_check_mark: 200 |
-| `hostnames=a&hostnames=b` *(bare repeat)* | :x: 400 `40003 hostnames must be an array` |
-| JSON `{"hostnames":["a","b"]}` | :white_check_mark: 200 |
+| `hostnames[]=a&hostnames[]=b` *(documented)* | ✅ 200 |
+| `hostnames[0]=a&hostnames[1]=b` *(`ctrld-sync`)* | ✅ 200 |
+| `hostnames=a&hostnames=b` *(bare repeat)* | ❌ 400 `40003 hostnames must be an array` |
+| JSON `{"hostnames":["a","b"]}` | ✅ 200 |
 
 Both bracket and indexed work: the docs and `ctrld-sync` were each right. What fails is the **bare
 repeat** (exactly what Go's `net/http` and Python's `parse_qs` emit by default).
@@ -47,11 +47,11 @@ still returns 200. Measured on `POST /rules` (`do` + `status` + N `hostnames[]`)
 
 | Body | Vars | Result |
 | --- | --- | --- |
-| params first + 998 hostnames | 1000 | :white_check_mark: 998 stored |
-| params first + 999 hostnames | 1001 | :white_check_mark: 999 stored |
-| params first + 1000 hostnames | 1002 | :warning: **200, 999 stored**, last hostname silently dropped |
-| 1000 hostnames + `do` + `status=0` last | 1002 | :warning: **200, 1000 stored, with `status=1`**: the trailing `status=0` was dropped and *defaulted*, storing the opposite of what was sent |
-| 1000 hostnames + `status` + `do` last | 1002 | :white_check_mark: 400, **0 stored**, a missing `do` is a hard error, never a default |
+| params first + 998 hostnames | 1000 | ✅ 998 stored |
+| params first + 999 hostnames | 1001 | ✅ 999 stored |
+| params first + 1000 hostnames | 1002 | ⚠️ **200, 999 stored**, last hostname silently dropped |
+| 1000 hostnames + `do` + `status=0` last | 1002 | ⚠️ **200, 1000 stored, with `status=1`**: the trailing `status=0` was dropped and *defaulted*, storing the opposite of what was sent |
+| 1000 hostnames + `status` + `do` last | 1002 | ✅ 400, **0 stored**, a missing `do` is a hard error, never a default |
 
 - **The response cannot reveal this.** `body.rules` on create/modify is a **one-entry summary**
   (`{do, status, via, group, order}`, no hostnames), however many rules the request carried.
@@ -62,16 +62,16 @@ still returns 200. Measured on `POST /rules` (`do` + `status` + N `hostnames[]`)
   corruption). **Verify the full desired state after every multi-target write**: re-fetch and
   assert every written hostname is present with the intended action, enabled state, `via`, `via6`,
   and folder. A bare count check is weaker: a concurrent add can mask a dropped hostname.
-- An earlier session recorded "1000 :white_check_mark: all stored", but that was wrong: it stored
+- An earlier session recorded "1000 ✅ all stored", but that was wrong: it stored
   999 and the diff went unchecked.
 
 ## Two more ceilings — these ones loud
 
 | Probe | Result |
 | --- | --- |
-| 1500 / 2000 hostnames in one batch | :x: 400 `Failed to create or modify custom rule(s)`, **0 stored** |
-| batch that would cross **10,000 rules/profile** (9,991 + 10) | :x: 400 `You have reached the maximum number of custom rules`, **0 stored**, no clipping |
-| single rule under the cap (-> 9,992) | :white_check_mark: 200 |
+| 1500 / 2000 hostnames in one batch | ❌ 400 `Failed to create or modify custom rule(s)`, **0 stored** |
+| batch that would cross **10,000 rules/profile** (9,991 + 10) | ❌ 400 `You have reached the maximum number of custom rules`, **0 stored**, no clipping |
+| single rule under the cap (-> 9,992) | ✅ 200 |
 
 The **10,000 custom-rule cap is real and enforced per profile**, atomically per batch.
 `Failed to create or modify custom rule(s)` is the *generic* rule-write failure. It also fires for
@@ -83,9 +83,9 @@ The spec marks `do` and `status` required. Live, both are optional and omitted f
 
 | Sent (rule was `do=2, via=..., status=1`) | Stored |
 | --- | --- |
-| `status=0` only | `do=2, via` kept, `status=0` :white_check_mark: merge |
+| `status=0` only | `do=2, via` kept, `status=0` ✅ merge |
 | `do=0` only | `do=0`, `status` kept, and **`via` cleared** (leaving spoof/redirect drops it) |
-| `group=0` only | rule moved to the **root folder**, other fields kept :white_check_mark: |
+| `group=0` only | rule moved to the **root folder**, other fields kept ✅ |
 
 No read-modify-write needed to toggle one field.
 
@@ -93,9 +93,9 @@ No read-modify-write needed to toggle one field.
 
 | Sent | Result |
 | --- | --- |
-| `do=2, via`, `via_v6` omitted | preserved :white_check_mark: merge applies to `via_v6` too |
-| `via_v6=` (empty) | :x: 400 `40003` `Via_v6 must be a minimum of 1 characters` (atomic, nothing changed, fixture `err_via6_clear.json`) |
-| `via_v6=0` | :x: 400 `40003` `Invalid rule action was provided` (atomic, nothing changed) |
+| `do=2, via`, `via_v6` omitted | preserved ✅ merge applies to `via_v6` too |
+| `via_v6=` (empty) | ❌ 400 `40003` `Via_v6 must be a minimum of 1 characters` (atomic, nothing changed, fixture `err_via6_clear.json`) |
+| `via_v6=0` | ❌ 400 `40003` `Invalid rule action was provided` (atomic, nothing changed) |
 | `do=1` only | flipping the action away from spoof clears **both** `via` and `via_v6` |
 
 **Conclusion: the API has no operation that clears `via_v6` while the spoof action persists.** The
@@ -106,25 +106,25 @@ fail fast before any mutation ([commands.md](../commands.md#rule-import-semantic
 
 ## Folders
 
-- `POST /groups` **without `do`** -> :white_check_mark: 200, an action-less folder (`{"action":{"status":1}}`).
+- `POST /groups` **without `do`** -> ✅ 200, an action-less folder (`{"action":{"status":1}}`).
   Even bare `name` works, and `status` defaults to 1. The spec marks `do` required, but it is not.
 - `PUT /groups/{folder}` **merges** *(probed 2026-07-11: the spec marks `do`+`status` required
   on PUT, but they are not)*:
 
   | Sent (folder was `name=probeA, do=0, status=1`) | Stored |
   | --- | --- |
-  | `name=` only | renamed, `do`/`status` preserved :white_check_mark: |
-  | `status=0` only | disabled, name/`do` preserved :white_check_mark: |
-  | `do=1` only | action changed, `status=0` preserved :white_check_mark: |
-  | rename of an **action-less** folder | stays action-less, no `do` materializes :white_check_mark: |
+  | `name=` only | renamed, `do`/`status` preserved ✅ |
+  | `status=0` only | disabled, name/`do` preserved ✅ |
+  | `do=1` only | action changed, `status=0` preserved ✅ |
+  | rename of an **action-less** folder | stays action-less, no `do` materializes ✅ |
 
-  | spoof folder (`do=2, via=...`) -> `do=0` only | action changed and **`via` cleared** :white_check_mark:, same as rules, no stale remnant (fixture `write_folder_update.json`) |
+  | spoof folder (`do=2, via=...`) -> `do=0` only | action changed and **`via` cleared** ✅, same as rules, no stale remnant (fixture `write_folder_update.json`) |
 
   The PUT response carries the **full folder object** (the spec's empty response schema is wrong),
   and the `{folder}` path segment must be the **integer `PK`**: the folder *name* is rejected
   (HTTP 400, `40003 This folder does not exist`). In the create/update response, `group` holds the
   name and `PK` the id.
-- `DELETE /groups/{folder}` **without a body** -> :white_check_mark: 200. The spec's four required body fields are a
+- `DELETE /groups/{folder}` **without a body** -> ✅ 200. The spec's four required body fields are a
   copy-paste artifact from the PUT page.
 
 ## Filters
@@ -136,7 +136,7 @@ fail fast before any mutation ([commands.md](../commands.md#rule-import-semantic
 - The write response is a **map keyed by family**, with `lvl` naming the active level:
   `{"filters":{"porn":{"do":0,"status":1,"lvl":"porn_strict"}}}`. The docs' array-of-strings
   example for the single endpoint is wrong live.
-- :warning: **When zero filters remain enabled, that same key is `[]`**: PHP serializes an empty map as an
+- ⚠️ **When zero filters remain enabled, that same key is `[]`**: PHP serializes an empty map as an
   array. `body.filters` is object-or-array *by emptiness*. Required test fixture.
 - Invalid name -> **400** `40003 Invalid filter name` (not 404).
 
@@ -152,9 +152,9 @@ disabled**, no removal exists. Invalid service -> 400 `40003 Invalid service was
 
 | Sent | Result |
 | --- | --- |
-| `do=2, via`, `via_v6` omitted | preserved :white_check_mark: the PUT merges it |
-| `via_v6=` (empty) | :x: 400 `40003` `Via_v6 must be a minimum of 1 characters` (atomic) |
-| `via_v6=0` | :x: 400 `40003` `Invalid service rule action was provided` (atomic) |
+| `do=2, via`, `via_v6` omitted | preserved ✅ the PUT merges it |
+| `via_v6=` (empty) | ❌ 400 `40003` `Via_v6 must be a minimum of 1 characters` (atomic) |
+| `via_v6=0` | ❌ 400 `40003` `Invalid service rule action was provided` (atomic) |
 | `do=1` only | flipping away from spoof clears **both** `via` and `via_v6` |
 
 **No clear exists here either, and services cannot be deleted**, so the only route to
@@ -198,12 +198,12 @@ It validates, then 500s on every shape tried. Undocumented *and* broken -> **unu
 
 | Probe | Result |
 | --- | --- |
-| `do=2` spoof, no `via` | :x: 400: **`via` required for spoof** |
-| `do=2` spoof, `via=192.0.2.5` | :white_check_mark: 200 |
-| `do=3` redirect, `via=LHR` *(valid)* | :warning: **402** `40201 You need the Full Control plan` |
-| `do=3` redirect, `via=ZZZ` *(invalid)* | :warning: **402**, same as above (plan check precedes validation) |
-| duplicate hostname | :x: **400** `40003 Custom Rule already exists`, **not 409** |
-| missing `do` | :x: 400 `Failed to create or modify custom rule(s)`, never a default |
+| `do=2` spoof, no `via` | ❌ 400: **`via` required for spoof** |
+| `do=2` spoof, `via=192.0.2.5` | ✅ 200 |
+| `do=3` redirect, `via=LHR` *(valid)* | ⚠️ **402** `40201 You need the Full Control plan` |
+| `do=3` redirect, `via=ZZZ` *(invalid)* | ⚠️ **402**, same as above (plan check precedes validation) |
+| duplicate hostname | ❌ **400** `40003 Custom Rule already exists`, **not 409** |
+| missing `do` | ❌ 400 `Failed to create or modify custom rule(s)`, never a default |
 
 **Redirect is plan-gated.** Because the 402 fires before validation, we **cannot** tell whether the
 API validates proxy codes at all. `cdctl` validates `--via` client-side against `GET /proxies`
@@ -217,7 +217,7 @@ distinguish outcomes.
 
 ## Wildcard hostnames in DELETE paths
 
-`*.wild.example.com` -> percent-encode `*` as `%2A` -> :white_check_mark: 200.
+`*.wild.example.com` -> percent-encode `*` as `%2A` -> ✅ 200.
 
 ## Write responses
 
@@ -237,7 +237,7 @@ distinguish outcomes.
 | Docs and `ctrld-sync` contradict on encoding | Both work |
 | `groups/import` is a promising bulk endpoint | Exists, 500s, unusable |
 | Duplicate -> `409` | `400` |
-| `via` required for spoof | :white_check_mark: confirmed |
+| `via` required for spoof | ✅ confirmed |
 | Batch of 1000 -> "all stored" | **999 stored**: <= ~1001 form vars parsed, rest silently dropped |
 | `PUT /rules` requires `do`+`status` (spec) | Merge, both optional |
 | `POST /groups` requires `do` (spec) | Optional: omitting it makes an action-less folder |
@@ -249,13 +249,13 @@ distinguish outcomes.
 
 | Probe | Result |
 | --- | --- |
-| `PUT /profiles/{id}/rules` targeting a hostname with no existing rule | :x: 400 `Custom Rule does not exist`, **nothing created**, confirming "`PUT /rules` is a merge, not a replace" above never upserts |
-| `POST /profiles/{id}/rules` with `via=MiXeD-CaSe.Example.COM` | :white_check_mark: 200, read back **byte-for-byte identical**: case is preserved verbatim |
-| `POST /profiles/{id}/rules` with a hostname containing `%` or `?` | :x: 400 `Invalid hostname was supplied` |
-| `POST /profiles/{id}/rules` with `hostnames[]=MiXeD.Example.COM` | :white_check_mark: 200, read back `PK: "MiXeD.Example.COM"`, **case-preserved** exactly like `via` above |
-| `PUT /profiles/{id}/rules` with `hostnames[]=mixed.example.com` against that same rule | :x: 400 `Custom Rule does not exist`, **target matching is case-SENSITIVE**, not just storage |
-| `DELETE /profiles/{id}/rules/{hostname}` with a hostname matching no rule | :white_check_mark: 200 `success: true`, `"Custom rule(s) deleted"`, a **silent no-op**: the rule set is unchanged |
-| `POST /profiles/{id}/rules` with `hostnames[]=MiXeD.Example.COM`, then again with `hostnames[]=mixed.example.com` | :white_check_mark: both 200: **case variants coexist as two distinct rules** in the same profile |
+| `PUT /profiles/{id}/rules` targeting a hostname with no existing rule | ❌ 400 `Custom Rule does not exist`, **nothing created**, confirming "`PUT /rules` is a merge, not a replace" above never upserts |
+| `POST /profiles/{id}/rules` with `via=MiXeD-CaSe.Example.COM` | ✅ 200, read back **byte-for-byte identical**: case is preserved verbatim |
+| `POST /profiles/{id}/rules` with a hostname containing `%` or `?` | ❌ 400 `Invalid hostname was supplied` |
+| `POST /profiles/{id}/rules` with `hostnames[]=MiXeD.Example.COM` | ✅ 200, read back `PK: "MiXeD.Example.COM"`, **case-preserved** exactly like `via` above |
+| `PUT /profiles/{id}/rules` with `hostnames[]=mixed.example.com` against that same rule | ❌ 400 `Custom Rule does not exist`, **target matching is case-SENSITIVE**, not just storage |
+| `DELETE /profiles/{id}/rules/{hostname}` with a hostname matching no rule | ✅ 200 `success: true`, `"Custom rule(s) deleted"`, a **silent no-op**: the rule set is unchanged |
+| `POST /profiles/{id}/rules` with `hostnames[]=MiXeD.Example.COM`, then again with `hostnames[]=mixed.example.com` | ✅ both 200: **case variants coexist as two distinct rules** in the same profile |
 
 **Consequences for `cdctl`:** `rule update` cannot create a missing rule, so a typo'd hostname must
 be caught before the write: a pre-write check against a fresh profile-wide read-back, not

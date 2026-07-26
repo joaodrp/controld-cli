@@ -104,7 +104,7 @@ Exceptions to the `body.<controllerName>` rule: the object sits directly at `bod
 A third shape exists that the spec does not describe: a controller key *plus sibling metadata*:
 - `GET /network` -> `body` = `{"network": [...], "time": <int>, "current_pop": "<pop>"}`. **[LIVE ONLY]**
 
-> :warning: So `body` has **three** shapes, not two. The unwrap key must be per-operation configuration
+> ⚠️ So `body` has **three** shapes, not two. The unwrap key must be per-operation configuration
 > supporting *keyed*, *flat*, and *keyed-plus-siblings*. And on **error**, `body` is `[]`, an
 > **array**, regardless of the success shape. See
 > [read-verification.md section 1](read-verification.md#the-envelope-has-three-shapes-not-one).
@@ -235,7 +235,7 @@ The `PUT /profiles/{profile_id}/services/{service}` page restates it as an expli
 > * In `do=2` mode, this arg supplies the `AAAA` record
 > * No effect when `do=3`
 
-:warning: **The concept guides describe only THREE actions** (Block / Bypass / Redirect) because the web UI folds
+⚠️ **The concept guides describe only THREE actions** (Block / Bypass / Redirect) because the web UI folds
 SPOOF and REDIRECT into one "Redirect" control with a "Proxies vs IP or Hostname" sub-choice. The **API has
 four values**. Do not let the guide prose mislead the implementation. (`custom-rules.md`: "one of 3 rule types".
 `default-rule.md`: "one of 3 actions".)
@@ -247,7 +247,7 @@ four values**. Do not let the guide prose mislead the implementation. (`custom-r
 `0` = disabled, `1` = enabled. Integer. Consistent everywhere (rules, folders, services, filters, options).
 Declared with `enum: [0,1], minimum: 0, maximum: 1` on `PUT /profiles/{profile_id}/filters`.
 
-:warning: Do **not** confuse this with `status` on `PUT /devices/{device_id}`, which is a **4-value device lifecycle
+⚠️ Do **not** confuse this with `status` on `PUT /devices/{device_id}`, which is a **4-value device lifecycle
 enum** (see section Devices).
 
 ### Filter identifiers (`PK`) **[SPEC]**
@@ -276,11 +276,11 @@ From the `filters` guide's "Filter Name to Filter PK Mapping" table:
 | `urlshort` | URL Shorteners |
 | `dnsvpn` | VPN & DNS |
 
-:warning: **[CONFLICT]** The `GET /profiles/{profile_id}/filters` response example lists only 15 filters and omits
+⚠️ **[CONFLICT]** The `GET /profiles/{profile_id}/filters` response example lists only 15 filters and omits
 `noai`, `ddns`, `filehost`, `games`, `urlshort`. The guide table (20 entries) is newer. **Do not hardcode
 this list**: fetch it from `GET /profiles/{profile_id}/filters` at runtime.
 
-:warning: **[CONFLICT] Filter "mode" suffixes.** The `PUT /profiles/{profile_id}/filters` batch example sends
+⚠️ **[CONFLICT] Filter "mode" suffixes.** The `PUT /profiles/{profile_id}/filters` batch example sends
 `porn_strict` and its success response contains `ads_small`. Neither is in the PK table, and neither is
 returned by the List endpoint. So a filter name may be a bare PK (`ads`) or a suffixed variant
 (`ads_small`, `porn_strict`). The docs **never define the suffix grammar or enumerate the variants**.
@@ -324,7 +324,7 @@ Declared on `POST /devices` and `PUT /devices/{device_id}`: "Set analytics level
 | `2` | Soft disabled | Profile no longer enforced, acts as a plain resolver |
 | `3` | Hard disabled | Serves no DNS at all |
 
-:warning: `status` is **not** an accepted field on `POST /devices`, only on `PUT`. **[SPEC]**
+⚠️ `status` is **not** an accepted field on `POST /devices`, only on `PUT`. **[SPEC]**
 
 ### Device/endpoint types and icons **[EXAMPLE]** (from `GET /devices/types`)
 Response is `body.types`, an **object keyed by category**, not an array. The `icon` value you pass to
@@ -337,7 +337,7 @@ Response is `body.types`, an **object keyed by category**, not an array. The `ic
 | `tv` | TV & Media | `tv`, `tv-apple`, `tv-android`, `tv-firetv`, `tv-samsung` |
 | `router` | Routers | `router`, `router-openwrt`, `router-ubiquiti`, `router-asus`, `router-ddwrt` (+ `setup_url`) |
 
-:warning: **[GAP]** The router category has an extra `setup_url` key, but the others don't. Deserialize defensively.
+⚠️ **[GAP]** The router category has an extra `setup_url` key, but the others don't. Deserialize defensively.
 
 ### Service categories **[EXAMPLE]**
 `audio`, `gaming`, `shop`, `social`, `tools`, `video`. Fetch via `GET /services/categories`.
@@ -382,7 +382,7 @@ List all profiles associated with an account.
 | `profile.opt.count` / `profile.opt.data[]` | integer / array | each `{PK, value}` |
 | `profile.da` | object **or** array | the Default Rule: `{do, via, status}` |
 
-:warning: **[CONFLICT]** `profile.da` is declared in the schema as `"type": "array"` but the examples show it as
+⚠️ **[CONFLICT]** `profile.da` is declared in the schema as `"type": "array"` but the examples show it as
 either `[]` (empty, when unset) **or** a bare object `{"do":3,"via":"YYZ","status":1}`. Deserialize as
 `Option`-ish / untagged-enum. Same trap as the top-level `body`.
 
@@ -410,7 +410,7 @@ Create a new blank profile, or clone an existing one.
 | `lock_message` | string | message to error with when a locked profile is modified |
 | `password` | string | **account password**, required when *unlocking* a profile |
 
-:warning: **[GAP]** `lock_status` values are never enumerated. `0`/`1` is the obvious guess but unstated.
+⚠️ **[GAP]** `lock_status` values are never enumerated. `0`/`1` is the obvious guess but unstated.
 
 - Response: empty schema `{}`. **[GAP]**
 
@@ -422,7 +422,7 @@ Create a new blank profile, or clone an existing one.
 
 ### `GET /profiles/options` — Profiles - List Options
 Get all available profile options (the catalogue, not a profile's current values).
-- :warning: **[CONFLICT]** Declares a **required** `Content-Type: application/x-www-form-urlencoded` *header* on a
+- ⚠️ **[CONFLICT]** Declares a **required** `Content-Type: application/x-www-form-urlencoded` *header* on a
   GET with no body. Almost certainly a docs artifact from copy-paste. Harmless to send, probably ignorable.
 - Response key: **`body.options`** (array): `PK`, `title`, `description`, `type` (`toggle`|`field`),
   `default_value` (integer), `info_url`. All required.
@@ -442,7 +442,7 @@ Set an option on a profile.
 | `status` | integer | **yes** | 1 = enable, 0 = disable |
 | `value` | **string** | no | "Optional value of the option to set" (example: `"something"`) |
 
-:warning: Note `value` is typed **string** here, but `GET /profiles/options` returns `default_value` as an
+⚠️ Note `value` is typed **string** here, but `GET /profiles/options` returns `default_value` as an
 **integer**, and `body.profile.opt.data[].value` is an **integer**. Send it as a string in the form body
 (everything in a form body is a string anyway), expect an integer back.
 
@@ -469,7 +469,7 @@ Set an option on a profile.
 | `status` | integer | **yes** | |
 
 - Response key: **`body.default`** (`{do, via, status}`).
-- :warning: No `via_v6` here, unlike custom rules and services. **[GAP]** Can the default rule spoof AAAA? Undocumented.
+- ⚠️ No `via_v6` here, unlike custom rules and services. **[GAP]** Can the default rule spoof AAAA? Undocumented.
 
 ---
 
@@ -515,7 +515,7 @@ Set an option on a profile.
 | `filters[].filter` | string | **yes** | "Filter name from the List Filters endpoint" |
 | `filters[].status` | integer | **yes** | `enum: [0,1]`, `minimum: 0`, `maximum: 1` |
 
-- :warning: **[CONFLICT]** The declared response schema says `body.filters` is an **array of string**. The success
+- ⚠️ **[CONFLICT]** The declared response schema says `body.filters` is an **array of string**. The success
   *example* shows `body.filters` as an **object/map**:
 ```json
 { "body": { "filters": {
@@ -559,11 +559,11 @@ The URL segment is **`groups`**. The docs title them "Rule Folders". Folder IDs 
 | `action` | object | yes | `{do, status}`: schema marks **both** `do` and `status` required... |
 | `count` | integer | yes | number of rules inside |
 
-:warning: **[CONFLICT]** `action` declares `required: ["do","status"]`, but the very example on the same page shows
+⚠️ **[CONFLICT]** `action` declares `required: ["do","status"]`, but the very example on the same page shows
 a folder with `"action": {"status": 1}`, **no `do`** (a plain, action-less folder). So `do` is genuinely
 optional in `action`. Model it as `Option<i64>`.
 
-:warning: `action.via` is **not** in the List schema, but **is** in the Create response schema. **[CONFLICT]** —
+⚠️ `action.via` is **not** in the List schema, but **is** in the Create response schema. **[CONFLICT]** —
 expect it to be present for `do=2`/`do=3` folders.
 
 ### `POST /profiles/{profile_id}/groups` — Rule Folders - Create
@@ -577,7 +577,7 @@ expect it to be present for `do=2`/`do=3` folders.
 | `via` | string | no | "Add spoof IP or hostname, or proxy identifier if do=2 or do=3" |
 | `status` | integer | **yes** | "Status of the folder and all rules inside" |
 
-:warning: **[CONFLICT]** `do` is marked **required** here, yet the List example proves action-less folders exist
+⚠️ **[CONFLICT]** `do` is marked **required** here, yet the List example proves action-less folders exist
 (`{"action": {"status": 1}}`), and the guide says a folder "can be **optionally** assigned an action".
 Either the API accepts a sentinel (`do=`? `do=-1`?) for "no action", or action-less folders can only be made
 via the UI. **Unresolvable from the docs. Probe.**
@@ -600,7 +600,7 @@ via the UI. **Unresolvable from the docs. Probe.**
 ### `DELETE /profiles/{profile_id}/groups/{folder}` — Rule Folders - Delete
 Delete folder **and all custom rules inside it**.
 - Path: `profile_id` (string, required), `folder` (string, required)
-- :warning: **[CONFLICT] The docs declare a form-encoded request body with `name`, `do`, `via`, `status`, all four
+- ⚠️ **[CONFLICT] The docs declare a form-encoded request body with `name`, `do`, `via`, `status`, all four
   marked REQUIRED, on a DELETE.** This is plainly a copy-paste of the PUT page (the field descriptions even
   say "(Optional) Rename the folder"). A DELETE almost certainly needs no body. **Send no body. Probe if it
   400s.** Note the types here are also `string` where PUT used `integer`, more evidence of a bad copy-paste.
@@ -612,8 +612,8 @@ Delete folder **and all custom rules inside it**.
 
 ### `GET /profiles/{profile_id}/rules/{folder_id}` — Custom Rules - List
 Return custom rules in a folder. **For the root folder, OMIT the folder ID.**
-> :warning: **The docs also say you may pass `0`. You may not: it returns `404 "No such group exists."`**
-> Verified live. `0` is not a real folder. See [read-verification.md section 3](read-verification.md#listing-root-rules-the-docs-offer-two-ways-one-is-false--and-the-working-one-isnt-all-rules).
+> ⚠️ **The docs also say you may pass `0`. You may not: it returns `404 "No such group exists."`**
+> Verified live. `0` is not a real folder. See [read-verification section 3](read-verification.md#listing-root-rules-the-docs-offer-two-ways-one-is-false--and-the-working-one-isnt-all-rules).
 - Path: `profile_id` (string, required), `folder_id` (string, required in the schema, but the description
   says "Folder ID (**0 or omit for root**)" and the operation description says "For root folder, omit the
   folder ID"). So `GET /profiles/{profile_id}/rules` (no trailing segment) is valid. **[SPEC]**
@@ -674,7 +674,7 @@ Modify an existing custom rule. Same path (no `{hostname}` segment): the target 
 | `hostnames[]` | array | **yes** | example here is the bare string `"domain1.com"`, not an array (docs sloppiness). Declared `type: array` |
 
 - Response: empty schema `{}`. **[GAP]**
-- :warning: **[GAP]** Whether PUT is a full replace or a partial merge is undocumented. Since `do` and `status` are
+- ⚠️ **[GAP]** Whether PUT is a full replace or a partial merge is undocumented. Since `do` and `status` are
   both required, it behaves like a replace: you must resend the full action even to change one field.
 
 ### `DELETE /profiles/{profile_id}/rules/{hostname}` — Custom Rules - Delete
@@ -683,7 +683,7 @@ declared body is an **empty object**. **[CONFLICT]** There is no documented way 
 whether a `hostnames[]` body is accepted.
 - Path: `profile_id` (string, required), `hostname` (string, required, e.g. `domain.com`)
 - Content-Type: `application/x-www-form-urlencoded` with an empty schema.
-- :warning: Hostnames with wildcards (`*.domain.com`) must be **URL-encoded** in the path. Not mentioned in the docs. **[GAP]**
+- ⚠️ Hostnames with wildcards (`*.domain.com`) must be **URL-encoded** in the path. Not mentioned in the docs. **[GAP]**
 - Response: empty schema `{}`. **[GAP]**
 
 ---
@@ -718,7 +718,7 @@ Create or modify a rule for a service in a profile.
 | `via_v6` | string | no | `do=2` => AAAA record. No effect when `do=3` |
 
 - Response key: **`body.services`** (array): `{do, via, status}`
-- :warning: **[GAP]** No documented way to **delete** a service rule. Presumably `status=0` disables it. Whether the
+- ⚠️ **[GAP]** No documented way to **delete** a service rule. Presumably `status=0` disables it. Whether the
   rule can be removed entirely is unstated.
 
 ### `GET /services/categories` — List Service Categories
@@ -748,7 +748,7 @@ The URL segment is **`devices`**. The docs call them "Endpoints".
   > We're currently updating this API to streamline behavior and improve query performance. As part of this
   > change, the `last_activity` and `clients` fields will be removed from the response soon. In the meantime,
   > if you still need these two fields, please include the query parameter `last_activity=1` in your requests.
-  :warning: Neither `last_activity` nor `clients` appears in the declared response schema at all. **[GAP]** Their
+  ⚠️ Neither `last_activity` nor `clients` appears in the declared response schema at all. **[GAP]** Their
   shapes are undocumented. Don't rely on them.
 
 - Response key: **`body.devices`** (array), plus a sibling **`body.activity`** (boolean, required).
@@ -771,7 +771,7 @@ The URL segment is **`devices`**. The docs call them "Endpoints".
 | `legacy_ipv4` | object | no | `{resolver, status}` |
 | `profile` | object | **yes** | `{PK, updated, name}`, the enforced profile |
 
-:warning: `profile_id2` (second enforced profile) is a **write-only** field: accepted on POST/PUT but **never
+⚠️ `profile_id2` (second enforced profile) is a **write-only** field: accepted on POST/PUT but **never
 appears in any response schema or example**. **[GAP]** How do you read back the second profile?
 
 ### `POST /devices` — Create Endpoint
@@ -796,7 +796,7 @@ appears in any response schema or example**. **[GAP]** How do you read back the 
 | `remap_device_id` | string | no | remap source device + client ID to a new device |
 | `remap_client_id` | string | no | e.g. `hostname-01` |
 
-:warning: `status` and `bump_tls` and `ctrld_custom_config` are **not** accepted on POST. PUT only.
+⚠️ `status` and `bump_tls` and `ctrld_custom_config` are **not** accepted on POST. PUT only.
 
 - Response: the device object sits **directly at `body`** (not `body.devices`). **[SPEC]**
   Required: `PK`, `ts`, `name`, `stats`, `device_id`, `status`, `icon`, `restricted`, `learn_ip`, `bump_tls`,
@@ -828,7 +828,7 @@ appears in any response schema or example**. **[GAP]** How do you read back the 
 | `status` | integer | **0 = pending, 1 = active, 2 = soft disabled, 3 = hard disabled.** PUT-only |
 | `ctrld_custom_config` | string | a `ctrld` `.toml` config file to deploy. **PUT-only** |
 
-:warning: `icon` is **not** listed as a modifiable field on PUT, though it's required on POST. **[GAP]** Can you
+⚠️ `icon` is **not** listed as a modifiable field on PUT, though it's required on POST. **[GAP]** Can you
 change a device's icon? Probe.
 
 - Response: device object **directly at `body`** + `message` (e.g. `"Device has been updated"`). Required
@@ -899,7 +899,7 @@ Both are catalogue endpoints. **Both have completely empty response schemas in t
 - No params. Feeds the `stats` field of `POST`/`PUT /devices` (0 / 1 / 2).
 - Response key unknown, probably `body.levels`. **Probe.**
 
-:warning: **[GAP]** There is **no endpoint to query analytics data itself** (query logs, counts, reports) in the
+⚠️ **[GAP]** There is **no endpoint to query analytics data itself** (query logs, counts, reports) in the
 public API. These two only expose the *configuration* catalogues. If the CLI is meant to show DNS activity,
 that capability is not in the documented public API.
 
@@ -930,7 +930,7 @@ underscore**. Verbatim from the OpenAPI fragment:
 "paths": { "/organizations/sub_organizations": { "get": { ... } } }
 ```
 
-> ### :white_check_mark: `GET /organizations/sub_organizations` — **underscore**, not hyphen. Definitive.
+> ### ✅ `GET /organizations/sub_organizations` — **underscore**, not hyphen. Definitive.
 
 The response body key is likewise **`sub_organizations`** (underscore). Note the *create* path is a
 **different, shorter word**: `POST /organizations/suborg`. Three different spellings across the API surface:
@@ -979,7 +979,7 @@ Note the doubled segment: the path really is `/organizations/organization`.
 | `status` | integer | |
 | `permission` | object | `{level: integer, printable: string}` (e.g. `{100, "Owner"}`, `{1, "Viewer"}`) |
 
-:warning: **[GAP]** No endpoints to **invite, modify, or remove** members. Read-only.
+⚠️ **[GAP]** No endpoints to **invite, modify, or remove** members. Read-only.
 
 ### `GET /organizations/sub_organizations` — View Sub-Organizations
 - No params.
@@ -1014,7 +1014,7 @@ Optional: `parent_profile`, `website`, `address`.
 | `parent_profile` | string | no | Global Profile PK to enforce on all created Devices |
 
 - Response key: **`body.organization`** + top-level `message` (`"Sub-organization has been created."`)
-- :warning: `max_users` / `max_routers` / `max_profiles` are **not** settable at creation: the new org comes back
+- ⚠️ `max_users` / `max_routers` / `max_profiles` are **not** settable at creation: the new org comes back
   with server-chosen defaults (example: `max_users: 10`, `max_routers: 1`, `max_profiles: 100`). Use
   `PUT /organizations` to change seats, except see the conflict below.
 
@@ -1038,7 +1038,7 @@ Optional: `parent_profile`, `website`, `address`.
 | `contact_phone` | string | |
 | `parent_profile` | string | |
 
-- :warning: **[CONFLICT] Seats.** The page's prose is explicitly about seats:
+- ⚠️ **[CONFLICT] Seats.** The page's prose is explicitly about seats:
   > **Billable Events** — Modifying `max_users` and `max_routers` is a billable event. If you increase your
   > commitment, you will be charged a prorated difference from your last commitment to the new one. New amount
   > will be rebilled subsequently. Reducing the commitment will update your future rebill amount.
@@ -1048,7 +1048,7 @@ Optional: `parent_profile`, `website`, `address`.
   careful: getting this wrong triggers real billing.**
 
 - Response key: **`body.organization`** + `message` (`"Organization has been updated."`)
-- :warning: **[GAP]** No endpoint to **delete** a sub-organization.
+- ⚠️ **[GAP]** No endpoint to **delete** a sub-organization.
 
 ---
 
@@ -1158,7 +1158,7 @@ Undocumented-but-mentioned extras: `GET /devices/users`, `GET /devices/routers`,
 
 Ordered by risk.
 
-> **Status 2026-07-11: resolved**, except #6 (org seats, untestable on a personal account, :warning:
+> **Status 2026-07-11: resolved**, except #6 (org seats, untestable on a personal account, ⚠️
 > billable), #14 (no 429 ever observed), and the low-stakes #15/#16/#18. Findings live in
 > [read-verification.md](read-verification.md) and [write-verification.md](write-verification.md),
 > including two hazards this list never anticipated: the server silently drops form variables past
@@ -1173,7 +1173,7 @@ Ordered by risk.
    `GET /profiles/{id}/filters` actually return for a filter in strict mode: `status: 2`? A different `PK`?
 5. **`PUT /profiles/{id}/filters` response shape**: array-of-string (schema) or map (example)?
 6. **`PUT /organizations` targeting + seats.** No org ID in the path. Are `max_users` / `max_routers`
-   accepted? :warning: **Billable: test on a throwaway sub-org.**
+   accepted? ⚠️ **Billable: test on a throwaway sub-org.**
 7. **`DELETE /profiles/{id}/groups/{folder}` body.** Does it really require `name`/`do`/`via`/`status`, or is
    the docs' body a copy-paste artifact? Send none first.
 8. **Action-less folders.** `POST /groups` marks `do` required, but action-less folders demonstrably exist.
