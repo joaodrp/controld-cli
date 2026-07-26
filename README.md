@@ -78,56 +78,49 @@ The account resources and what you can do to each:
 | [rule](docs/commands.md#rule) | ✅ | | ✅ | ✅ | ✅ |
 | [folder](docs/commands.md#folder-api-groups) | ✅ | | ✅ | ✅ | ✅ |
 
-Empty cells aren't shipped yet — see the [roadmap](docs/roadmap.md).
+Empty cells aren't shipped yet — see the [roadmap.md](docs/roadmap.md).
 
 ## Highlights
 
-- Verified writes. The API can acknowledge a write it did not apply, so `cdctl` reads every
-  mutation back and compares it before reporting success.
-- Safe by default. Every mutation takes `-n`/`--dry-run`, deletes ask for confirmation, and a
-  failed write says whether retrying is safe.
-- Built for scripts and agents. `--json` everywhere, stdout carries only data, errors have
-  stable slugs, and the [exit codes](docs/decisions.md#d5--nine-exit-codes-exactly-one-retryable)
-  are a documented contract: 8 means retry, nothing else does.
-- Careful with the token. Read from the environment or a hidden prompt, never argv. Stored in a
-  `0600` file, redacted in `--debug` traces.
-- One static binary, with shell completions and man pages. Config follows XDG.
-- `cdctl api` reaches the whole documented API, sending raw requests through the same auth,
-  retries, and error mapping as the typed commands.
-- Personal accounts, documented API surface only. Organization endpoints aren't here yet, and
-  [adding them later](docs/decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes)
-  won't break anything.
+- 🔍 The API can report success for a change it never made, so `cdctl` reads every write back and checks it landed.
+- 🛡️ `--dry-run` on every write, confirmation on deletes, and errors that say if a retry is safe.
+- 🤖 Scripts and agents get `--json`, data-only stdout, and stable error codes.
+- 🚦 [Exit codes](docs/decisions.md#d5--nine-exit-codes-exactly-one-retryable) are a contract: 8 means retry, nothing else does.
+- 🔑 The token is never passed on the command line, lives in a file only you can read, and is hidden from `--debug` output.
+- 📦 One static binary, with completions and man pages.
+- 🚪 `cdctl api` reaches the whole documented API through the same auth, retries, and error handling.
+- 👤 Personal accounts, with [orgs addable later](docs/decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes) and no breaking changes.
 
 ## Install
 
-The package is `controld-cli`, and every method below installs the `cdctl` binary. Installer
-script (Linux and macOS):
+The package is `controld-cli`; the binary is `cdctl`.
+
+| Channel | Platforms | Command |
+| --- | --- | --- |
+| Homebrew | macOS | `brew install joaodrp/tap/cdctl` |
+| Prebuilt archive | macOS, Linux, Windows | from [Releases](https://github.com/joaodrp/controld-cli/releases), put `cdctl` on `PATH` |
+| Cargo | any | `cargo install controld-cli` |
+
+Archives cover aarch64 and x86_64, Linux in both gnu and musl, and ship completions and man
+pages. `cdctl completions --help` generates one for any shell.
+
+Installer scripts (no upgrade path, so re-run one to update):
 
 ```sh
+# macOS and Linux
 curl --proto '=https' --tlsv1.2 -LsSf \
     https://github.com/joaodrp/controld-cli/releases/latest/download/controld-cli-installer.sh | sh
+
+# Windows
+powershell -c "irm https://github.com/joaodrp/controld-cli/releases/latest/download/controld-cli-installer.ps1 | iex"
 ```
 
-Or a prebuilt archive from [Releases](https://github.com/joaodrp/controld-cli/releases):
-Linux (gnu, musl), macOS (arm64, x64), Windows. Or Homebrew:
+Swap `latest/download` for `download/<tag>` to pin a version.
 
-```sh
-brew install joaodrp/tap/cdctl
-```
+### Uninstall
 
-Or from source:
-
-```sh
-cargo install controld-cli
-```
-
-Prebuilt archives ship completions and man pages. `cdctl completions <shell>` generates a script
-for bash, elvish, fish, powershell, or zsh, and `cdctl completions --help` shows where to put it.
-
-To uninstall, remove the binary the way it arrived: `brew uninstall cdctl`,
-`cargo uninstall controld-cli`, or delete `cdctl` from where the installer put it
-(`~/.cargo/bin` by default). The config file, at the path `cdctl config path` prints, holds your
-token if you ran `auth login`. Delete it too.
+Removing the binary leaves the config file, which holds your token if you ran `auth login`.
+`cdctl config path` prints where it is.
 
 ## Quickstart
 
@@ -135,7 +128,7 @@ Create an API token in the [Control D dashboard](https://controld.com/dashboard/
 and check it reaches the API:
 
 ```sh
-echo -n "$CONTROLD_API_TOKEN" | cdctl auth login --token-stdin
+cdctl auth login --token-stdin     # paste the token at the prompt, input stays hidden
 cdctl auth status
 ```
 
@@ -147,8 +140,7 @@ cdctl profile list
 cdctl config set default_profile Home
 ```
 
-Block a domain, list the rules, then delete it again. The delete prompts for confirmation
-(`--yes` skips the prompt, but only alongside an explicit `--profile`):
+Block a domain, list the rules, then delete it again. The delete asks you to confirm:
 
 ```sh
 cdctl rule create ads.example.com --action block
@@ -158,6 +150,50 @@ cdctl rule delete ads.example.com
 
 From here, every command answers `--help`, `cdctl reference` prints the whole surface as one
 document, and [commands.md](docs/commands.md) specifies each flag, output column, and exit code.
+
+## Configuration
+
+### Environment variables
+
+| Variable | Meaning |
+| --- | --- |
+| `CONTROLD_API_TOKEN` | API token (alternative to `cdctl auth login`) |
+| `CONTROLD_PROFILE` | Profile to operate on, as `--profile` |
+| `CONTROLD_OUTPUT` | `json` makes JSON the default output |
+
+### Config file
+
+Plain TOML at `~/.config/cdctl/config.toml` (`%APPDATA%\cdctl\config.toml` on Windows, or
+wherever `$XDG_CONFIG_HOME` points):
+
+```toml
+current_context = "personal"
+
+[contexts.personal]
+token = "api.xxxx"
+default_profile = "Home"
+```
+
+A context is a named token with its own default profile. One is enough unless you have several
+accounts.
+
+| Key | Meaning | Notes |
+| --- | --- | --- |
+| `current_context` | The context in use | Optional, defaults to `personal`. Set with `cdctl config set` |
+| `token` | API token for that context | Written by `cdctl auth login`. Plain text, in a file only you can read |
+| `default_profile` | Profile used when `--profile` is absent | Per context. Set with `cdctl config set` |
+
+`cdctl config path` prints that path and `cdctl config list` shows each value with the source it
+came from.
+
+### Precedence
+
+When a setting has more than one source, the first one that is set wins:
+
+| Setting | Precedence |
+| --- | --- |
+| Profile | `--profile` > `CONTROLD_PROFILE` > `default_profile` |
+| Token | `CONTROLD_API_TOKEN` > `token` |
 
 ## Documentation
 
