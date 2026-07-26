@@ -107,7 +107,7 @@ A third shape exists that the spec does not describe: a controller key *plus sib
 > ⚠️ So `body` has **three** shapes, not two. The unwrap key must be per-operation configuration
 > supporting *keyed*, *flat*, and *keyed-plus-siblings*. And on **error**, `body` is `[]`, an
 > **array**, regardless of the success shape. See
-> [read-verification.md section 1](read-verification.md#the-envelope-has-three-shapes-not-one).
+> [read-verification section 1](read-verification.md#the-envelope-has-three-shapes-not-one).
 
 ### Error envelope **[SPEC]**
 ```json
@@ -1160,7 +1160,7 @@ Ordered by risk.
 
 > **Status 2026-07-11: resolved**, except #6 (org seats, untestable on a personal account, ⚠️
 > billable), #14 (no 429 ever observed), and the low-stakes #15/#16/#18. Findings live in
-> [read-verification.md](read-verification.md) and [write-verification.md](write-verification.md),
+> [read-verification](read-verification.md) and [write-verification](write-verification.md),
 > including two hazards this list never anticipated: the server silently drops form variables past
 > ~1001 (a 1000-hostname batch 200s and stores 999), and the 10,000 rules/profile cap rejects
 > crossing batches atomically.

@@ -24,7 +24,7 @@ cargo fmt --check
 ```
 
 `cargo test` never touches the network. Test layers and the fixture policy are in
-[testing.md](docs/testing.md). New fixtures in `tests/fixtures/api/` must be sanitized (no
+[testing](docs/testing.md). New fixtures in `tests/fixtures/api/` must be sanitized (no
 emails, device names, real domains, public IPs, or account PKs).
 
 ## The live suite
@@ -61,17 +61,17 @@ $ ./scripts/fetch-spec.sh
 The API is unversioned (*"[breaking changes can be introduced without
 warning](https://docs.controld.com/reference/get-started)"*), so CI re-fetches and diffs weekly.
 Where the spec came from and how far to trust it:
-[spec-provenance.md](docs/reference/spec-provenance.md). Read
-[hazards.md](docs/reference/hazards.md) before touching `src/api/` or any write path.
+[spec-provenance](docs/reference/spec-provenance.md). Read
+[hazards](docs/reference/hazards.md) before touching `src/api/` or any write path.
 
 ## Conventions
 
-- [decisions.md](docs/decisions.md) is authoritative. Several decisions look wrong until you
+- [decisions](docs/decisions.md) is authoritative. Several decisions look wrong until you
   read the reasoning. Changing one needs the maintainer's explicit approval, recorded by
   amending that file.
 - Commit messages and PR titles follow [Conventional Commits](https://www.conventionalcommits.org/).
 - Two contracts are public API and semver-major to break: the exit codes and the stdout-is-data
-  rule. [AGENTS.md](AGENTS.md) states both.
+  rule. [AGENTS](AGENTS.md) states both.
 
 ## Bug reports
 

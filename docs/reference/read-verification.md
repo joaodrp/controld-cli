@@ -1,7 +1,7 @@
 # Live Verification (reads)
 
 Read-only `GET` probes against a real account. Where this contradicts Control D's spec or docs, **this
-wins**. Writes: [write-verification.md](write-verification.md). Provenance is per section below: most
+wins**. Writes: [write-verification](write-verification.md). Provenance is per section below: most
 of this file is from the initial 2026-07-11 pass, and sections that say otherwise are later.
 
 ## The envelope has three shapes, not one
@@ -28,7 +28,7 @@ not a 404. All of these are `400` / `40001`:
 
 - no token, bad token, nonexistent path with no token
 
-**Classify on `error.code`, never on the HTTP status.** See [error-codes.md](error-codes.md#classify-on-the-prefix-not-the-code).
+**Classify on `error.code`, never on the HTTP status.** See [error-codes](error-codes.md#classify-on-the-prefix-not-the-code).
 
 ## Listing root rules: the docs offer two ways, one is false — and the working one isn't "all rules"
 

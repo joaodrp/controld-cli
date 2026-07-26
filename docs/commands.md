@@ -501,7 +501,7 @@ add/converge/delete plan and exits `0`.
   already matches the entire desired tuple. A hostname present with any difference **converges via
   `PUT`** (the verified merge, since a user may have recreated, moved, or edited it since the manifest
   was written). A missing hostname is **created via `POST`**, never `PUT`, since `PUT` does not upsert
-  ([write-verification.md](reference/write-verification.md): an unknown hostname 400s `Custom Rule
+  ([write-verification](reference/write-verification.md): an unknown hostname 400s `Custom Rule
   does not exist` and nothing lands). Chunked at 500 with the same per-chunk and final full-state
   verification as import.
 - **Chunks of 500, scalar params first, verify the full desired state.** After each chunk,

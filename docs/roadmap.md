@@ -32,7 +32,7 @@ Provable only when the release runs:
 ## v0.2 — `rule import` + `rule restore`
 
 The feature that justifies the project: two blocklist-sync tools exist because it doesn't.
-Full semantics in [commands.md](commands.md#rule-import-semantics-v02): **folder-scoped**
+Full semantics in [commands](commands.md#rule-import-semantics-v02): **folder-scoped**
 diff -> converge -> add over one **profile-wide** fetch (quota against the **10,000 rules/profile
 cap**), cross-folder collisions fail fast (exit `6`, nothing written), chunks of **500** with
 scalar params first, **full desired-state verification** after every chunk plus a final full-scope
@@ -88,7 +88,7 @@ fit**. Point users at Control D's native filters.
 `filter list/enable/disable/set`, `service list/set/categories/catalog`
 
 - Live probes owed **before the gate**: the `dropdown` option write and the level-less filter
-  write (Open items 5 and 7, [decisions.md](decisions.md#open)), captured as sanitized fixtures.
+  write (Open items 5 and 7, [decisions](decisions.md#open)), captured as sanitized fixtures.
 
 **Gate** *(v0.1 global gates inherited)*:
 

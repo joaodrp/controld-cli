@@ -198,13 +198,13 @@ stderr.
 
 Only **five** distinct codes are known (`40001`, `40002`, `40003`, `40201`, `40401`), and `40003` alone
 carries **a still-growing list of unrelated meanings**, since every probe session adds to the observed
-table in [error-codes.md](reference/error-codes.md#observed-codes--the-entire-known-universe). A lookup table would be worthless.
+table in [error-codes](reference/error-codes.md#observed-codes--the-entire-known-universe). A lookup table would be worthless.
 
 Control D document the structure: *"first 3 digits match the HTTP status."* So classify on the prefix:
 it's total, and a code we've never seen still resolves correctly.
 
 **The trap:** `400` is overloaded. Auth runs before routing, so a bad token is `400`/`40001`, not 401.
-Special-case it. Full table: [reference/error-codes.md](reference/error-codes.md#observed-codes--the-entire-known-universe).
+Special-case it. Full table: [reference/error-codes](reference/error-codes.md#observed-codes--the-entire-known-universe).
 
 ## D5 — Nine exit codes, exactly **one** retryable
 
@@ -309,7 +309,7 @@ rules. GET retries apply, writes never retry.
 keys** (`hostnames[]=` works as typed). `--input -` sends stdin verbatim as JSON. **Both body
 forms require a non-GET `-X <method>`** (a GET never carries a body here), and the two are mutually
 exclusive. Query strings ride in the path. Grammar:
-[commands.md](commands.md#cdctl-api-request-encoding).
+[commands](commands.md#cdctl-api-request-encoding).
 
 ## D9b — Flags primary; JSON only via stdin
 
@@ -338,7 +338,7 @@ Send what the spec declares: form for the 18 writes, JSON for `PUT .../filters`.
 
 **The "contradiction" never existed**: bracket and indexed both work. The *bare repeat* fails, and
 that's what Go/Python emit by default. Root cause: **the backend is PHP** (it leaked a `print_r()`
-dump into an error). Details: [reference/write-verification.md](reference/write-verification.md#array-encoding--there-was-never-a-contradiction).
+dump into an error). Details: [reference/write-verification](reference/write-verification.md#array-encoding--there-was-never-a-contradiction).
 
 Consequences:
 
@@ -467,7 +467,7 @@ Four releases, each independently useful. Anything not yet typed is reachable vi
 
 **Cost accepted:** four release cycles instead of one. Users of deferred families type raw
 `cdctl api` paths for a while. The delivery table above must stay in sync with
-[roadmap.md](roadmap.md).
+[roadmap](roadmap.md).
 
 ## D18 — Single crate, binary-only, one module per noun
 
