@@ -30,3 +30,7 @@ ever contradicts this list, update the reference doc and this index.**
 - **`PUT /rules` never upserts**: an unknown hostname 400s `Custom Rule does not exist`, and
   target matching is case-sensitive while `PK`s store case-preserved, so pre-check existence and
   resolve case before writing.
+- **Bad paths never 404.** An unknown top-level path returns *"This token does not have access to
+  this endpoint"*, making a typo indistinguishable from a plan restriction. Worse, `/devices/{id}`
+  **swallows trailing segments**: any `/devices/{id}/<anything>` returns 200 with the device, so a
+  200 there proves nothing.

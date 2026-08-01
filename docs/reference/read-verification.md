@@ -30,6 +30,31 @@ not a 404. All of these are `400` / `40001`:
 
 **Classify on `error.code`, never on the HTTP status.** See [error-codes](error-codes.md#classify-on-the-prefix-not-the-code).
 
+## Bad paths never say "not found" (2026-08-01)
+
+With a **valid** token, routing failures wear two disguises, and neither is a 404.
+
+An unknown top-level path reports a permissions problem:
+
+```
+GET /nonexistent-path-probe  -> "This token does not have access to this endpoint"   # exit 5
+```
+
+A typo and a genuinely forbidden endpoint look identical, so exit 5 from `cdctl api` never proves
+the endpoint exists.
+
+Worse, `/devices/{id}` **swallows any trailing segments** and returns the device:
+
+```
+GET /devices/{id}/schedules             -> 200, the device object
+GET /devices/{id}/zzz-not-a-real-thing  -> 200, the device object
+GET /devices/{id}/a/b/c                 -> 200, the device object
+```
+
+**A 200 from a guessed sub-path under `/devices/{id}` is meaningless.** Hand-probing for
+undocumented endpoints this way yields false positives. Find the path's call site in the dashboard
+bundle instead, then check that its response differs from the bare resource.
+
 ## Listing root rules: the docs offer two ways, one is false — and the working one isn't "all rules"
 
 The `folder_id` param says *"0 or omit for root"*. **Only `omit` works.**
