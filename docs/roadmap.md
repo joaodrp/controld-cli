@@ -137,3 +137,7 @@ since v0.1, semver-guaranteed.
 - **Machine-readable command spec**: generate a versioned schema from the same centralized
   metadata that drives clap and `cdctl reference`. Implement only when a concrete consumer
   exists. No handwritten parallel contract ([D3](decisions.md#d3--no-tty-based-format-switching)).
+- **Endpoint schedules**: `/endpointschedules` (full CRUD) is live but undocumented, so it stays
+  behind `cdctl api` ([D16](decisions.md#d16--documented-surface-only)). Implement only if Control D
+  documents it — `spec-drift.yml` goes red the week that happens. Shape and traps in
+  [`reference/api-contract.md`](reference/api-contract.md#endpoint-schedules-undocumented).
