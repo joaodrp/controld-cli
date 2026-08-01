@@ -34,3 +34,9 @@ ever contradicts this list, update the reference doc and this index.**
   this endpoint"*, making a typo indistinguishable from a plan restriction. Worse, `/devices/{id}`
   **swallows trailing segments**: any `/devices/{id}/<anything>` returns 200 with the device, so a
   200 there proves nothing.
+- **`profile2` is not scheduling.** The second enforced profile stays active outside schedule
+  windows. Scheduled profiles are a separate, undocumented `/endpointschedules` resource, invisible
+  on the device object. Modelling the two as one concept silently drops `profile2`'s always-on
+  semantics.
+- **An endpoint schedule's top-level `profile_id`/`time_start`/`time_end` duplicate `windows[0]`**:
+  reading them truncates a multi-window schedule to its first window. Read `windows[]`.

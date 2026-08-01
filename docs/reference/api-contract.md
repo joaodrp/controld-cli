@@ -770,9 +770,16 @@ The URL segment is **`devices`**. The docs call them "Endpoints".
 | `resolvers` | object | **yes** | `{uid, doh, dot}` required, `v4`/`v6` (arrays of string) optional |
 | `legacy_ipv4` | object | no | `{resolver, status}` |
 | `profile` | object | **yes** | `{PK, updated, name}`, the enforced profile |
+| `profile2` | object | no | `{PK, updated, name}`, the second enforced profile. **Undocumented** |
 
-⚠️ `profile_id2` (second enforced profile) is a **write-only** field: accepted on POST/PUT but **never
-appears in any response schema or example**. **[GAP]** How do you read back the second profile?
+⚠️ `profile_id2` is written as a scalar PK and read back as a **`profile2` object**, mirroring
+`profile_id` -> `profile`. The spec documents the write but not the read: `profile2` appears in no
+response schema or example, yet `POST /devices`, `GET /devices`, and `GET /devices/{id}` all return
+it. Verified live 2026-08-01.
+
+⚠️ `profile2` schedules nothing. It belongs to the endpoint's always-on profile stack and stays
+active outside schedule windows; scheduled profiles are a separate resource
+([endpoint schedules](#endpoint-schedules-undocumented)).
 
 ### `POST /devices` — Create Endpoint
 - Content-Type: `application/x-www-form-urlencoded`
@@ -845,6 +852,47 @@ change a device's icon? Probe.
 - Response key: **`body.types`**, an **object keyed by category** (`os`, `browser`, `tv`, `router`), each
   `{name: string, icons: {<icon_key>: <label>}}`. The `router` entry additionally has `setup_url`.
   See section 1 for the full icon key list.
+
+### Endpoint schedules (undocumented)
+
+Not in the spec's `paths`, not in the API reference. Discovered in the dashboard bundle and verified
+live 2026-08-01. **Out of scope for typed commands** ([D16](../decisions.md#d16--documented-surface-only)); reachable through `cdctl api`.
+
+| Operation | Path |
+| --- | --- |
+| List | `GET /endpointschedules`, or `?device_id={pk}` to scope to one endpoint |
+| Create | `POST /endpointschedules` (`device_id` in the body) |
+| Modify | `PUT /endpointschedules/{schedule_pk}` |
+| Delete | `DELETE /endpointschedules/{schedule_pk}` |
+
+A schedule is its own resource with its own `PK`, referencing an endpoint. Response key is
+`body.schedules`:
+
+```jsonc
+{"PK":"...", "name":"...", "time_zone":"Europe/Lisbon", "status":1, "enforcing":0,
+ "created_at":"2026-08-01 09:15:24", "updated_at":"...",
+ "windows":[{"weekday":"mon", "time_start":"06:30", "time_end":"09:00",
+             "start_minute":390, "end_minute":540,
+             "profile_id":"...", "profile_name":"..."}],
+ "weekdays":{"mon":1,"tue":1,"wed":0,"thu":0,"fri":0,"sat":0,"sun":0},
+ "device":{"PK":"...", "device_id":"...", "name":"...", "resolvers":{"doh":"...","dot":"..."}},
+ "profile_id":"...", "profile_name":"...", "time_start":"06:30", "time_end":"09:00"}
+```
+
+- `windows[]` is the schedule, **flat rather than grouped by day**: `weekday` is a field on each
+  window, so one day can carry several windows with different profiles.
+- Times appear twice: `"HH:MM"` strings and `start_minute`/`end_minute` integers (minutes past
+  midnight). Both are minute-precise.
+- `weekdays` is a 0/1 map derivable from `windows[]`. Redundant.
+- ⚠️ The **top-level `profile_id`, `profile_name`, `time_start`, `time_end` duplicate `windows[0]`**,
+  a legacy single-window shape. Reading them silently truncates a multi-window schedule to its first
+  window. Read `windows[]`.
+- `status` is the enabled flag; `enforcing` reports whether a window is active now.
+- Schedules are **invisible on the device**: `GET /devices` and `GET /devices/{id}` are byte-identical
+  before and after attaching a schedule.
+
+`/schedules` is a **different resource** (own CRUD in the same bundle) and stays empty when endpoint
+schedules exist. Do not conflate the two.
 
 ---
 
@@ -1186,7 +1234,8 @@ Ordered by risk.
 13. **`GET /users` auth.** Confirm it 401s without a token (schema says `security: []`, prose says otherwise).
 14. **Rate limits.** Watch for `429` and any `X-RateLimit-*` / `Retry-After` headers. Wholly undocumented.
 15. **`icon` on `PUT /devices/{id}`**: accepted or not?
-16. **`profile_id2` read-back**: where does the second enforced profile appear in responses?
+16. ~~**`profile_id2` read-back**~~ **Answered 2026-08-01**: it reads back as an undocumented
+    `profile2` object on all three device responses. See the `GET /devices` field table.
 17. **Wildcard hostname URL-encoding** in `DELETE /profiles/{id}/rules/{hostname}` (`*.domain.com`).
 18. **`lock_status` values** on `PUT /profiles/{id}`.
 19. **`GET /profiles/{id}/filters/external` shape.**

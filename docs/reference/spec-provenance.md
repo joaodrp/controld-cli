@@ -58,6 +58,23 @@ Verified against the live API: see [read-verification](read-verification.md) and
 - 12 operations have an **empty response schema**, including `GET /proxies`, the authoritative list
   of legal REDIRECT targets.
 - **Rate limits and pagination: entirely undocumented.**
+- **Live endpoints exist outside the 35 paths.** `/endpointschedules` (full CRUD) and `/schedules`
+  are absent from the spec and from the API reference, yet both answer on a personal account. The
+  spec is a subset of the API, not a description of it.
+- Documented request fields can have **undocumented response counterparts**: `profile_id2` is
+  accepted on device writes and returned as `profile2`, which appears in no schema or example.
+
+### Finding what the spec omits
+
+The dashboard is a Next.js app whose chunks embed every API path it calls. Fetch
+`https://controld.com/dashboard`, download the `/_next/static/chunks/*.js` it references, and grep
+for path literals. Undocumented endpoints appear directly, method and body shape attached.
+`/endpointschedules` turned up this way. Hand-probing cannot match it, because the API defeats
+guesswork — see
+[bad paths never say "not found"](read-verification.md#bad-paths-never-say-not-found-2026-08-01).
+
+Bundle-derived paths are **evidence, not license**: undocumented surface stays out of typed
+commands ([D16](../decisions.md#d16--documented-surface-only)).
 
 ## Versioning
 

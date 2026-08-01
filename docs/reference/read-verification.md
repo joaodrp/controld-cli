@@ -168,3 +168,8 @@ Headers do expose `x-controld-srv` / `x-controld-pop` (worth echoing under `--de
   (blank in the spec) is **`body.ips`**: `{ip, ts, country, city, isp, asn, as_name}`, geo nullable.
 - `profile.*` hints at undocumented surface: `cflt` (custom filters), `ipflt` (IP filters, no
   endpoint at all).
+- `profile_id2` is written as a scalar and read back as a **`profile2` object** on `POST /devices`,
+  `GET /devices`, and `GET /devices/{id}` (2026-08-01). Undocumented on the read side.
+- **Endpoint schedules** live on an undocumented `/endpointschedules` resource, invisible on the
+  device object. Shape and traps in
+  [api-contract](api-contract.md#endpoint-schedules-undocumented).
