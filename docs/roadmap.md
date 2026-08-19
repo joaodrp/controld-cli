@@ -4,35 +4,41 @@ What ships next, in what order, and the test gates each slice must pass. Deliver
 sliced ([D17](decisions.md#d17--ship-in-vertical-slices-not-all-40-operations-at-once)): v0.1 freezes every global contract, so later slices only add
 commands. Anything not yet typed is reachable via `cdctl api` today.
 
-Current state: **v0.1 is code-complete on `main`** (core, `cdctl api`, `profile list/get`,
-`rule`/`folder` CRUD, release machinery), verified by the full suite and the opt-in live suite.
-Publishing it is one action (merging the open release-plz PR), which tags `v0.1.0`, publishes to
-crates.io, and fires cargo-dist (binaries, GitHub Release, Homebrew formula).
+Current state: **v0.1 shipped** (core, `cdctl api`, `profile list/get`, `rule`/`folder` CRUD,
+release machinery). Each later slice is one release-plz PR: merging it tags, publishes to
+crates.io, and fires cargo-dist (binaries, GitHub Release, Homebrew formula). A slice is a
+feature, so it bumps the minor version (`features_always_increment_minor` in
+`release-plz.toml`); patch releases carry fixes only.
 
 | Release | Ships |
 | --- | --- |
-| v0.2 | `rule import` + `rule restore` |
-| v0.3 | Protection: `profile` writes/options/default, `filter *`, `service *` |
-| v0.4 | Fleet & account: `device *`, `access *`, `proxy`, `analytics`, `account`, `billing`, `network`, `ip` |
+| v0.2 | `device list/get` |
+| v0.3 | `rule import` + `rule restore` |
+| v0.4 | Protection: `profile` writes/options/default, `filter *`, `service *` |
+| v0.5 | Fleet & account: `device` writes/`types`, `access *`, `proxy`, `analytics`, `account`, `billing`, `network`, `ip` |
 | 1.0 | The full mapped surface |
 
-## First-release watch items
+## v0.2 — `device list/get`
 
-Provable only when the release runs:
+The read half of the fleet group, pulled ahead on its own: consumers were reaching it through
+`cdctl api /devices` with no typed contract. Read-only, no write-path hazards. Contract in
+[commands](commands.md#device-api-endpoints).
 
-- The Homebrew tap must receive `Formula/cdctl.rb`: an `installers`/`publish-jobs`
-  desync in `dist-workspace.toml` makes the publish loop no-op green while the tap silently never
-  updates.
-- `RELEASE_PLZ_TOKEN` and `HOMEBREW_TAP_TOKEN` scopes prove out only at release time.
-- Until the first tag exists, release-plz bases its PR branch on the last release-machinery
-  commit, whose tree still carries the invalid pre-move `.github/workflows/build-setup.yml`.
-  Every rotation therefore mints one phantom failed workflow run (notification noise, nothing
-  more). The first release moves the base past it permanently.
+**Gate** *(v0.1 global gates inherited)*:
 
-## v0.2 — `rule import` + `rule restore`
+- All four `status` values and all three `analytics` levels render by name; an unknown code is
+  exit `8`, never a passthrough int.
+- A `stats`-less device reports `analytics: null`, distinct from `"none"`.
+- A resolver family the API omits is `[]` in JSON.
+- `PK != device_id` exits `8` with nothing on stdout.
+- Name resolution: id wins, unique case-insensitive name matches, ambiguity exits `2` naming the
+  candidate ids, no match exits `3` (`device.not_found`).
+- `--fields` typos and control characters in the selector exit `2` before any request.
+
+## v0.3 — `rule import` + `rule restore`
 
 The feature that justifies the project: two blocklist-sync tools exist because it doesn't.
-Full semantics in [commands](commands.md#rule-import-semantics-v02): **folder-scoped**
+Full semantics in [commands](commands.md#rule-import-semantics-v03): **folder-scoped**
 diff -> converge -> add over one **profile-wide** fetch (quota against the **10,000 rules/profile
 cap**), cross-folder collisions fail fast (exit `6`, nothing written), chunks of **500** with
 scalar params first, **full desired-state verification** after every chunk plus a final full-scope
@@ -82,7 +88,7 @@ fit**. Point users at Control D's native filters.
   replace, and delete-first replace: `operation` discriminates, and `quota.peak`/`final` differ
   between the two replace modes.
 
-## v0.3 — Protection
+## v0.4 — Protection
 
 `profile create/update/delete`, `profile option list/set`, `profile default get/set`,
 `filter list/enable/disable/set`, `service list/set/categories/catalog`
@@ -102,13 +108,12 @@ fit**. Point users at Control D's native filters.
 - `profile default set --via6` exits `2` (shared syntax != shared capability).
 - Creation-intent snapshot for `profile create` incl. `--clone`.
 
-## v0.4 — Fleet & account
+## v0.5 — Fleet & account
 
-`device list/get/create/update/delete/types`, `access list/add/remove`, `proxy list`,
+`device create/update/delete/types`, `access list/add/remove`, `proxy list`,
 `analytics levels/regions`, `account get`, `billing products/subscriptions` *(payments deferred,
 no verifiable schema, [D2](decisions.md#d2--the-cli-is-the-stability-layer-own-the-output-schema))*, `network`, `ip`
 
-- `device get` is a **client-side filter**: no `GET /devices/{id}` exists.
 - Multi-target cap ([D11](decisions.md#d11--form-encoded-hostnames-resolved-live)): **50 IPs** on `access add/remove`.
 
 **Gate** *(v0.1 global gates inherited)*:

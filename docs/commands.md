@@ -3,7 +3,7 @@
 Per-command contract: flags, human table columns, and normalized JSON fields.
 Written before implementation so the commands are consistent by construction, not by luck.
 
-A section or heading tagged with a release version (`(v0.2)`, `(v0.3)`, `(v0.4)`) describes a
+A section or heading tagged with a release version (`(v0.3)`, `(v0.4)`, `(v0.5)`) describes a
 planned command, not yet in the binary. See [`docs/roadmap.md`](roadmap.md) for the shipping
 sequence. Untagged sections are shipped.
 
@@ -110,7 +110,7 @@ whatever the count, since cardinality never changes the shape.
 ## Dry run
 
 Typed **remote-mutation** commands accept `-n, --dry-run` (the clig.dev standard flag): every
-typed remote mutation, with `rule import` and `rule restore` joining in v0.2. Local-state commands
+typed remote mutation, with `rule import` and `rule restore` joining in v0.3. Local-state commands
 (`auth login/logout`, `config set`) do **not** take it, and `cdctl api` is excluded. The escape
 hatch is gated by [D9](decisions.md#d9--cdctl-api-separately-gateable-get-by-default) (`-X` + `--yes`) instead.
 
@@ -302,13 +302,13 @@ not reshape what it carries. It is gated by [D9](decisions.md#d9--cdctl-api-sepa
 | --- | --- |
 | `profile list` | — |
 | `profile get <id\|name>` | — |
-| `profile create <name>` (v0.3) | `--clone <PK>` |
-| `profile update <id>` (v0.3) | `--name <s>`, `--disable-until <time>`, `--enable` |
-| `profile delete <id>` (v0.3) | `--confirm=<name>`, `--yes` alone is never enough |
-| `profile option list` (v0.3) | — |
-| `profile option set <name>` (v0.3) | `--enabled/--disabled`, `--value <v>` |
-| `profile default get` (v0.3) | — |
-| `profile default set` (v0.3) | *action flags* |
+| `profile create <name>` (v0.4) | `--clone <PK>` |
+| `profile update <id>` (v0.4) | `--name <s>`, `--disable-until <time>`, `--enable` |
+| `profile delete <id>` (v0.4) | `--confirm=<name>`, `--yes` alone is never enough |
+| `profile option list` (v0.4) | — |
+| `profile option set <name>` (v0.4) | `--enabled/--disabled`, `--value <v>` |
+| `profile default get` (v0.4) | — |
+| `profile default set` (v0.4) | *action flags* |
 
 **Table:** `NAME, ID, RULES, UPDATED`. `RULES` shows the enabled count
 **JSON:** `{id, name, enabled_rules, enabled_filters, enabled_services, folders, options, default_action, enabled, disabled_until, updated}`
@@ -329,20 +329,20 @@ create. Readback shape-shifts (`disable: null` <-> `disable_ttl: <ts>`). Derive
 `profile get` is a **client-side filter over `GET /profiles`**. The API has no `GET /profiles/{id}`.
 Human mode: key/value lines over the full JSON field set, not the list table.
 
-**`profile option list`** (v0.3): table `OPTION, TITLE, TYPE, DEFAULT`.
+**`profile option list`** (v0.4): table `OPTION, TITLE, TYPE, DEFAULT`.
 JSON `{name, title, description, type, default, info_url}`. `type` is an open enum: live values
 are `toggle`, `field`, and `dropdown` (the third is absent from the API docs). Render unknown types
 as-is, never error. `default` is **raw JSON**: an integer for toggles/fields, an object map
 (`{"0.9": "Minimal"}`) or a **bare label array** (`ecs_subnet`) for dropdowns. Never assume a shape.
 
-**`profile option set <name> --enabled|--disabled [--value <v>]`** (v0.3): the API write takes a
+**`profile option set <name> --enabled|--disabled [--value <v>]`** (v0.4): the API write takes a
 required `status` plus an optional `value`. A single positional value cannot express
 enable/disable/select unambiguously. Validate `--value` per type against the live catalogue
 (field -> number, dropdown -> a key of its map). ⚠️ The dropdown write is **unprobed**.
-Verify before v0.3. Prints the new state `{name, value, enabled}` via read-back (no verified write
+Verify before v0.4. Prints the new state `{name, value, enabled}` via read-back (no verified write
 response exists).
 
-**`profile default get/set`** (v0.3): one row, `ACTION, VIA, ENABLED`. JSON `{action, via, enabled}`.
+**`profile default get/set`** (v0.4): one row, `ACTION, VIA, ENABLED`. JSON `{action, via, enabled}`.
 
 ---
 
@@ -354,8 +354,8 @@ response exists).
 | `rule create <hostname>...` | *action flags*, `--folder <id\|name>` |
 | `rule update <hostname>...` | *action flags*, `--folder`, `--root` |
 | `rule delete <hostname>...` | `--yes` |
-| `rule import <file\|->` (v0.2) | *action flags*, `--folder`, `--replace`, `--force-delete-first` |
-| `rule restore <manifest>` (v0.2) | `--force` *(accept a profile mismatch)* |
+| `rule import <file\|->` (v0.3) | *action flags*, `--folder`, `--replace`, `--force-delete-first` |
+| `rule restore <manifest>` (v0.3) | `--force` *(accept a profile mismatch)* |
 
 **Table:** `HOSTNAME, ACTION, VIA, ENABLED, FOLDER`
 **JSON:** `{hostname, action, via, via6, enabled, folder, folder_id, order}`
@@ -426,7 +426,7 @@ response exists).
 
 `rule delete` must **percent-encode the hostname into the path**, wildcards included.
 
-### `rule import` semantics (v0.2)
+### `rule import` semantics (v0.3)
 
 Input: one hostname per line. `#` comments and blanks skipped. Hosts-file format accepted
 (`0.0.0.0 ads.example.com` -> `ads.example.com`). Hostnames are canonicalized (lowercased, trailing
@@ -493,7 +493,7 @@ add/converge/delete plan and exits `0`.
   `{"version": 1, "profile_id": "...", "rules": [<normalized rule objects>]}`. Rules carry
   `folder_id`, so restore stays exact when folder names collide, and heterogeneous actions
   round-trip (a plain hostname list cannot).
-- **`rule restore <manifest>`** (v0.2) is a **separate command**: no positional file and no `--action`
+- **`rule restore <manifest>`** (v0.3) is a **separate command**: no positional file and no `--action`
   (each rule carries its own), so it doesn't collide with the import grammar. It refuses a manifest
   whose `profile_id` differs from the target profile unless `--force` is given, and refuses unknown
   `version` values. Recreates action, state, `via`, `via6`, and folder exactly. Idempotent by
@@ -546,7 +546,7 @@ add/converge/delete plan and exits `0`.
 
 ---
 
-## filter (v0.3)
+## filter (v0.4)
 
 | Command | Flags |
 | --- | --- |
@@ -582,7 +582,7 @@ add/converge/delete plan and exits `0`.
 
 ---
 
-## service (v0.3)
+## service (v0.4)
 
 | Command | Flags |
 | --- | --- |
@@ -616,45 +616,57 @@ catalogue, not the profile's rules.
 
 ---
 
-## device (API: "endpoints") (v0.4)
+## device (API: "endpoints")
 
 | Command | Flags |
 | --- | --- |
 | `device list` | — |
 | `device get <id\|name>` | — |
-| `device create <name>` | `--profile <p>` *(required)*, `--type <t>`, `--clients <n>`, `--analytics <none\|some\|full>` |
-| `device update <id>` | `--name`, `--profile`, `--analytics`, `--status <s>` |
-| `device delete <id>` | `--confirm=<name>`, `--yes` alone is never enough |
-| `device types` | — |
+| `device create <name>` (v0.5) | `--profile <p>` *(required)*, `--type <t>`, `--clients <n>`, `--analytics <none\|some\|full>` |
+| `device update <id>` (v0.5) | `--name`, `--profile`, `--analytics <none\|some\|full>`, `--status <active\|soft-disabled\|hard-disabled>` (PUT-only, no `--enabled/--disabled` alias: a boolean cannot say which disable) |
+| `device delete <id>` (v0.5) | `--confirm=<name>`, `--yes` alone is never enough |
+| `device types` (v0.5) | — |
 
-**Table:** `NAME, ID, PROFILE, STATUS, CLIENTS, CTRLD, LAST SEEN`
-**JSON:** `{id, device_id, name, profile: {id, name}, status, analytics, clients, ips, learn_ip, ctrld: {version, status, last_fetch}, icon, resolvers, last_seen}`
+**Table:** `NAME, ID, PROFILE, STATUS, CLIENTS, CTRLD`
+**JSON:** `{id, name, profile: {id, name}, status, analytics, clients, learn_ip, icon, ctrld: {version, last_fetch} | null, resolvers: {doh, dot, v4, v6}}`
 
-**Device lifecycle is four states, not a boolean**: `status` is the string
-`pending | active | soft-disabled | hard-disabled` (API ints 0-3, never exposed, [D10](decisions.md#d10--never-make-users-type-magic-integers)). The two
-disabled modes differ materially: *soft* serves plain unfiltered DNS, *hard* serves none.
-`device update --status soft-disabled|hard-disabled|active` writes it (**PUT-only**: devices are
-born `pending` and flip to `active` on their first DNS query, not via the API, and `--status active` on
-a pending device is rejected client-side with that explanation). There is no `--enabled/--disabled`
-alias. The boolean cannot say which disable it means.
+`device get` prints the same fields as key/value lines (`ctrld_*` and `resolver_*` flattened).
 
-- `--type` maps to the API's `icon` field: the icon key *is* the device type (`desktop-linux`,
-  `router-openwrt`, ...). `--clients` maps to `client_count`. Live, only `name` and `--profile` are
-  enforced (the spec wrongly marks `icon`/`client_count` required, `client_count` defaults to 1).
-  A duplicate name is a conflict (exit 6).
-- `--analytics none|some|full` <- the API's `stats` ints 0-2, named after its own `analytics levels`
-  catalogue (`No/Some/Full Analytics`). Integers never appear in input or output
-  ([D10](decisions.md#d10--never-make-users-type-magic-integers)). JSON `analytics` is the name, `null` when unset.
-- **`ctrld`, `icon`, and `analytics` are optional** and absent on some devices: model them as `Option`.
-- `ctrld` reports the *daemon's* version on that endpoint. `device list` can surface
-  `version != version_target` as an upgrade hint.
-- `device get` is a **client-side filter**. The API has no `GET /devices/{id}`.
-- `device types` returns a **nested dict** (`os`/`browser`/`tv`/`router` -> `icons` -> `{name,
-  settings}`), not a list. Flatten it for the table: `TYPE, ICON, NAME`.
+- **`id` is the API's `device_id`**: the identifier its own paths (`/devices/{device_id}`),
+  `resolvers.uid`, and analytics key on. `PK` is observed equal to it in every response but
+  never documented as such, so normalization treats `PK != device_id` as an upstream shape
+  error (exit `8`) rather than silently picking one.
+- **`status` is four states, not a boolean**: `pending | active | soft-disabled | hard-disabled`
+  (API ints 0-3, never exposed, [D10](decisions.md#d10--never-make-users-type-magic-integers)).
+  `pending` = created, has never made a DNS query (not yet protected, not paused). The two
+  disabled modes differ materially: *soft* serves plain unfiltered DNS, *hard* serves none.
+- **`analytics`** <- the API's optional `stats` ints 0-2, named after its own `analytics levels`
+  catalogue (`No/Some/Full Analytics`): `none | some | full`. `null` means the API did not
+  report a level, which is distinct from `"none"` (reported as off).
+- **`profile`** is the enforced profile as `{id, name}`. The undocumented second profile
+  (`profile2`, [api-contract](reference/api-contract.md#8-endpoints--devices)) is not surfaced
+  ([D16](decisions.md#d16--documented-surface-only)).
+- **`resolvers`** carries the device's resolver identities verbatim: `doh`, `dot`, and the
+  dedicated `v4`/`v6` addresses. `v4`/`v6` are `[]` when the API omits them, never absent.
+  The documented optional `legacy_ipv4`, `restricted`, `desc`, and `ddns`/`ddns_ext` fields
+  are not surfaced yet (additive).
+- **`ctrld`, `icon`, `analytics`, and `clients` are optional**: `null` in JSON, `-` in tables.
+  `ctrld` is the daemon's undocumented self-report on that endpoint, so its `version` and
+  `last_fetch` (RFC-3339) are each nullable too. Its `status` int has no documented meaning
+  and is not surfaced. `clients` <- `client_count`, which the response schema does not declare.
+- `learn_ip` is a boolean (`0`/`1` upstream; any other code is a shape error).
+- `device get` is a **client-side filter** over `GET /devices`. A `GET /devices/{id}` exists live
+  but is undocumented ([D16](decisions.md#d16--documented-surface-only)).
+
+**Writes (v0.5):** `--status active` on a `pending` device is rejected client-side (the flip
+happens on the first DNS query, not via the API). `--type` maps to the API's `icon` field (the
+icon key *is* the device type); `--clients` to `client_count`. Live, only `name` and `--profile`
+are enforced; a duplicate name is a conflict (exit 6). `device types` returns a nested dict
+(`os`/`browser`/`tv`/`router` -> `icons`), flattened to `TYPE, ICON, NAME`.
 
 ---
 
-## access, proxy (v0.4)
+## access, proxy (v0.5)
 
 | Command | Flags |
 | --- | --- |
@@ -687,7 +699,7 @@ alias. The boolean cannot say which disable it means.
 
 ---
 
-## account, billing, analytics, misc (v0.4)
+## account, billing, analytics, misc (v0.5)
 
 > **`org` is deferred to a later release** ([D15](decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes)): `cdctl` targets personal accounts.
 > The `--org` flag arrives with the org commands. Context-keyed config keeps them additive.

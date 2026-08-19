@@ -1,5 +1,5 @@
 //! `cdctl profile` — the account's profiles (commands.md#profile).
-//! Phase 3 ships the read surface; writes arrive with Protection (v0.3).
+//! Phase 3 ships the read surface; writes arrive with Protection (v0.4).
 
 use clap::Subcommand;
 

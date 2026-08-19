@@ -569,6 +569,35 @@ fn drive_mixed_case_resolution(config_home: &Path, token: &str, pk: &str) {
     );
 }
 
+/// Read-only: `device list` normalizes whatever the account holds, and
+/// `device get` by id finds the first entry again. Only identity is compared
+/// across the two requests: `ctrld.last_fetch`, `clients`, and a `pending`
+/// flip can legitimately move between them. Nothing is created or mutated,
+/// so this needs no profile isolation.
+fn drive_device_reads(config_home: &Path, token: &str) {
+    let output = live_cdctl(config_home, token)
+        .args(["device", "list", "--json"])
+        .output()
+        .expect("device list runs");
+    assert!(output.status.success(), "device list: {output:?}");
+    let devices = json_stdout(&output, "device list");
+    let devices = devices.as_array().expect("device list prints an array");
+    let Some(first) = devices.first() else {
+        eprintln!("device get: skipped, the account has no devices");
+        return;
+    };
+    let id = first["id"].as_str().expect("id is a string");
+    let output = live_cdctl(config_home, token)
+        .args(["device", "get", id, "--json"])
+        .output()
+        .expect("device get runs");
+    assert!(output.status.success(), "device get: {output:?}");
+    let got = json_stdout(&output, "device get");
+    assert_eq!(got["id"], first["id"]);
+    assert_eq!(got["name"], first["name"]);
+    assert_eq!(got["profile"], first["profile"]);
+}
+
 #[test]
 fn live_smoke() {
     // CI and plain `cargo test` take this path. Any other set value is a
@@ -597,6 +626,7 @@ fn live_smoke() {
     let config_home = dir.path();
 
     sweep_stale_profiles(config_home, &token);
+    drive_device_reads(config_home, &token);
 
     let guard = ProfileGuard::create(config_home, &token);
     drive_profile_lifecycle(config_home, &token, &guard.pk, &guard.name);

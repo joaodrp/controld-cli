@@ -8,6 +8,7 @@ pub mod auth;
 pub mod completions;
 pub mod config;
 pub mod confirm;
+pub mod device;
 pub mod folder;
 pub mod man;
 pub mod multi;

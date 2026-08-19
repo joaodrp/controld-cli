@@ -102,7 +102,7 @@ No read-modify-write needed to toggle one field.
 only clearing mechanism is the action flip, whose intermediate state (a spoof rule momentarily
 bypassing) is an unprotected window `cdctl` never enters implicitly. Consequence: a desired state of
 `via6: null` against a live rule with `via_v6` set is **unconvergeable**: plans that require it
-fail fast before any mutation ([commands](../commands.md#rule-import-semantics-v02)).
+fail fast before any mutation ([commands](../commands.md#rule-import-semantics-v03)).
 
 ## Folders
 

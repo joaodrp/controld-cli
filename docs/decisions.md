@@ -445,15 +445,16 @@ because the other documented option (`folder_id=0`) **is broken**.
 
 ## D17 — Ship in vertical slices, not all 40 operations at once
 
-Four releases, each independently useful. Anything not yet typed is reachable via `cdctl api`
+Five releases, each independently useful. Anything not yet typed is reachable via `cdctl api`
 (D9) from day one, so deferral never locks anyone out:
 
 | Release | Group |
 | --- | --- |
 | **v0.1** | Core + `cdctl api` + `profile list/get` + `rule`/`folder` CRUD + release machinery |
-| **v0.2** | `rule import` + `rule restore` — the flagship, isolated so v0.1 ships sooner |
-| **v0.3** | Protection: `profile` writes/options/default, `filter *`, `service *` |
-| **v0.4** | Fleet & account: `device *`, `access *`, `proxy`, `analytics`, `account`, `billing`, `network`, `ip` |
+| **v0.2** | `device list/get` — read-only, pulled ahead of the flagship to give the device read a typed contract |
+| **v0.3** | `rule import` + `rule restore` — the flagship, isolated so v0.1 ships sooner |
+| **v0.4** | Protection: `profile` writes/options/default, `filter *`, `service *` |
+| **v0.5** | Fleet & account: `device` writes/`types`, `access *`, `proxy`, `analytics`, `account`, `billing`, `network`, `ip` |
 | **1.0** | = the full mapped surface, org (D15) and `billing payments` (D2) stay deferred |
 
 **What makes this safe** is the same mechanism as D15's org deferral:
@@ -462,10 +463,10 @@ Four releases, each independently useful. Anything not yet typed is reachable vi
   ships complete in v0.1 and is **treated as frozen from v0.1**, 0.x semver notwithstanding.
   Later groups only add nouns and verbs.
 - Folders ride with rules in v0.1 because rules are folder-scoped.
-- Group-specific live probes gate their own group (dropdown/level-less filters -> v0.3), not
+- Group-specific live probes gate their own group (dropdown/level-less filters -> v0.4), not
   earlier releases.
 
-**Cost accepted:** four release cycles instead of one. Users of deferred families type raw
+**Cost accepted:** five release cycles instead of one. Users of deferred families type raw
 `cdctl api` paths for a while. The delivery table above must stay in sync with
 [roadmap](roadmap.md).
 
@@ -500,10 +501,10 @@ its integration point.
 2. **Rate limits**: never observed.
 3. **The `[]`-shaped default rule**: never reproduced. Spec says it can happen. Tolerate both.
 4. **`icon` on `PUT /devices`, `profile_id2` read-back, `lock_status` values**: unprobed, low-stakes.
-5. **`dropdown` option writes** (`PUT /options/{name}` with `value`): unprobed, verify before v0.3.
+5. **`dropdown` option writes** (`PUT /options/{name}` with `value`): unprobed, verify before v0.4.
 6. **`billing payments` schema**: needs one real sanitized payload, the typed command waits on it.
 7. **Level-less filter writes** (`PUT /filters/filter/{family}` for families without `levels[]`,
-   e.g. `noai`): unprobed, verify before v0.3.
+   e.g. `noai`): unprobed, verify before v0.4.
 8. **The `ips[]` form-variable ceiling** (`POST /access`): unprobed, the 50-IP cap keeps it
    unreachable.
 9. **Percent-encoded bracket keys** ✅ *resolved* — form bodies are hand-built:

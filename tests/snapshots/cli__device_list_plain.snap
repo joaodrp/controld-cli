@@ -1,0 +1,8 @@
+---
+source: tests/cli.rs
+expression: plain
+---
+ NAME    ID           PROFILE     STATUS         CLIENTS  CTRLD  
+ Phone   dev11aa22bb  Aggressive  soft-disabled  1        -      
+ phone   dev33cc44dd  Hardened    pending        3        -      
+ Router  dev55ee66ff  Hardened    hard-disabled  12       v1.5.2
