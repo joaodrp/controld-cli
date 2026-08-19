@@ -45,5 +45,5 @@ account, not just a throwaway.
   `cdctl-test-*` profiles by name + age on start (plans cap profile counts, so accumulated leaks
   would eventually fail setup itself).
 - **Limits:** account-scoped surfaces (devices, access, proxy, account, billing, network) cannot
-  be profile-isolated. Their tests (v0.4) use the same `cdctl-test-` naming on the resources they
+  be profile-isolated. Their tests (v0.5) use the same `cdctl-test-` naming on the resources they
   create.

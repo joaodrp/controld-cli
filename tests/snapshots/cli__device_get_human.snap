@@ -1,0 +1,18 @@
+---
+source: tests/cli.rs
+expression: stdout
+---
+name              Router
+id                dev55ee66ff
+profile           Hardened (pkae1060cf)
+status            hard-disabled
+analytics         full
+clients           12
+learn_ip          false
+icon              router-openwrt
+ctrld_version     v1.5.2
+ctrld_last_fetch  2026-07-11T10:22:50Z
+resolver_doh      https://dns.controld.com/dev55ee66ff
+resolver_dot      dev55ee66ff.dns.controld.com
+resolver_v4       -
+resolver_v6       2001:db8:0:0::b

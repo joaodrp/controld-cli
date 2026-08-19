@@ -64,6 +64,7 @@ Commands:
   profile      Inspect the account's profiles
   rule         Manage a profile's DNS rules
   folder       Manage a profile's rule folders (API: groups)
+  device       Inspect the account's devices (API: endpoints)
   config       Read and write cdctl's own configuration
   api          Raw request against the API origin (escape hatch, GET by default)
   completions  Shell completion script
@@ -77,6 +78,7 @@ The account resources and what you can do to each:
 | [profile](docs/commands.md#profile) | ✅ | ✅ | | | |
 | [rule](docs/commands.md#rule) | ✅ | | ✅ | ✅ | ✅ |
 | [folder](docs/commands.md#folder-api-groups) | ✅ | | ✅ | ✅ | ✅ |
+| [device](docs/commands.md#device-api-endpoints) | ✅ | ✅ | | | |
 
 Empty cells aren't shipped yet — see the [roadmap](docs/roadmap.md).
 

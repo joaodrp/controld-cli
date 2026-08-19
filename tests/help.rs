@@ -20,6 +20,7 @@ fn help_snapshots() {
         "profile",
         "rule",
         "folder",
+        "device",
         "config",
         "api",
         "completions",
@@ -112,6 +113,11 @@ fn readme_action_matrix_matches_the_verbs() {
             "folder",
             "docs/commands.md#folder-api-groups",
             "## folder (API: \"groups\")",
+        ),
+        (
+            "device",
+            "docs/commands.md#device-api-endpoints",
+            "## device (API: \"endpoints\")",
         ),
     ] {
         let verbs: Vec<String> = help_for(dir.path(), &[resource])

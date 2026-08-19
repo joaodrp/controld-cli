@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand};
 
 use crate::commands::{
-    api::ApiArgs, auth::AuthCommand, config::ConfigCommand, folder::FolderCommand,
-    profile::ProfileCommand, rule::RuleCommand,
+    api::ApiArgs, auth::AuthCommand, config::ConfigCommand, device::DeviceCommand,
+    folder::FolderCommand, profile::ProfileCommand, rule::RuleCommand,
 };
 use crate::error::Error;
 use crate::output::Mode;
@@ -152,6 +152,13 @@ because the API can acknowledge writes it did not fully apply."
 groups rules and can carry a default action applied to the rules inside it."
     )]
     Folder(FolderCommand),
+    /// Inspect the account's devices (API: endpoints)
+    #[command(
+        subcommand,
+        long_about = "Inspect the account's devices (the API calls them endpoints). A device \
+is a resolver identity (DoH, DoT, or dedicated IPs) that enforces a profile."
+    )]
+    Device(DeviceCommand),
     /// Read and write cdctl's own configuration
     #[command(
         subcommand,

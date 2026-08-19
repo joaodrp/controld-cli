@@ -1,10 +1,12 @@
-//! Name-or-id resolution (commands.md#name-resolution) for both profiles and
-//! folders: exact id match wins, else exact case-insensitive name; multiple
-//! matches are an error (never guess — exit 2), no match is exit 3.
+//! Name-or-id resolution (commands.md#name-resolution) for profiles,
+//! folders, and devices: exact id match wins, else exact case-insensitive
+//! name; multiple matches are an error (never guess — exit 2), no match is
+//! exit 3.
 
 use crate::api::client::Client;
 use crate::cli::Globals;
 use crate::error::{Error, Exit};
+use crate::model::device::ApiDevice;
 use crate::model::folder::ApiFolder;
 use crate::model::profile::ApiProfile;
 use crate::output::escape_controls;
@@ -43,6 +45,42 @@ pub(crate) fn find_profile<'a>(
             matches
                 .iter()
                 .map(|p| p.pk.as_str())
+                .collect::<Vec<_>>()
+                .join(", "),
+        ))),
+    }
+}
+
+/// One `GET /devices` — there is no documented `GET /devices/{id}`;
+/// `device get` filters client-side (commands.md).
+pub(crate) async fn fetch_devices(client: &Client) -> Result<Vec<ApiDevice>, Error> {
+    client.get("/devices", "device").await?.keyed_as("devices")
+}
+
+pub(crate) fn find_device<'a>(
+    devices: &'a [ApiDevice],
+    selector: &str,
+) -> Result<&'a ApiDevice, Error> {
+    if let Some(device) = devices.iter().find(|d| d.device_id == selector) {
+        return Ok(device);
+    }
+    let named: Vec<&ApiDevice> = devices
+        .iter()
+        .filter(|d| d.name.eq_ignore_ascii_case(selector))
+        .collect();
+    match named.as_slice() {
+        [device] => Ok(device),
+        [] => Err(Error::new(
+            "device.not_found",
+            format!("no device matches {selector:?}"),
+            Exit::NotFound,
+        )),
+        matches => Err(Error::usage(format!(
+            "{selector:?} matches {} devices ({}); use the id",
+            matches.len(),
+            matches
+                .iter()
+                .map(|d| d.device_id.as_str())
                 .collect::<Vec<_>>()
                 .join(", "),
         ))),
@@ -185,6 +223,7 @@ pub(crate) fn find_folder<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::device::devices_fixture;
     use crate::model::folder::folders_fixture;
     use crate::model::profile::profiles_fixture;
 
@@ -246,5 +285,35 @@ mod tests {
         let error = find_folder(&folders, "nope").expect_err("missing");
         assert_eq!(error.exit(), Exit::NotFound);
         assert_eq!(error.code, "folder.not_found");
+    }
+
+    #[test]
+    fn device_id_wins_then_unique_name_case_insensitively() {
+        let devices = devices_fixture("devices_dup_names.json");
+        assert_eq!(
+            find_device(&devices, "dev55ee66ff").expect("id").name,
+            "Router"
+        );
+        assert_eq!(
+            find_device(&devices, "router").expect("name").device_id,
+            "dev55ee66ff"
+        );
+    }
+
+    #[test]
+    fn ambiguous_device_names_name_the_candidate_ids() {
+        let devices = devices_fixture("devices_dup_names.json");
+        let error = find_device(&devices, "PHONE").expect_err("ambiguous");
+        assert_eq!(error.exit(), Exit::Usage);
+        assert!(error.message.contains("dev11aa22bb"));
+        assert!(error.message.contains("dev33cc44dd"));
+    }
+
+    #[test]
+    fn no_device_match_is_exit_3() {
+        let devices = devices_fixture("devices_dup_names.json");
+        let error = find_device(&devices, "nope").expect_err("missing");
+        assert_eq!(error.exit(), Exit::NotFound);
+        assert_eq!(error.code, "device.not_found");
     }
 }

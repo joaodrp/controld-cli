@@ -3,6 +3,7 @@
 //! unknown fields under test — the same drift tripwire as the envelope.
 
 pub mod action;
+pub mod device;
 pub mod folder;
 pub mod profile;
 pub mod proxy;

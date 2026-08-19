@@ -2233,6 +2233,272 @@ async fn a_fields_typo_among_valid_fields_is_still_a_usage_error() {
     .expect("command runs");
 }
 
+// --- device list/get: human/plain/json rendering, name resolution, hazards ---
+
+/// A `MockServer` with `GET /devices` mounted, serving `fixture_name` as the
+/// raw body; `expect` is the number of `/devices` calls the test drives.
+async fn devices_server(fixture_name: &str, expect: u64) -> MockServer {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/devices"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(fixture(fixture_name), "application/json"),
+        )
+        .expect(expect)
+        .mount(&server)
+        .await;
+    server
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn device_list_renders_all_three_modes() {
+    let server = devices_server("devices_dup_names.json", 3).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let human_assert = cdctl_against(&uri, dir.path())
+            .args(["device", "list"])
+            .assert()
+            .success();
+        let human = String::from_utf8_lossy(&human_assert.get_output().stdout).into_owned();
+
+        let plain_assert = cdctl_against(&uri, dir.path())
+            .args(["device", "list", "--plain"])
+            .assert()
+            .success();
+        let plain = String::from_utf8_lossy(&plain_assert.get_output().stdout).into_owned();
+        assert!(
+            !plain.contains('│') && !plain.contains('─'),
+            "plain mode drops border glyphs: {plain}"
+        );
+
+        let json_assert = cdctl_against(&uri, dir.path())
+            .args(["device", "list", "--json"])
+            .assert()
+            .success();
+        let json = String::from_utf8_lossy(&json_assert.get_output().stdout).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        let devices = doc.as_array().expect("array of devices");
+        assert_eq!(devices.len(), 3);
+        let first = devices[0].as_object().expect("object");
+        assert_eq!(
+            first.keys().collect::<Vec<_>>(),
+            vec![
+                "id",
+                "name",
+                "profile",
+                "status",
+                "analytics",
+                "clients",
+                "learn_ip",
+                "icon",
+                "ctrld",
+                "resolvers",
+            ]
+        );
+        // Raw ints never leak (D10): status and analytics are names.
+        assert_eq!(devices[0]["status"], "soft-disabled");
+        assert_eq!(devices[0]["analytics"], "none");
+        assert_eq!(devices[1]["status"], "pending");
+        assert_eq!(devices[2]["status"], "hard-disabled");
+        assert_eq!(devices[2]["analytics"], "full");
+        // Absent resolver families are `[]`, never missing.
+        assert_eq!(devices[1]["resolvers"]["v4"], serde_json::json!([]));
+        assert_eq!(devices[1]["resolvers"]["v6"], serde_json::json!([]));
+        assert!(devices[1]["ctrld"].is_null());
+
+        insta::with_settings!({filters => port_filters()}, {
+            insta::assert_snapshot!("device_list_human", human);
+            insta::assert_snapshot!("device_list_plain", plain);
+            insta::assert_snapshot!("device_list_json", json);
+        });
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn device_get_resolves_names_case_insensitively() {
+    let server = devices_server("devices_dup_names.json", 2).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let by_name = cdctl_against(&uri, dir.path())
+            .args(["device", "get", "router", "--json"])
+            .assert()
+            .success();
+        let doc: serde_json::Value =
+            serde_json::from_slice(&by_name.get_output().stdout).expect("valid JSON");
+        assert_eq!(doc["id"], "dev55ee66ff");
+        assert_eq!(doc["profile"]["name"], "Hardened");
+
+        let by_id = cdctl_against(&uri, dir.path())
+            .args(["device", "get", "dev55ee66ff", "--json"])
+            .assert()
+            .success();
+        let doc: serde_json::Value =
+            serde_json::from_slice(&by_id.get_output().stdout).expect("valid JSON");
+        assert_eq!(doc["name"], "Router");
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn device_get_human_renders_key_values() {
+    let server = devices_server("devices_dup_names.json", 1).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["device", "get", "Router"])
+            .assert()
+            .success();
+        let stdout = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+        insta::with_settings!({filters => port_filters()}, {
+            insta::assert_snapshot!("device_get_human", stdout);
+        });
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn device_get_ambiguous_name_exits_2() {
+    let server = devices_server("devices_dup_names.json", 1).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["device", "get", "Phone"])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            stderr.contains("dev11aa22bb"),
+            "names the first match: {stderr}"
+        );
+        assert!(
+            stderr.contains("dev33cc44dd"),
+            "names the second match: {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn device_get_unknown_selector_exits_3() {
+    let server = devices_server("devices.json", 1).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["device", "get", "nope", "--json"])
+            .assert()
+            .code(3)
+            .stdout(predicates::str::is_empty());
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "device.not_found");
+        assert_eq!(doc["error"]["retryable"], false);
+    })
+    .await
+    .expect("command runs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn device_selector_control_chars_and_fields_typo_exit_2_before_any_request() {
+    let server = MockServer::start().await;
+    mount_no_requests(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl_against(&uri, dir.path())
+            .args(["device", "get", "bad\u{7}name"])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        cdctl_against(&uri, dir.path())
+            .args(["device", "list", "--fields", "name,nmae"])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+    })
+    .await
+    .expect("command runs");
+    // MockServer verifies .expect(0) on drop: no request was ever built.
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn device_list_empty_is_exit_0_with_empty_json_array() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/devices"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"devices": []},
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["device", "list", "--json"])
+            .assert()
+            .success();
+        assert_eq!(assert.get_output().stdout, b"[]\n");
+    })
+    .await
+    .expect("command runs");
+}
+
+/// A device whose `PK` and `device_id` disagree breaks the contract `id`
+/// rests on: exit 8 with nothing on stdout, never a silent pick of one.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn device_list_with_divergent_ids_is_a_shape_error() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/devices"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"devices": [{
+                "PK": "devaaaa", "device_id": "devbbbb", "name": "X", "status": 1,
+                "client_count": 1, "learn_ip": 0,
+                "resolvers": {"doh": "https://dns.example/devbbbb", "dot": "devbbbb.dns.example"},
+                "profile": {"PK": "pk1", "name": "Home"}
+            }]},
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["device", "list", "--json"])
+            .assert()
+            .code(8)
+            .stdout(predicates::str::is_empty());
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "upstream.error");
+    })
+    .await
+    .expect("command runs");
+}
+
 // --- SIGPIPE: `cdctl reference | head` must die quietly with 141, never panic ---
 
 #[cfg(unix)]

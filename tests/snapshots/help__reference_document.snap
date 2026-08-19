@@ -134,6 +134,20 @@ Delete a folder and its contained rules
 - `<SELECTOR>` — Folder id or name (case-insensitive, an ambiguous name is an error)
 - `-n, --dry-run` — Print the planned mutation without writing anything
 
+## cdctl device
+
+Inspect the account's devices (the API calls them endpoints). A device is a resolver identity (DoH, DoT, or dedicated IPs) that enforces a profile.
+
+### cdctl device list
+
+List devices
+
+### cdctl device get
+
+Show one device by id or name
+
+- `<SELECTOR>` — Device id or name (case-insensitive, an ambiguous name is an error)
+
 ## cdctl config
 
 Read and write cdctl's own configuration: the current context and each context's default profile. The file lives where `cdctl config path` points.

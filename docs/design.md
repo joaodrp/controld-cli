@@ -19,8 +19,8 @@ cdctl <noun> <verb> [args] [flags]
 ```sh
 cdctl profile list
 cdctl rule create ads.example.com --action block
-cdctl filter enable ads_medium --profile Home   # v0.3
-cdctl device list --json                        # v0.4
+cdctl device list --json
+cdctl filter enable ads_medium --profile Home   # v0.4
 ```
 
 ### Global flags
@@ -32,7 +32,7 @@ cdctl device list --json                        # v0.4
 | `--fields <a,b>` | | Select JSON fields, implies `--json`. |
 | `--plain` | | Tables without borders/color, for `awk`/`cut`. |
 | `-y, --yes` | | Skip confirmation. **Ignored when the target is implicit** ([D8](decisions.md#d8--tiered-confirmation)). |
-| `-n, --dry-run` | | **Every typed remote mutation** (`rule import`/`restore` join in v0.2): resolve and validate everything, print the request/domain plan, persist nothing: no HTTP write, no config change, no file created. Exit `0`. Excluded from `cdctl api` ([D9](decisions.md#d9--cdctl-api-separately-gateable-get-by-default)). Contract in [commands](commands.md#dry-run). |
+| `-n, --dry-run` | | **Every typed remote mutation** (`rule import`/`restore` join in v0.3): resolve and validate everything, print the request/domain plan, persist nothing: no HTTP write, no config change, no file created. Exit `0`. Excluded from `cdctl api` ([D9](decisions.md#d9--cdctl-api-separately-gateable-get-by-default)). Contract in [commands](commands.md#dry-run). |
 | `--no-retry` | | Disable automatic retries. |
 | `--timeout <secs>` | | Per-request cap, default 30 s total, 10 s connect ([D12](decisions.md#d12--rate-limiting-reactive-not-predictive)). A hang is worse than a fast failure. |
 | `--debug` | | Request/response trace to stderr, including `x-controld-pop`/`x-controld-srv`. Token always redacted. Upstream bytes are JSON-escaped, so control sequences never reach the terminal raw. |
@@ -60,9 +60,10 @@ not gated.
 > **Delivery is vertically sliced ([D17](decisions.md#d17--ship-in-vertical-slices-not-all-40-operations-at-once)):**
 >
 > - v0.1: `cdctl api`, profiles (list/get), rules, folders
-> - v0.2: `rule import`/`restore`
-> - v0.3: profile writes/options/default, filters, services
-> - v0.4: devices, access, proxy, analytics, account, billing, network, ip
+> - v0.2: devices (list/get)
+> - v0.3: `rule import`/`restore`
+> - v0.4: profile writes/options/default, filters, services
+> - v0.5: device writes, access, proxy, analytics, account, billing, network, ip
 > - 1.0: the full surface
 >
 > Until a family's typed commands land, `cdctl api` reaches it.
@@ -131,7 +132,7 @@ spec's folder path parameter is literally `{folder}`).
 | Command | API |
 | --- | --- |
 | `device list` | `GET /devices` |
-| `device get <id>` | *client-side filter*: **the API has no `GET /devices/{id}`** |
+| `device get <id>` | *client-side filter* over `GET /devices`: a `GET /devices/{id}` exists live but is undocumented (D16) |
 | `device create <name> --profile ...` | `POST /devices` (only `name` + `profile_id` enforced live) |
 | `device update <id> ...` | `PUT /devices/{device_id}` |
 | `device delete <id>` | `DELETE /devices/{device_id}` |
