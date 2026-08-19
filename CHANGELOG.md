@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0](https://github.com/joaodrp/controld-cli/compare/v0.1.2...v0.2.0) - 2026-08-19
+
+### Added
+
+- *(device)* add `device list` and `device get`
+
+### Other
+
+- *(roadmap)* defer endpoint schedules to post-1.0
+- *(reference)* record profile2 read-back and endpoint schedules
+- *(reference)* document bad-path routing hazards
+
 ## [0.1.2](https://github.com/joaodrp/controld-cli/compare/v0.1.1...v0.1.2) - 2026-07-26
 
 ### Added
