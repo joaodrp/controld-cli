@@ -2,15 +2,17 @@
 source: tests/help.rs
 expression: "help_for(dir.path(), &[noun])"
 ---
-Inspect the account's devices (the API calls them endpoints). A device is a resolver identity (DoH,
-DoT, or dedicated IPs) that enforces a profile.
+Manage the account's devices (the API calls them endpoints). A device is a resolver identity (DoH,
+DoT, or dedicated IPs) that enforces a profile. Every write is verified by reading the device back,
+because the API can acknowledge writes it did not apply.
 
 Usage: cdctl device [OPTIONS] <COMMAND>
 
 Commands:
-  list  List devices
-  get   Show one device by id or name
-  help  Print this message or the help of the given subcommand(s)
+  list    List devices
+  get     Show one device by id or name
+  update  Update a device (only the given fields change)
+  help    Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help

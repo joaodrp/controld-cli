@@ -136,7 +136,7 @@ Delete a folder and its contained rules
 
 ## cdctl device
 
-Inspect the account's devices (the API calls them endpoints). A device is a resolver identity (DoH, DoT, or dedicated IPs) that enforces a profile.
+Manage the account's devices (the API calls them endpoints). A device is a resolver identity (DoH, DoT, or dedicated IPs) that enforces a profile. Every write is verified by reading the device back, because the API can acknowledge writes it did not apply.
 
 ### cdctl device list
 
@@ -147,6 +147,17 @@ List devices
 Show one device by id or name
 
 - `<SELECTOR>` — Device id or name (case-insensitive, an ambiguous name is an error)
+
+### cdctl device update
+
+Update a device (only the given fields change)
+
+- `<SELECTOR>` — Device id or name (case-insensitive, an ambiguous name is an error)
+- `--name <NAME>` — New device name
+- `--enforce <PK|name>` — Profile to enforce (name or PK)
+- `--status <STATUS>` — Lifecycle state (soft-disabled serves unfiltered DNS, hard-disabled serves none)
+- `--analytics <ANALYTICS>` — Analytics level
+- `-n, --dry-run` — Print the planned mutation without writing anything
 
 ## cdctl config
 

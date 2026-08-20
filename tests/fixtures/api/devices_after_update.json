@@ -1,0 +1,91 @@
+{
+  "body": {
+    "devices": [
+      {
+        "PK": "dev11aa22bb",
+        "ts": 1780559476,
+        "name": "Phone",
+        "user": "pk14ba0f1c",
+        "stats": 0,
+        "device_id": "dev11aa22bb",
+        "status": 2,
+        "client_count": 1,
+        "learn_ip": 1,
+        "resolvers": {
+          "uid": "dev11aa22bb",
+          "doh": "https://dns.controld.com/dev11aa22bb",
+          "dot": "dev11aa22bb.dns.controld.com",
+          "v4": [
+            "192.0.2.10"
+          ],
+          "v6": [
+            "2001:db8:0:0::a"
+          ]
+        },
+        "icon": "mobile-android",
+        "profile": {
+          "PK": "pk4cada1c5",
+          "updated": 1782927148,
+          "name": "Aggressive"
+        },
+        "ip_count": 1
+      },
+      {
+        "PK": "dev33cc44dd",
+        "ts": 1779830995,
+        "name": "phone",
+        "user": "pk14ba0f1c",
+        "stats": 1,
+        "device_id": "dev33cc44dd",
+        "status": 0,
+        "client_count": 3,
+        "learn_ip": 0,
+        "resolvers": {
+          "uid": "dev33cc44dd",
+          "doh": "https://dns.controld.com/dev33cc44dd",
+          "dot": "dev33cc44dd.dns.controld.com"
+        },
+        "icon": "mobile-ios",
+        "profile": {
+          "PK": "pkae1060cf",
+          "updated": 1783173588,
+          "name": "Hardened"
+        },
+        "ip_count": 0
+      },
+      {
+        "PK": "dev55ee66ff",
+        "ts": 1779830995,
+        "name": "Router",
+        "user": "pk14ba0f1c",
+        "stats": 2,
+        "device_id": "dev55ee66ff",
+        "status": 1,
+        "client_count": 12,
+        "learn_ip": 0,
+        "ctrld": {
+          "status": 1,
+          "last_fetch": 1783765370,
+          "version": "v1.5.2",
+          "version_target": "v1.5.3"
+        },
+        "resolvers": {
+          "uid": "dev55ee66ff",
+          "doh": "https://dns.controld.com/dev55ee66ff",
+          "dot": "dev55ee66ff.dns.controld.com",
+          "v6": [
+            "2001:db8:0:0::b"
+          ]
+        },
+        "icon": "router-openwrt",
+        "profile": {
+          "PK": "pk4cada1c5",
+          "updated": 1782927148,
+          "name": "Aggressive"
+        },
+        "ip_count": 0
+      }
+    ]
+  },
+  "success": true
+}

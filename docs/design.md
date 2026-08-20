@@ -20,7 +20,7 @@ cdctl <noun> <verb> [args] [flags]
 cdctl profile list
 cdctl rule create ads.example.com --action block
 cdctl device list --json
-cdctl filter enable ads_medium --profile Home   # v0.4
+cdctl filter enable ads_medium --profile Home   # v0.5
 ```
 
 ### Global flags
@@ -32,7 +32,7 @@ cdctl filter enable ads_medium --profile Home   # v0.4
 | `--fields <a,b>` | | Select JSON fields, implies `--json`. |
 | `--plain` | | Tables without borders/color, for `awk`/`cut`. |
 | `-y, --yes` | | Skip confirmation. **Ignored when the target is implicit** ([D8](decisions.md#d8--tiered-confirmation)). |
-| `-n, --dry-run` | | **Every typed remote mutation** (`rule import`/`restore` join in v0.3): resolve and validate everything, print the request/domain plan, persist nothing: no HTTP write, no config change, no file created. Exit `0`. Excluded from `cdctl api` ([D9](decisions.md#d9--cdctl-api-separately-gateable-get-by-default)). Contract in [commands](commands.md#dry-run). |
+| `-n, --dry-run` | | **Every typed remote mutation** (`rule import`/`restore` join in v0.4): resolve and validate everything, print the request/domain plan, persist nothing: no HTTP write, no config change, no file created. Exit `0`. Excluded from `cdctl api` ([D9](decisions.md#d9--cdctl-api-separately-gateable-get-by-default)). Contract in [commands](commands.md#dry-run). |
 | `--no-retry` | | Disable automatic retries. |
 | `--timeout <secs>` | | Per-request cap, default 30 s total, 10 s connect ([D12](decisions.md#d12--rate-limiting-reactive-not-predictive)). A hang is worse than a fast failure. |
 | `--debug` | | Request/response trace to stderr, including `x-controld-pop`/`x-controld-srv`. Token always redacted. Upstream bytes are JSON-escaped, so control sequences never reach the terminal raw. |
@@ -61,16 +61,19 @@ not gated.
 >
 > - v0.1: `cdctl api`, profiles (list/get), rules, folders
 > - v0.2: devices (list/get)
-> - v0.3: `rule import`/`restore`
-> - v0.4: profile writes/options/default, filters, services
-> - v0.5: device writes, access, proxy, analytics, account, billing, network, ip
+> - v0.3: `device update`
+> - v0.4: `rule import`/`restore`
+> - v0.5: profile writes/options/default, filters, services
+> - v0.6: device create/delete/types, access, proxy, analytics, account, billing, network, ip
 > - 1.0: the full surface
 >
 > Until a family's typed commands land, `cdctl api` reaches it.
 
-Nouns follow Control D's **user-facing names**, not the wire names: the dashboard and the docs' own
-prose say *folders* and *devices*, even though the URL segments are `groups` and `endpoints` (the
-spec's folder path parameter is literally `{folder}`).
+Nouns are chosen once per resource, cross-referenced against the API name everywhere: *folder*
+(the wire says `groups`, the spec's path parameter is literally `{folder}`) matches the dashboard;
+*device* (the docs' prose says "Endpoints") follows the wire (`/devices`, `body.devices`,
+`device_id`) and plain meaning — "endpoint" is already taken by API paths in a CLI that ships
+`cdctl api`.
 
 ### profile
 

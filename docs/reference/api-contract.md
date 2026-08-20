@@ -835,8 +835,9 @@ active outside schedule windows; scheduled profiles are a separate resource
 | `status` | integer | **0 = pending, 1 = active, 2 = soft disabled, 3 = hard disabled.** PUT-only |
 | `ctrld_custom_config` | string | a `ctrld` `.toml` config file to deploy. **PUT-only** |
 
-⚠️ `icon` is **not** listed as a modifiable field on PUT, though it's required on POST. **[GAP]** Can you
-change a device's icon? Probe.
+⚠️ `icon` is **not** listed as a modifiable field on PUT, though it's required on POST. **[GAP]**
+Probed 2026-08-19: **accepted and echoed**. Note the PUT echo can be stale for `profile_id`
+switches ([write-verification](write-verification.md#devices--access)).
 
 - Response: device object **directly at `body`** + `message` (e.g. `"Device has been updated"`). Required
   fields include `ddns` and `ddns_ext` (unlike the POST response, which requires `icon` and `bump_tls` instead).
@@ -1233,7 +1234,8 @@ Ordered by risk.
 12. **`GET /network` shape.**
 13. **`GET /users` auth.** Confirm it 401s without a token (schema says `security: []`, prose says otherwise).
 14. **Rate limits.** Watch for `429` and any `X-RateLimit-*` / `Retry-After` headers. Wholly undocumented.
-15. **`icon` on `PUT /devices/{id}`**: accepted or not?
+15. ~~**`icon` on `PUT /devices/{id}`**~~ **Answered 2026-08-19**: accepted and echoed. The PUT
+    echo can be stale for `profile_id` switches; see [write-verification](write-verification.md#devices--access).
 16. ~~**`profile_id2` read-back**~~ **Answered 2026-08-01**: it reads back as an undocumented
     `profile2` object on all three device responses. See the `GET /devices` field table.
 17. **Wildcard hostname URL-encoding** in `DELETE /profiles/{id}/rules/{hostname}` (`*.domain.com`).

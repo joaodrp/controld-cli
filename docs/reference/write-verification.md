@@ -102,7 +102,7 @@ No read-modify-write needed to toggle one field.
 only clearing mechanism is the action flip, whose intermediate state (a spoof rule momentarily
 bypassing) is an unprotected window `cdctl` never enters implicitly. Consequence: a desired state of
 `via6: null` against a live rule with `via_v6` set is **unconvergeable**: plans that require it
-fail fast before any mutation ([commands](../commands.md#rule-import-semantics-v03)).
+fail fast before any mutation ([commands](../commands.md#rule-import-semantics-v04)).
 
 ## Folders
 
@@ -165,7 +165,22 @@ disabled**, no removal exists. Invalid service -> 400 `40003 Invalid service was
 - `POST /devices` enforces **only `name` + `profile_id`**: the spec wrongly marks `icon` and
   `client_count` required (`client_count` defaults to 1). Missing `profile_id` -> 400 `40002`.
 - Duplicate device name -> 400 `40003 A device with this name already exists` (a conflict -> exit 6).
+- Device names cap at **32 characters**, same as profiles: 400 with the *same* `40003` code but
+  message `Name must be a maximum of 32 characters` (probed 2026-08-20) — the code alone cannot
+  distinguish the two failures.
 - Response: device object **flat at `body`** + `message`, exactly as the spec says.
+- `PUT /devices/{device_id}` (probed 2026-08-19, fresh test device):
+  - **The echo can be stale**: switching `profile_id` returned the *pre-switch* profile object in
+    `body.profile`, while an immediate `GET /devices` showed the new one. Never trust the PUT
+    echo; verify by read-back.
+  - `icon` **is accepted** on PUT and echoed (the spec omits it from the PUT fields).
+  - `status` **is accepted on a `pending` device**, both `2` and `1` — the API happily activates
+    a never-used device; the "flips on first query" rule is how it happens organically, not a
+    write restriction.
+  - `profile_id2=-1` removes the second profile: the `profile2` key disappears from reads.
+  - `name` and `stats` writes echo correctly.
+- `DELETE /devices/{device_id}` is **not** a silent-ack delete: re-deleting errors
+  `No such device` (unlike rules, where a non-matching DELETE acks success).
 - `GET /access` -> **`body.ips`** (the key the spec leaves blank):
   `{ip, ts, country, city, isp, asn, as_name}`, geo fields null until learned.
 - `POST /access` / `DELETE /access` ack with `body: []` + `"N IPs added"` / `"N IPs deleted"`.
@@ -283,7 +298,7 @@ trusting the ack alone to mean something was actually removed.
 
 - Proxy-code validation (masked by the 402 plan gate, needs Full Control).
 - Any 429 / rate limit.
-- `icon` on `PUT /devices/{id}`, `profile_id2` read-back, `lock_status` values.
+- `lock_status` values (`PUT /profiles/{id}`).
 - The `[]`-shaped `da` (never reproduced, tolerate both).
 - The `ips[]` form-variable ceiling (`POST /access`): the CLI's 50-IP cap keeps it unreachable.
 - Level-less filter writes (`PUT /filters/filter/{family}` for families without `levels[]`,

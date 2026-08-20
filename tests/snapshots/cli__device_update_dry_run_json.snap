@@ -1,0 +1,21 @@
+---
+source: tests/cli.rs
+expression: json
+---
+{
+  "requests": [
+    {
+      "method": "PUT",
+      "path": "/devices/dev55ee66ff",
+      "intent": {
+        "name": null,
+        "profile": {
+          "id": "pk69038f3c",
+          "name": "Kids"
+        },
+        "status": null,
+        "analytics": "none"
+      }
+    }
+  ]
+}

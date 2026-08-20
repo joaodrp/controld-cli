@@ -96,12 +96,12 @@ pub enum Details {
     },
     #[allow(
         dead_code,
-        reason = "constructed from `rule import` (v0.3, collisions); schema frozen here"
+        reason = "constructed from `rule import` (v0.4, collisions); schema frozen here"
     )]
     Collisions { collisions: Vec<Collision> },
     #[allow(
         dead_code,
-        reason = "constructed from `rule import` (v0.3, unconvergeable states); schema frozen here"
+        reason = "constructed from `rule import` (v0.4, unconvergeable states); schema frozen here"
     )]
     Unconvergeable { rules: Vec<UnconvergeableRule> },
 }

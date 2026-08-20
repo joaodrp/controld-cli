@@ -11,6 +11,7 @@ use super::action_flags::ActionSpec;
 use crate::cli::Globals;
 use crate::error::Error;
 use crate::model::action::Action;
+use crate::model::device::{Analytics, DeviceProfile, DeviceStatus};
 use crate::output::{emit, print_doc, print_key_values};
 
 /// The `-n, --dry-run` flag (the clig.dev standard flag), flattened into
@@ -45,6 +46,16 @@ pub struct FolderCreateIntent {
     pub action: Option<Action>,
     pub via: Option<String>,
     pub enabled: bool,
+}
+
+/// A device update's intent: `--enforce` already resolved to `{id, name}`,
+/// so the plan shows what would be enforced, not what was typed.
+#[derive(Debug, Serialize)]
+pub struct DeviceUpdateIntent {
+    pub name: Option<String>,
+    pub profile: Option<DeviceProfile>,
+    pub status: Option<DeviceStatus>,
+    pub analytics: Option<Analytics>,
 }
 
 /// `RuleUpdateChanges::folder_id`'s patch value: move to a folder, or back to

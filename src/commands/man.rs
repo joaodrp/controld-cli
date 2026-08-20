@@ -48,6 +48,7 @@ mod tests {
             timeout: None,
             debug: false,
             quiet: false,
+            profile_from_flag: false,
         }
     }
 

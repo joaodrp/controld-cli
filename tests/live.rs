@@ -569,6 +569,177 @@ fn drive_mixed_case_resolution(config_home: &Path, token: &str, pk: &str) {
     );
 }
 
+/// The `device update` write path against a fresh test device inside the
+/// guard profile: status, analytics, and name each write and read back;
+/// the device is deleted before the profile (a profile enforced by a device
+/// cannot be deleted). Deletion goes through `cdctl api` — typed
+/// `device delete` is v0.6.
+/// Best-effort delete of a just-created device whose id was lost: find it
+/// by its unique test name in `GET /devices` and DELETE it. Mirrors
+/// `reap_by_name` for profiles.
+fn reap_device_by_name(config_home: &Path, token: &str, name: &str) {
+    let Ok(output) = live_cdctl(config_home, token)
+        .args(["device", "list", "--json"])
+        .output()
+    else {
+        eprintln!("reap: could not list devices; a device named {name} may be leaked");
+        return;
+    };
+    let Ok(devices) = serde_json::from_slice::<serde_json::Value>(&output.stdout) else {
+        eprintln!("reap: device list unparseable; a device named {name} may be leaked");
+        return;
+    };
+    let Some(id) = devices
+        .as_array()
+        .and_then(|list| list.iter().find(|d| d["name"] == name))
+        .and_then(|d| d["id"].as_str())
+    else {
+        eprintln!("reap: no device named {name} found — nothing landed");
+        return;
+    };
+    let _ = live_cdctl(config_home, token)
+        .args(["api", &format!("/devices/{id}"), "-X", "DELETE", "--yes"])
+        .output();
+}
+
+/// Deletes its device on unwind so a failed assert never leaks one (the
+/// happy path deletes explicitly and forgets the guard).
+struct DeviceGuard {
+    id: String,
+    token: String,
+    config_home: PathBuf,
+}
+
+impl Drop for DeviceGuard {
+    fn drop(&mut self) {
+        // Leak-loud, like ProfileGuard: a device the profile sweep can never
+        // remove must at least name itself (and it blocks the profile's own
+        // teardown while it exists).
+        match live_cdctl(&self.config_home, &self.token)
+            .args([
+                "api",
+                &format!("/devices/{}", self.id),
+                "-X",
+                "DELETE",
+                "--yes",
+            ])
+            .output()
+        {
+            Ok(output) if output.status.success() => {}
+            Ok(output) => eprintln!(
+                "leak guard: cdctl api delete exited {} for device {} — delete it manually",
+                output.status, self.id
+            ),
+            Err(e) => eprintln!(
+                "leak guard: could not delete device {} — delete it manually: {e}",
+                self.id
+            ),
+        }
+    }
+}
+
+fn drive_device_update_lifecycle(config_home: &Path, token: &str, pk: &str, profile_name: &str) {
+    // Device names share the profile's 32-character cap (probed live:
+    // 400 `Name must be a maximum of 32 characters`), and the guard's
+    // profile name is exactly 32 — truncate before suffixing.
+    let base: String = profile_name.chars().take(29).collect();
+    let device_name = format!("{base}-d");
+    let output = live_cdctl(config_home, token)
+        .args([
+            "api",
+            "/devices",
+            "-X",
+            "POST",
+            "-F",
+            &format!("name={device_name}"),
+            "-F",
+            &format!("profile_id={pk}"),
+            "-F",
+            "icon=desktop-linux",
+            "--yes",
+        ])
+        .output()
+        .expect("cdctl spawns for device create");
+    // A failed create either landed nothing or the profile teardown covers
+    // it; fail loud.
+    assert!(
+        output.status.success(),
+        "POST /devices exited {}\nstderr: {}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    // A create that succeeded but returned an unparseable body is a landed
+    // write with no handle: look the device up by name and delete it before
+    // panicking, or it (and the profile it enforces) leaks past teardown.
+    let device_id = serde_json::from_slice::<serde_json::Value>(&output.stdout)
+        .ok()
+        .and_then(|doc| doc["body"]["device_id"].as_str().map(str::to_owned));
+    let Some(device_id) = device_id else {
+        reap_device_by_name(config_home, token, &device_name);
+        panic!(
+            "POST /devices succeeded but the body carries no device_id\nstdout: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+    };
+
+    // The delete must run even if an assert below panics (assert_cmd panics
+    // carry stdout/stderr, never the token).
+    let device_guard = DeviceGuard {
+        id: device_id.clone(),
+        token: token.to_owned(),
+        config_home: config_home.to_owned(),
+    };
+
+    // b. the typed write: status + analytics + name in one patch, JSON out.
+    let renamed = format!("{base}-r");
+    let assert = live_cdctl(config_home, token)
+        .args([
+            "device",
+            "update",
+            &device_id,
+            "--status",
+            "soft-disabled",
+            "--analytics",
+            "some",
+            "--name",
+            &renamed,
+            "--json",
+        ])
+        .assert()
+        .success();
+    let updated = json_stdout(assert.get_output(), "device update");
+    assert_eq!(updated["id"], device_id.as_str());
+    assert_eq!(updated["status"], "soft-disabled");
+    assert_eq!(updated["analytics"], "some");
+    assert_eq!(updated["name"], renamed.as_str());
+
+    // c. resume: back to active, by (renamed) name this time.
+    let assert = live_cdctl(config_home, token)
+        .args(["device", "update", &renamed, "--status", "active", "--json"])
+        .assert()
+        .success();
+    let updated = json_stdout(assert.get_output(), "device update (resume)");
+    assert_eq!(updated["status"], "active");
+
+    // d. explicit delete (the guard is the unwind path, not the happy path).
+    let output = live_cdctl(config_home, token)
+        .args([
+            "api",
+            &format!("/devices/{device_id}"),
+            "-X",
+            "DELETE",
+            "--yes",
+        ])
+        .output()
+        .expect("cdctl spawns for device delete");
+    assert!(
+        output.status.success(),
+        "explicit device teardown: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    std::mem::forget(device_guard);
+}
+
 /// Read-only: `device list` normalizes whatever the account holds, and
 /// `device get` by id finds the first entry again. Only identity is compared
 /// across the two requests: `ctrld.last_fetch`, `clients`, and a `pending`
@@ -631,7 +802,8 @@ fn live_smoke() {
     let guard = ProfileGuard::create(config_home, &token);
     drive_profile_lifecycle(config_home, &token, &guard.pk, &guard.name);
 
-    // No devices were created, so the devices-before-profile ordering rule
-    // (docs/testing.md) is satisfied vacuously.
+    // Device before profile teardown: a profile enforced by a device cannot
+    // be deleted (docs/testing.md ordering rule).
+    drive_device_update_lifecycle(config_home, &token, &guard.pk, &guard.name);
     guard.teardown();
 }
