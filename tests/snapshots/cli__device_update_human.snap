@@ -1,0 +1,9 @@
+---
+source: tests/cli.rs
+expression: stdout
+---
+name       Router
+id         dev55ee66ff
+profile    Aggressive (pk4cada1c5)
+status     active
+analytics  full

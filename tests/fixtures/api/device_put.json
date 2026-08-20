@@ -1,0 +1,29 @@
+{
+  "body": {
+    "PK": "dev55ee66ff",
+    "ts": 1779830995,
+    "name": "Router",
+    "user": "pk14ba0f1c",
+    "device_id": "dev55ee66ff",
+    "status": 1,
+    "client_count": 12,
+    "learn_ip": 0,
+    "resolvers": {
+      "uid": "dev55ee66ff",
+      "doh": "https://dns.controld.com/dev55ee66ff",
+      "dot": "dev55ee66ff.dns.controld.com",
+      "v6": [
+        "2001:db8:0:0::b"
+      ]
+    },
+    "icon": "router-openwrt",
+    "profile": {
+      "PK": "pkae1060cf",
+      "updated": 1783173588,
+      "name": "Hardened"
+    },
+    "ip_count": 0
+  },
+  "message": "Endpoint has been updated",
+  "success": true
+}

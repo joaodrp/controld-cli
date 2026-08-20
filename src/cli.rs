@@ -152,11 +152,13 @@ because the API can acknowledge writes it did not fully apply."
 groups rules and can carry a default action applied to the rules inside it."
     )]
     Folder(FolderCommand),
-    /// Inspect the account's devices (API: endpoints)
+    /// Manage the account's devices (API: endpoints)
     #[command(
         subcommand,
-        long_about = "Inspect the account's devices (the API calls them endpoints). A device \
-is a resolver identity (DoH, DoT, or dedicated IPs) that enforces a profile."
+        long_about = "Manage the account's devices (the API calls them endpoints). A device \
+is a resolver identity (DoH, DoT, or dedicated IPs) that enforces a profile. Every write \
+is verified by reading the device back, because the API can acknowledge writes it did \
+not apply."
     )]
     Device(DeviceCommand),
     /// Read and write cdctl's own configuration
@@ -205,6 +207,10 @@ pub struct Globals {
     pub timeout: Option<u64>,
     pub debug: bool,
     pub quiet: bool,
+    /// Whether `profile` came from the `--profile` flag (not
+    /// `CONTROLD_PROFILE`). `device update` uses it to catch the flag being
+    /// mistaken for its own `--enforce` (the global would silently eat it).
+    pub profile_from_flag: bool,
 }
 
 impl Globals {
@@ -222,6 +228,7 @@ impl Globals {
             None => false,
         };
         Ok(Self {
+            profile_from_flag: args.profile.is_some(),
             // The flag wins over the environment — clap's own precedence,
             // kept even though `--profile` carries no clap-level `env` (D8's
             // fallback is resolved here instead). Routing `CONTROLD_PROFILE`

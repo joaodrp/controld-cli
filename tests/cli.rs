@@ -2499,6 +2499,353 @@ async fn device_list_with_divergent_ids_is_a_shape_error() {
     .expect("command runs");
 }
 
+// --- device update: read-back verification, --enforce, guards ---
+
+/// GET /devices serving `first` once, then `second` — the resolve fetch and
+/// the post-write read-back see different worlds, exactly like a real write.
+async fn devices_sequence_server(first: &str, second: &str) -> MockServer {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/devices"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(fixture(first), "application/json"))
+        .up_to_n_times(1)
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/devices"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(fixture(second), "application/json"))
+        .expect(1)
+        .mount(&server)
+        .await;
+    server
+}
+
+/// The full happy path in one pass: `--enforce` resolves a profile name, the
+/// form carries the wire ints, the PUT echo is stale (pre-switch profile,
+/// captured live) and is ignored — the read-back alone decides, and the
+/// printed row reflects it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn device_update_verifies_by_read_back_not_the_stale_echo() {
+    let server =
+        devices_sequence_server("devices_dup_names.json", "devices_after_update.json").await;
+    Mock::given(method("GET"))
+        .and(path("/profiles"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(fixture("profiles.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .and(path("/devices/dev55ee66ff"))
+        .and(body_string("profile_id=pk4cada1c5&status=1".to_owned()))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(fixture("device_put.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "device",
+                "update",
+                "Router",
+                "--enforce",
+                "aggressive",
+                "--status",
+                "active",
+                "--json",
+            ])
+            .assert()
+            .success();
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stdout).expect("valid JSON");
+        assert_eq!(doc["status"], "active");
+        assert_eq!(doc["profile"]["id"], "pk4cada1c5");
+        assert_eq!(doc["profile"]["name"], "Aggressive");
+    })
+    .await
+    .expect("command runs");
+}
+
+/// The write acks but the read-back still shows the old state: exit 8,
+/// nothing on stdout — an ack is never success (write-verification.md).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn device_update_read_back_mismatch_is_unverified_exit_8() {
+    let server = devices_sequence_server("devices_dup_names.json", "devices_dup_names.json").await;
+    Mock::given(method("PUT"))
+        .and(path("/devices/dev55ee66ff"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(fixture("device_put.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["device", "update", "Router", "--status", "active", "--json"])
+            .assert()
+            .code(8)
+            .stdout(predicates::str::is_empty());
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "device.unverified");
+        assert_eq!(doc["error"]["retryable"], true);
+    })
+    .await
+    .expect("command runs");
+}
+
+/// A retryable write error whose read-back shows the intent landed is a
+/// success (with an info line), not a retry loop that would duplicate writes.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn device_update_ambiguous_write_resolved_by_read_back() {
+    let server =
+        devices_sequence_server("devices_dup_names.json", "devices_after_update.json").await;
+    Mock::given(method("PUT"))
+        .and(path("/devices/dev55ee66ff"))
+        .respond_with(ResponseTemplate::new(500))
+        .expect(1..)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "device",
+                "update",
+                "Router",
+                "--status",
+                "active",
+                "--no-retry",
+                "--json",
+            ])
+            .assert()
+            .success();
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stdout).expect("valid JSON");
+        assert_eq!(doc["status"], "active");
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            stderr.contains("read-back confirms"),
+            "announces the resolution: {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+/// Dry run: everything resolves (device by name, profile by name), nothing
+/// is written, and the plan shows the resolved profile, not the typed name.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn device_update_dry_run_writes_nothing_and_prints_the_plan() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/devices"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("devices_dup_names.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/profiles"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(fixture("profiles.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "device",
+                "update",
+                "Router",
+                "--enforce",
+                "kids",
+                "--analytics",
+                "none",
+                "--dry-run",
+                "--json",
+            ])
+            .assert()
+            .success();
+        let json = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(doc["requests"][0]["method"], "PUT");
+        assert_eq!(doc["requests"][0]["path"], "/devices/dev55ee66ff");
+        let intent = &doc["requests"][0]["intent"];
+        assert!(intent["name"].is_null());
+        assert_eq!(intent["profile"]["id"], "pk69038f3c");
+        assert_eq!(intent["profile"]["name"], "Kids");
+        assert!(intent["status"].is_null());
+        assert_eq!(intent["analytics"], "none");
+        insta::with_settings!({filters => port_filters()}, {
+            insta::assert_snapshot!("device_update_dry_run_json", json);
+        });
+    })
+    .await
+    .expect("command runs");
+}
+
+/// The guards that must fire before any request: no change flags; the global
+/// `--profile` mistaken for `--enforce`; a parse-level bad status.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn device_update_guards_exit_2_before_any_request() {
+    let server = MockServer::start().await;
+    mount_no_requests(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl_against(&uri, dir.path())
+            .args(["device", "update", "Router"])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "device",
+                "update",
+                "Router",
+                "--profile",
+                "Kids",
+                "--status",
+                "active",
+                "--json",
+            ])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert!(
+            doc["error"]["message"]
+                .as_str()
+                .expect("message is a string")
+                .contains("--enforce"),
+            "points at the right flag: {doc}"
+        );
+
+        // Even alongside --enforce: dropping --profile silently would lose
+        // part of what was typed.
+        cdctl_against(&uri, dir.path())
+            .args([
+                "device",
+                "update",
+                "Router",
+                "--profile",
+                "Kids",
+                "--enforce",
+                "Relaxed",
+            ])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+
+        let long_name = "x".repeat(33);
+        cdctl_against(&uri, dir.path())
+            .args(["device", "update", "Router", "--name", &long_name])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+
+        cdctl_against(&uri, dir.path())
+            .args(["device", "update", "Router", "--status", "pending"])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        cdctl_against(&uri, dir.path())
+            .args(["device", "update", "Router", "--analytics", "2"])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+    })
+    .await
+    .expect("command runs");
+    // MockServer verifies .expect(0) on drop: no request was ever built.
+}
+
+/// `CONTROLD_PROFILE` alone stays inert on device update: only the *flag*
+/// trips the --enforce guard (agents keep their ambient env).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn device_update_ignores_the_profile_env_var() {
+    let server =
+        devices_sequence_server("devices_dup_names.json", "devices_after_update.json").await;
+    Mock::given(method("PUT"))
+        .and(path("/devices/dev55ee66ff"))
+        .and(body_string("status=1".to_owned()))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(fixture("device_put.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        cdctl_against(&uri, dir.path())
+            .env("CONTROLD_PROFILE", "Kids")
+            .args(["device", "update", "Router", "--status", "active", "--json"])
+            .assert()
+            .success();
+    })
+    .await
+    .expect("command runs");
+}
+
+/// Human mode prints the read-back row as key/value lines.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn device_update_human_renders_key_values() {
+    let server =
+        devices_sequence_server("devices_dup_names.json", "devices_after_update.json").await;
+    Mock::given(method("PUT"))
+        .and(path("/devices/dev55ee66ff"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(fixture("device_put.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args(["device", "update", "Router", "--status", "active"])
+            .assert()
+            .success();
+        let stdout = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+        insta::with_settings!({filters => port_filters()}, {
+            insta::assert_snapshot!("device_update_human", stdout);
+        });
+    })
+    .await
+    .expect("command runs");
+}
+
 // --- SIGPIPE: `cdctl reference | head` must die quietly with 141, never panic ---
 
 #[cfg(unix)]

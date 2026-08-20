@@ -13,9 +13,10 @@ feature, so it bumps the minor version (`features_always_increment_minor` in
 | Release | Ships |
 | --- | --- |
 | v0.2 | `device list/get` |
-| v0.3 | `rule import` + `rule restore` |
-| v0.4 | Protection: `profile` writes/options/default, `filter *`, `service *` |
-| v0.5 | Fleet & account: `device` writes/`types`, `access *`, `proxy`, `analytics`, `account`, `billing`, `network`, `ip` |
+| v0.3 | `device update` |
+| v0.4 | `rule import` + `rule restore` |
+| v0.5 | Protection: `profile` writes/options/default, `filter *`, `service *` |
+| v0.6 | Fleet & account: `device create/delete/types`, `access *`, `proxy`, `analytics`, `account`, `billing`, `network`, `ip` |
 | 1.0 | The full mapped surface |
 
 ## v0.2 — `device list/get`
@@ -35,10 +36,31 @@ The read half of the fleet group, pulled ahead on its own: consumers were reachi
   candidate ids, no match exits `3` (`device.not_found`).
 - `--fields` typos and control characters in the selector exit `2` before any request.
 
-## v0.3 — `rule import` + `rule restore`
+## v0.3 — `device update`
+
+The fleet write consumers asked for, pulled ahead like the reads. All owed live probes ran
+before implementation (2026-08-19, [write-verification](reference/write-verification.md)):
+`icon` accepted on PUT, `status` writable on a `pending` device, `profile_id2` `-1` removal,
+and the PUT echo carrying stale state — hence the mandatory `GET /devices` read-back.
+Contract in [commands](commands.md#device-api-endpoints).
+
+**Gate** *(v0.1 global gates inherited)*:
+
+- The PUT echo is never the verdict: a stale echo with a converged read-back succeeds; an
+  acked write whose read-back mismatches exits `8` (`device.unverified`) with nothing on stdout.
+- A retryable write error followed by a converged read-back succeeds with an info line.
+- `--enforce` resolves a profile name; the global `--profile` flag on `device update` exits `2`
+  before any request (with or without `--enforce`); `CONTROLD_PROFILE` alone stays inert.
+- A 33-character `--name` exits `2` before any request (the API caps names at 32).
+- No-change invocation exits `2` before any request.
+- `--status pending` and integer `--analytics` values are parse errors (exit `2`).
+- Dry run sends nothing and prints the resolved intent (profile as `{id, name}`).
+- Live: a fresh `cdctl-test-*` device runs the full update lifecycle and is torn down.
+
+## v0.4 — `rule import` + `rule restore`
 
 The feature that justifies the project: two blocklist-sync tools exist because it doesn't.
-Full semantics in [commands](commands.md#rule-import-semantics-v03): **folder-scoped**
+Full semantics in [commands](commands.md#rule-import-semantics-v04): **folder-scoped**
 diff -> converge -> add over one **profile-wide** fetch (quota against the **10,000 rules/profile
 cap**), cross-folder collisions fail fast (exit `6`, nothing written), chunks of **500** with
 scalar params first, **full desired-state verification** after every chunk plus a final full-scope
@@ -88,7 +110,7 @@ fit**. Point users at Control D's native filters.
   replace, and delete-first replace: `operation` discriminates, and `quota.peak`/`final` differ
   between the two replace modes.
 
-## v0.4 — Protection
+## v0.5 — Protection
 
 `profile create/update/delete`, `profile option list/set`, `profile default get/set`,
 `filter list/enable/disable/set`, `service list/set/categories/catalog`
@@ -108,9 +130,9 @@ fit**. Point users at Control D's native filters.
 - `profile default set --via6` exits `2` (shared syntax != shared capability).
 - Creation-intent snapshot for `profile create` incl. `--clone`.
 
-## v0.5 — Fleet & account
+## v0.6 — Fleet & account
 
-`device create/update/delete/types`, `access list/add/remove`, `proxy list`,
+`device create/delete/types`, `access list/add/remove`, `proxy list`,
 `analytics levels/regions`, `account get`, `billing products/subscriptions` *(payments deferred,
 no verifiable schema, [D2](decisions.md#d2--the-cli-is-the-stability-layer-own-the-output-schema))*, `network`, `ip`
 

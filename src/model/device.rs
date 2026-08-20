@@ -140,6 +140,16 @@ impl DeviceStatus {
             Self::HardDisabled => "hard-disabled",
         }
     }
+
+    /// The wire int for a status write (`PUT /devices/{id}` `status=`).
+    pub fn api_code(self) -> u8 {
+        match self {
+            Self::Pending => 0,
+            Self::Active => 1,
+            Self::SoftDisabled => 2,
+            Self::HardDisabled => 3,
+        }
+    }
 }
 
 impl Serialize for DeviceStatus {
@@ -174,6 +184,15 @@ impl Analytics {
             Self::None => "none",
             Self::Some => "some",
             Self::Full => "full",
+        }
+    }
+
+    /// The wire int for an analytics write (`PUT /devices/{id}` `stats=`).
+    pub fn api_code(self) -> u8 {
+        match self {
+            Self::None => 0,
+            Self::Some => 1,
+            Self::Full => 2,
         }
     }
 }
