@@ -2372,6 +2372,12 @@
                     "example": 2,
                     "type": "integer"
                   },
+                  "comment": {
+                    "description": "Optional comment for the custom rule. Maximum 64 characters.",
+                    "example": "Comment goes here",
+                    "maxLength": 64,
+                    "type": "string"
+                  },
                   "hostnames[]": {
                     "description": "Array of hostnames",
                     "example": [
@@ -2511,6 +2517,12 @@
                     "description": "ID of the folder to create this rule in. ",
                     "example": 2,
                     "type": "integer"
+                  },
+                  "comment": {
+                    "description": "Optional comment for the custom rule. Maximum 64 characters. Send an empty string to clear the existing comment.",
+                    "example": "Comment goes here",
+                    "maxLength": 64,
+                    "type": "string"
                   },
                   "hostnames[]": {
                     "description": "Array of hostnames",
