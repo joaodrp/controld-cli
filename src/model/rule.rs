@@ -19,6 +19,9 @@ pub struct ApiRule {
     pub order: i64,
     pub group: i64,
     pub action: ApiAction,
+    /// Top-level sibling of `action`, absent when unset (probed 2026-08-31,
+    /// write-verification.md).
+    pub comment: Option<String>,
 }
 
 /// The normalized rule — the documented JSON schema, stable key set.
@@ -34,6 +37,7 @@ pub struct Rule {
     pub folder: Option<String>,
     pub folder_id: Option<i64>,
     pub order: i64,
+    pub comment: Option<String>,
 }
 
 impl Rule {
@@ -52,6 +56,7 @@ impl Rule {
         "folder",
         "folder_id",
         "order",
+        "comment",
     ];
 
     /// `folders` supplies the display name for `folder_id`; a `group` with
@@ -84,6 +89,9 @@ impl Rule {
             folder,
             folder_id,
             order: api.order,
+            // Reads back absent when unset (probed); an empty string still
+            // normalizes to null so consumers see one shape.
+            comment: api.comment.clone().filter(|comment| !comment.is_empty()),
         })
     }
 }
@@ -114,6 +122,7 @@ mod tests {
             folder: None,
             folder_id: None,
             order: 1,
+            comment: None,
         };
         let value = serde_json::to_value(&rule).expect("serializes");
         let keys: Vec<&str> = value
@@ -196,6 +205,21 @@ mod tests {
         .expect("deserializes");
         let rule = Rule::from_api(&api, &[]).expect("normalizes");
         assert!(!rule.enabled);
+    }
+
+    #[test]
+    fn a_comment_passes_through_and_an_empty_one_normalizes_to_null() {
+        let with = |comment: &str| {
+            serde_json::from_value::<ApiRule>(serde_json::json!({
+                "PK": "a.example.com", "order": 1, "group": 0,
+                "action": {"do": 0, "status": 1}, "comment": comment
+            }))
+            .expect("deserializes")
+        };
+        let rule = Rule::from_api(&with("probe comment"), &[]).expect("normalizes");
+        assert_eq!(rule.comment.as_deref(), Some("probe comment"));
+        let rule = Rule::from_api(&with(""), &[]).expect("normalizes");
+        assert_eq!(rule.comment, None);
     }
 
     /// Deserialization only — no sorting happens here (`Rule::from_api` and

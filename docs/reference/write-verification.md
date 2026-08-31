@@ -1,7 +1,9 @@
 # Write Verification
 
-Live `POST`/`PUT`/`DELETE` against a throwaway trial account (personal, plan "Try Control").
-Probed across multiple sessions (latest 2026-07-18). The account is left empty after each.
+Live `POST`/`PUT`/`DELETE`, probed across multiple sessions (latest 2026-08-31) — early ones
+against a throwaway trial account (personal, plan "Try Control"), later ones against a real
+account inside fresh `cdctl-test-*` resources (testing.md's isolation rules). Every probe
+tears its resources down.
 
 ## Array encoding — there was never a contradiction
 
@@ -61,7 +63,7 @@ still returns 200. Measured on `POST /rules` (`do` + `status` + N `hostnames[]`)
   scalar params *first*, so any overflow drops trailing hostnames instead of `status` (undetectable
   corruption). **Verify the full desired state after every multi-target write**: re-fetch and
   assert every written hostname is present with the intended action, enabled state, `via`, `via6`,
-  and folder. A bare count check is weaker: a concurrent add can mask a dropped hostname.
+  folder, and comment. A bare count check is weaker: a concurrent add can mask a dropped hostname.
 - An earlier session recorded "1000 ✅ all stored", but that was wrong: it stored
   999 and the diff went unchecked.
 
@@ -102,7 +104,7 @@ No read-modify-write needed to toggle one field.
 only clearing mechanism is the action flip, whose intermediate state (a spoof rule momentarily
 bypassing) is an unprotected window `cdctl` never enters implicitly. Consequence: a desired state of
 `via6: null` against a live rule with `via_v6` set is **unconvergeable**: plans that require it
-fail fast before any mutation ([commands](../commands.md#rule-import-semantics-v04)).
+fail fast before any mutation ([commands](../commands.md#rule-import-semantics-v05)).
 
 ## Folders
 
@@ -293,6 +295,32 @@ than the literal input). 2+ case-insensitive matches with no exact one is refuse
 every variant) rather than guessed. `rule delete`'s own ack is equally uninformative: since a
 non-matching `DELETE` acks success too, `cdctl` runs the same resolution before every delete, never
 trusting the ack alone to mean something was actually removed.
+
+## Rule `comment`: top-level on reads, empty clears, >64 rejects whole chunk *(probed 2026-08-31)*
+
+Upstream added an optional `comment` (documented as max 64 chars) to the custom-rule
+create/update request bodies (spec vendored 2026-08-31). The undocumented read/echo side, probed:
+
+| Probe | Result |
+| --- | --- |
+| `POST /rules` with `comment=...` | ✅ 200, echo carries `comment`; `GET /rules` returns it **top-level beside `action`** (`{"PK", "order", "group", "action", "comment"}`), not inside `action` |
+| `POST /rules` without `comment` | ✅ 200; the key is **absent** from the read, never `""` |
+| `PUT /rules` with `comment=` (empty) | ✅ 200, cleared; reads back **absent** |
+| `PUT /rules` omitting `comment` entirely | ✅ 200, existing comment **preserved** (the same merge as every other field) |
+| 65 ASCII chars | ❌ 400 `Comment must be a maximum of 64 characters`, code `40003` (the generic validation code), **nothing lands** |
+| 64 two-byte chars (128 bytes) | ❌ same 400: **the cap counts UTF-8 bytes**, the message's "characters" miscounts multibyte |
+| 32 two-byte chars (64 bytes) | ✅ 200, stored verbatim — 64 bytes is the boundary |
+| `comment= pad me ` (padded) | ⚠️ 200, stored **trimmed** (`"pad me"`), POST and PUT both |
+| whitespace-only comment | ⚠️ 200, stored as **absent** (trims to nothing) |
+| NFC vs NFD unicode | ✅ stored byte-for-byte, **no normalization** |
+
+**Consequences for `cdctl`:** `--comment` needs no read-modify-write on update (omission
+preserves); `--comment=` is the clear spelling and its verification accepts an absent read-back
+comment; the local preflight caps at **64 bytes** and **rejects leading/trailing whitespace**
+(exit `2`) — forwarding padding would store a trimmed comment the read-back verification can
+never match, a permanent mismatch wearing exit `8`; the normalized `comment` is `null` when
+absent, and a read-back `""` (never observed, but the API is unversioned) normalizes to `null`
+too.
 
 ## Still unverified
 

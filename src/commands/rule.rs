@@ -111,6 +111,30 @@ fn validate_folder_selector(selector: Option<&String>) -> Result<(), Error> {
     Ok(())
 }
 
+/// Probed server behavior (2026-08-31, write-verification.md), rejected
+/// locally to fail fast. Padding must be refused, not forwarded: the server
+/// trims it, storing a comment the read-back verification can never match.
+/// The cap is 64 UTF-8 bytes — the server's "64 characters" message
+/// miscounts multibyte input.
+fn validate_comment(comment: Option<&str>) -> Result<(), Error> {
+    let Some(comment) = comment else {
+        return Ok(());
+    };
+    super::validate::reject_control_chars(comment, "the comment")?;
+    if comment.trim() != comment {
+        return Err(Error::usage(
+            "the comment has leading or trailing whitespace, which the server strips; remove it",
+        ));
+    }
+    if comment.len() > 64 {
+        return Err(Error::usage(format!(
+            "the comment is {} bytes; the maximum is 64 (the server counts UTF-8 bytes)",
+            comment.len()
+        )));
+    }
+    Ok(())
+}
+
 /// The `client.write` -> verify resolution shared by `create` and `update`
 /// (module doc): a successful write always confirms via read-back
 /// (`verify(None)`, the ordinary path); a *terminal* write error propagates
@@ -163,6 +187,9 @@ pub enum RuleCommand {
         /// Folder id or name to create the rules in
         #[arg(long, value_name = "id|name")]
         folder: Option<String>,
+        /// Comment stored on each rule (max 64 bytes)
+        #[arg(long, value_name = "text")]
+        comment: Option<String>,
         #[command(flatten)]
         dry_run: DryRun,
     },
@@ -179,6 +206,9 @@ pub enum RuleCommand {
         /// Move back to the root, out of any folder
         #[arg(long)]
         root: bool,
+        /// Set the comment, max 64 bytes (--comment= clears it, omission preserves it)
+        #[arg(long, value_name = "text")]
+        comment: Option<String>,
         #[command(flatten)]
         dry_run: DryRun,
     },
@@ -199,15 +229,38 @@ pub async fn run(command: RuleCommand, globals: &Globals) -> Result<(), Error> {
             hostnames,
             action,
             folder,
+            comment,
             dry_run,
-        } => create(&hostnames, &action, folder, dry_run.dry_run, globals).await,
+        } => {
+            create(
+                &hostnames,
+                &action,
+                folder,
+                comment,
+                dry_run.dry_run,
+                globals,
+            )
+            .await
+        }
         RuleCommand::Update {
             hostnames,
             action,
             folder,
             root,
+            comment,
             dry_run,
-        } => update(&hostnames, &action, folder, root, dry_run.dry_run, globals).await,
+        } => {
+            update(
+                &hostnames,
+                &action,
+                folder,
+                root,
+                comment,
+                dry_run.dry_run,
+                globals,
+            )
+            .await
+        }
         RuleCommand::Delete { hostnames, dry_run } => {
             delete(&hostnames, dry_run.dry_run, globals).await
         }
@@ -275,10 +328,19 @@ async fn create(
     raw_hostnames: &[String],
     flags: &ActionFlags,
     folder_selector: Option<String>,
+    comment: Option<String>,
     dry_run: bool,
     globals: &Globals,
 ) -> Result<(), Error> {
     validate_folder_selector(folder_selector.as_ref())?;
+    // Only `update` has an existing comment to clear: the empty spelling on
+    // `create` could only be a mistake.
+    if comment.as_deref() == Some("") {
+        return Err(Error::usage(
+            "an empty --comment stores nothing on a new rule; omit the flag",
+        ));
+    }
+    validate_comment(comment.as_deref())?;
     // `create` always lowercases: it is the sole path that mints a rule's
     // PK, so canonical (lowercase) creation is what keeps every later
     // `cdctl`-issued lowercase target matching it (module doc).
@@ -318,6 +380,7 @@ async fn create(
             via6: spec.via6.clone(),
             enabled: spec.enabled.expect("create caps default enabled"),
             folder_id,
+            comment: comment.clone(),
         };
         return plan::print_one(globals, "POST", path, &intent);
     }
@@ -325,6 +388,9 @@ async fn create(
     let mut form: Vec<(&str, String)> = spec.form_pairs();
     if let Some(id) = folder_id {
         form.push(("group", id.to_string()));
+    }
+    if let Some(comment) = &comment {
+        form.push(("comment", comment.clone()));
     }
     for hostname in &hostnames {
         form.push(("hostnames[]", hostname.clone()));
@@ -341,6 +407,7 @@ async fn create(
                 &hostnames,
                 &spec,
                 folder_id,
+                comment.as_deref(),
                 &api_folders,
                 globals,
                 write_error,
@@ -352,7 +419,7 @@ async fn create(
 
 /// The mandatory read-back verification for `rule create`: re-fetch the
 /// whole profile and assert every target landed with the intended action,
-/// enabled state, `via`, `via6`, and folder before printing anything
+/// enabled state, `via`, `via6`, folder, and comment before printing anything
 /// (commands.md#rule). `write_error` is `Some` only when `client.write`
 /// itself returned a *retryable* error — this same read-back then also
 /// resolves whether that write landed (module doc,
@@ -369,6 +436,7 @@ async fn verify_create(
     hostnames: &[String],
     spec: &ActionSpec,
     folder_id: Option<i64>,
+    comment: Option<&str>,
     api_folders: &[ApiFolder],
     globals: &Globals,
     // By value, not `&Error`: `resolve_write` (the shared caller) hands this
@@ -382,7 +450,7 @@ async fn verify_create(
         hostnames,
         &api_rules,
         api_folders,
-        |rule| create_matches(rule, spec, folder_id),
+        |rule| create_matches(rule, spec, folder_id, comment),
         Exit::Generic,
     )?;
 
@@ -421,7 +489,7 @@ async fn verify_create(
     // update-verb retry at all — an empty `retry_argv` is correct; the hint
     // carries the whole remedy.
     let retry_argv = if !absent.is_empty() {
-        create_retry_argv(&scope.id, spec, folder_id, &absent)
+        create_retry_argv(&scope.id, spec, folder_id, comment, &absent)
     } else if convergeable.is_empty() {
         Vec::new()
     } else {
@@ -429,7 +497,15 @@ async fn verify_create(
             Some(id) => FolderPatch::To(id),
             None => FolderPatch::Root,
         };
-        let changes = RuleUpdateChanges::from_spec(spec, Some(folder_patch));
+        let changes =
+            // Always a `Some` patch, like the folder arm above: create
+            // semantics are total, so an omitted `--comment` must converge
+            // as the clear spelling, not as "preserve".
+            RuleUpdateChanges::from_spec(
+                spec,
+                Some(folder_patch),
+                Some(comment.unwrap_or_default().to_owned()),
+            );
         update_retry_argv(&scope.id, &changes, &convergeable)
     };
 
@@ -511,12 +587,18 @@ fn via_matches(action: Action, live: Option<&str>, desired: Option<&str>) -> boo
 /// probed live), but DNS names are case-insensitive and the API is
 /// unversioned — the comparison itself does not lean on that preservation
 /// continuing.
-fn create_matches(rule: &Rule, spec: &ActionSpec, folder_id: Option<i64>) -> bool {
+fn create_matches(
+    rule: &Rule,
+    spec: &ActionSpec,
+    folder_id: Option<i64>,
+    comment: Option<&str>,
+) -> bool {
     Some(rule.action) == spec.action
         && via_matches(rule.action, rule.via.as_deref(), spec.via.as_deref())
         && via_matches(rule.action, rule.via6.as_deref(), spec.via6.as_deref())
         && Some(rule.enabled) == spec.enabled
         && rule.folder_id == folder_id
+        && rule.comment.as_deref() == comment
 }
 
 async fn update(
@@ -524,10 +606,12 @@ async fn update(
     flags: &ActionFlags,
     folder_selector: Option<String>,
     root: bool,
+    comment: Option<String>,
     dry_run: bool,
     globals: &Globals,
 ) -> Result<(), Error> {
     validate_folder_selector(folder_selector.as_ref())?;
+    validate_comment(comment.as_deref())?;
     // `update` never lowercases: the server matches `PUT` targets
     // case-sensitively and case variants can coexist as distinct rules
     // (write-verification.md, probed 2026-07-18), so lowercasing here would
@@ -536,9 +620,10 @@ async fn update(
     let hostnames =
         canonicalize_hostnames(raw_hostnames, super::validate::reject_control_chars, false)?;
     check_hostname_cap(&hostnames)?;
-    if flags.is_empty() && folder_selector.is_none() && !root {
+    if flags.is_empty() && folder_selector.is_none() && !root && comment.is_none() {
         return Err(Error::usage(
-            "rule update needs at least one change: an action flag, --folder, or --root",
+            "rule update needs at least one change: an action flag, --folder, --root, or \
+             --comment",
         ));
     }
     super::preflight_fields(globals, Rule::FIELDS, dry_run)?;
@@ -570,7 +655,7 @@ async fn update(
         None
     };
 
-    let changes = RuleUpdateChanges::from_spec(&spec, folder_change);
+    let changes = RuleUpdateChanges::from_spec(&spec, folder_change, comment);
 
     let path = rules_path(&scope.id);
     if dry_run {
@@ -618,6 +703,11 @@ async fn update(
         Some(FolderPatch::To(id)) => form.push(("group", id.to_string())),
         Some(FolderPatch::Root) => form.push(("group", "0".to_owned())),
         None => {}
+    }
+    // An empty value clears the comment; omission preserves it (probed
+    // 2026-08-31, write-verification.md).
+    if let Some(comment) = &changes.comment {
+        form.push(("comment", comment.clone()));
     }
     for hostname in &resolved {
         form.push(("hostnames[]", hostname.clone()));
@@ -707,6 +797,10 @@ fn update_matches(rule: &Rule, changes: &RuleUpdateChanges) -> bool {
         && changes.folder_id.is_none_or(|patch| match patch {
             FolderPatch::Root => rule.folder_id.is_none(),
             FolderPatch::To(id) => rule.folder_id == Some(id),
+        })
+        && changes.comment.as_deref().is_none_or(|comment| {
+            // An empty patch clears; a cleared comment reads back absent.
+            rule.comment.as_deref() == (!comment.is_empty()).then_some(comment)
         })
 }
 
@@ -1340,6 +1434,7 @@ fn create_retry_argv(
     profile_id: &str,
     spec: &ActionSpec,
     folder_id: Option<i64>,
+    comment: Option<&str>,
     hostnames: &[String],
 ) -> Vec<String> {
     let mut argv = retry_argv_base("create", profile_id);
@@ -1353,6 +1448,11 @@ fn create_retry_argv(
     if let Some(id) = folder_id {
         argv.push("--folder".to_owned());
         argv.push(id.to_string());
+    }
+    // Attached form: a comment may begin with `-`, which only the attached
+    // spelling shields from clap on the replay.
+    if let Some(comment) = comment {
+        argv.push(format!("--comment={comment}"));
     }
     // `--` before the hostname block: a hostname beginning with `-` is legal
     // (a foreign client can create one, and `cdctl rule create` itself
@@ -1386,6 +1486,11 @@ fn update_retry_argv(
         }
         Some(FolderPatch::Root) => argv.push("--root".to_owned()),
         None => {}
+    }
+    // Attached form: `--comment=` is the documented clear spelling, and the
+    // attached rendering keeps an empty value visible in the argv.
+    if let Some(comment) = &changes.comment {
+        argv.push(format!("--comment={comment}"));
     }
     // `--`: see `create_retry_argv`'s matching comment.
     argv.push("--".to_owned());
@@ -1518,11 +1623,12 @@ fn render_rules_table(rules: &[Rule], plain: bool) -> comfy_table::Table {
                 rule.via.clone().unwrap_or_else(|| "-".to_owned()),
                 rule.enabled.to_string(),
                 rule.folder.clone().unwrap_or_else(|| "-".to_owned()),
+                rule.comment.clone().unwrap_or_else(|| "-".to_owned()),
             ]
         })
         .collect();
     render_table(
-        &["HOSTNAME", "ACTION", "VIA", "ENABLED", "FOLDER"],
+        &["HOSTNAME", "ACTION", "VIA", "ENABLED", "FOLDER", "COMMENT"],
         rows,
         plain,
     )
@@ -1552,6 +1658,7 @@ mod tests {
             folder: None,
             folder_id: None,
             order: 1,
+            comment: None,
         }
     }
 
@@ -1729,16 +1836,20 @@ mod tests {
             folder: None,
             folder_id: Some(2),
             order: 1,
+            comment: None,
         };
-        assert!(create_matches(&rule, &spec, Some(2)));
-        assert!(!create_matches(&rule, &spec, None), "folder_id must match");
-        assert!(!create_matches(&rule, &spec, Some(3)), "wrong folder");
+        assert!(create_matches(&rule, &spec, Some(2), None));
+        assert!(
+            !create_matches(&rule, &spec, None, None),
+            "folder_id must match"
+        );
+        assert!(!create_matches(&rule, &spec, Some(3), None), "wrong folder");
 
         let wrong_via = Rule {
             via: Some("192.0.2.99".into()),
             ..rule.clone()
         };
-        assert!(!create_matches(&wrong_via, &spec, Some(2)));
+        assert!(!create_matches(&wrong_via, &spec, Some(2), None));
     }
 
     /// The server preserves `via`/`via6` case verbatim (write-verification.md,
@@ -1757,8 +1868,9 @@ mod tests {
             folder: None,
             folder_id: None,
             order: 1,
+            comment: None,
         };
-        assert!(create_matches(&rule, &spec, None));
+        assert!(create_matches(&rule, &spec, None, None));
     }
 
     /// A redirect via is a proxy PK — an exact identifier, not a DNS name —
@@ -1790,8 +1902,9 @@ mod tests {
             folder: None,
             folder_id: None,
             order: 1,
+            comment: None,
         };
-        assert!(!create_matches(&rule, &spec, None));
+        assert!(!create_matches(&rule, &spec, None, None));
     }
 
     /// Same exact-identifier rule for `update`'s sent-field comparison.
@@ -1811,8 +1924,93 @@ mod tests {
             folder: None,
             folder_id: None,
             order: 1,
+            comment: None,
         };
         assert!(!update_matches(&rule, &changes));
+    }
+
+    /// The dropped-comment direction: a desired comment against a read-back
+    /// without one (or with a different one) must fail verification — the
+    /// silent-truncation shape the read-back doctrine exists for.
+    #[test]
+    fn create_matches_requires_the_desired_comment_to_land() {
+        let spec = spoof_spec("192.0.2.1", None, Some(true));
+        let rule_with = |comment: Option<&str>| Rule {
+            hostname: "a.example.com".into(),
+            action: Action::Spoof,
+            via: Some("192.0.2.1".into()),
+            via6: None,
+            enabled: true,
+            folder: None,
+            folder_id: None,
+            order: 1,
+            comment: comment.map(str::to_owned),
+        };
+        assert!(create_matches(
+            &rule_with(Some("note")),
+            &spec,
+            None,
+            Some("note")
+        ));
+        assert!(!create_matches(&rule_with(None), &spec, None, Some("note")));
+        assert!(!create_matches(
+            &rule_with(Some("other")),
+            &spec,
+            None,
+            Some("note")
+        ));
+    }
+
+    /// Boundary and counting unit, probed 2026-08-31: the cap is 64 UTF-8
+    /// bytes (32 two-byte chars pass, 33 fail), and whitespace padding is
+    /// refused because the server trims it.
+    #[test]
+    fn validate_comment_caps_at_64_bytes_and_rejects_padding() {
+        assert!(validate_comment(None).is_ok());
+        assert!(validate_comment(Some("")).is_ok(), "the update clear");
+        assert!(validate_comment(Some(&"x".repeat(64))).is_ok());
+        assert!(validate_comment(Some(&"x".repeat(65))).is_err());
+        assert!(validate_comment(Some(&"\u{e9}".repeat(32))).is_ok());
+        assert!(validate_comment(Some(&"\u{e9}".repeat(33))).is_err());
+        assert!(validate_comment(Some(" padded ")).is_err());
+        assert!(validate_comment(Some("   ")).is_err());
+    }
+
+    #[test]
+    fn update_matches_comment_set_and_clear_against_the_readback() {
+        let rule_with = |comment: Option<&str>| Rule {
+            hostname: "a.example.com".into(),
+            action: Action::Block,
+            via: None,
+            via6: None,
+            enabled: true,
+            folder: None,
+            folder_id: None,
+            order: 1,
+            comment: comment.map(str::to_owned),
+        };
+        let set = RuleUpdateChanges {
+            comment: Some("note".into()),
+            ..RuleUpdateChanges::default()
+        };
+        assert!(update_matches(&rule_with(Some("note")), &set));
+        assert!(!update_matches(&rule_with(None), &set));
+        assert!(!update_matches(&rule_with(Some("other")), &set));
+
+        // A clear patch converges on an absent read-back comment.
+        let clear = RuleUpdateChanges {
+            comment: Some(String::new()),
+            ..RuleUpdateChanges::default()
+        };
+        assert!(update_matches(&rule_with(None), &clear));
+        assert!(!update_matches(&rule_with(Some("note")), &clear));
+
+        // Not sent at all: any live comment passes.
+        let untouched = RuleUpdateChanges {
+            enabled: Some(true),
+            ..RuleUpdateChanges::default()
+        };
+        assert!(update_matches(&rule_with(Some("note")), &untouched));
     }
 
     #[tokio::test]
@@ -1830,6 +2028,7 @@ mod tests {
             folder: None,
             folder_id: Some(9),
             order: 1,
+            comment: None,
         };
         // `folder_id` was never sent: an unrelated live value must not fail
         // the check (write-verification.md's merge preserves it).
@@ -1859,6 +2058,7 @@ mod tests {
             folder: None,
             folder_id: None,
             order: 1,
+            comment: None,
         };
         assert!(update_matches(&rule, &changes));
     }
@@ -1878,6 +2078,7 @@ mod tests {
             folder: Some("Ads".into()),
             folder_id: Some(4),
             order: 1,
+            comment: None,
         };
         assert!(!update_matches(&still_foldered, &changes));
         let rooted = Rule {
@@ -1960,6 +2161,7 @@ mod tests {
             folder: None,
             folder_id: None,
             order: 1,
+            comment: None,
         };
         let mut reconciled = Reconciled {
             results: vec![
@@ -2011,7 +2213,7 @@ mod tests {
     #[test]
     fn create_retry_argv_uses_resolved_ids_and_omits_the_default_enabled() {
         let spec = spoof_spec("192.0.2.1", None, None);
-        let argv = create_retry_argv("pk1", &spec, Some(7), &["a.example.com".to_owned()]);
+        let argv = create_retry_argv("pk1", &spec, Some(7), None, &["a.example.com".to_owned()]);
         assert_eq!(
             argv,
             vec![
@@ -2035,7 +2237,7 @@ mod tests {
     #[test]
     fn create_retry_argv_renders_disabled_explicitly() {
         let spec = spoof_spec("192.0.2.1", None, Some(false));
-        let argv = create_retry_argv("pk1", &spec, None, &["a.example.com".to_owned()]);
+        let argv = create_retry_argv("pk1", &spec, None, None, &["a.example.com".to_owned()]);
         assert!(argv.contains(&"--disabled".to_owned()));
         assert!(!argv.contains(&"--folder".to_owned()));
     }
@@ -2053,6 +2255,7 @@ mod tests {
             "pk1",
             &spec,
             None,
+            None,
             &["a.example.com".to_owned(), "b.example.com".to_owned()],
         );
         let dash = argv.iter().position(|a| a == "--").expect("-- present");
@@ -2062,9 +2265,24 @@ mod tests {
     #[test]
     fn create_retry_argv_with_a_leading_hyphen_hostname_round_trips_through_clap() {
         let spec = spoof_spec("192.0.2.1", None, None);
-        let argv = create_retry_argv("pk1", &spec, None, &["-ads.example.com".to_owned()]);
+        let argv = create_retry_argv("pk1", &spec, None, None, &["-ads.example.com".to_owned()]);
         crate::cli::Cli::try_parse_from(&argv)
             .expect("-- shields the leading-hyphen hostname from clap");
+    }
+
+    #[test]
+    fn create_retry_argv_with_a_leading_hyphen_comment_round_trips_through_clap() {
+        let spec = spoof_spec("192.0.2.1", None, None);
+        let argv = create_retry_argv(
+            "pk1",
+            &spec,
+            None,
+            Some("-see ticket 12"),
+            &["a.example.com".to_owned()],
+        );
+        assert!(argv.contains(&"--comment=-see ticket 12".to_owned()));
+        crate::cli::Cli::try_parse_from(&argv)
+            .expect("the attached spelling shields the leading-hyphen comment from clap");
     }
 
     #[test]

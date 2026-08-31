@@ -11,7 +11,8 @@ expression: json
     "enabled": true,
     "folder": null,
     "folder_id": null,
-    "order": 1
+    "order": 1,
+    "comment": null
   },
   {
     "hostname": "*.host2.example.com",
@@ -21,7 +22,8 @@ expression: json
     "enabled": false,
     "folder": null,
     "folder_id": null,
-    "order": 2
+    "order": 2,
+    "comment": null
   },
   {
     "hostname": "*.host3.example.com",
@@ -31,7 +33,8 @@ expression: json
     "enabled": true,
     "folder": null,
     "folder_id": null,
-    "order": 3
+    "order": 3,
+    "comment": null
   },
   {
     "hostname": "host4.example.com",
@@ -41,7 +44,8 @@ expression: json
     "enabled": true,
     "folder": null,
     "folder_id": null,
-    "order": 5
+    "order": 5,
+    "comment": null
   },
   {
     "hostname": "host5.example.com",
@@ -51,7 +55,8 @@ expression: json
     "enabled": true,
     "folder": null,
     "folder_id": null,
-    "order": 6
+    "order": 6,
+    "comment": null
   },
   {
     "hostname": "host6.example.com",
@@ -61,7 +66,8 @@ expression: json
     "enabled": true,
     "folder": null,
     "folder_id": null,
-    "order": 7
+    "order": 7,
+    "comment": null
   },
   {
     "hostname": "host7.example.com",
@@ -71,7 +77,8 @@ expression: json
     "enabled": true,
     "folder": null,
     "folder_id": null,
-    "order": 8
+    "order": 8,
+    "comment": null
   },
   {
     "hostname": "host8.example.com",
@@ -81,6 +88,7 @@ expression: json
     "enabled": true,
     "folder": null,
     "folder_id": null,
-    "order": 9
+    "order": 9,
+    "comment": null
   }
 ]
