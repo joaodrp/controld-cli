@@ -445,7 +445,7 @@ because the other documented option (`folder_id=0`) **is broken**.
 
 ## D17 — Ship in vertical slices, not all 40 operations at once
 
-Six releases, each independently useful. Anything not yet typed is reachable via `cdctl api`
+Seven releases, each independently useful. Anything not yet typed is reachable via `cdctl api`
 (D9) from day one, so deferral never locks anyone out:
 
 | Release | Group |
@@ -453,9 +453,10 @@ Six releases, each independently useful. Anything not yet typed is reachable via
 | **v0.1** | Core + `cdctl api` + `profile list/get` + `rule`/`folder` CRUD + release machinery |
 | **v0.2** | `device list/get` — read-only, pulled ahead of the flagship to give the device read a typed contract |
 | **v0.3** | `device update` — the fleet write consumers asked for, probed live before implementation |
-| **v0.4** | `rule import` + `rule restore` — the flagship, isolated so v0.1 ships sooner |
-| **v0.5** | Protection: `profile` writes/options/default, `filter *`, `service *` |
-| **v0.6** | Fleet & account: `device create/delete/types`, `access *`, `proxy`, `analytics`, `account`, `billing`, `network`, `ip` |
+| **v0.4** | Rule comments — upstream added the field mid-flight; a small slice lands it before `rule import`'s manifests |
+| **v0.5** | `rule import` + `rule restore` — the flagship, isolated so v0.1 ships sooner |
+| **v0.6** | Protection: `profile` writes/options/default, `filter *`, `service *` |
+| **v0.7** | Fleet & account: `device create/delete/types`, `access *`, `proxy`, `analytics`, `account`, `billing`, `network`, `ip` |
 | **1.0** | = the full mapped surface, org (D15) and `billing payments` (D2) stay deferred |
 
 **What makes this safe** is the same mechanism as D15's org deferral:
@@ -464,10 +465,10 @@ Six releases, each independently useful. Anything not yet typed is reachable via
   ships complete in v0.1 and is **treated as frozen from v0.1**, 0.x semver notwithstanding.
   Later groups only add nouns and verbs.
 - Folders ride with rules in v0.1 because rules are folder-scoped.
-- Group-specific live probes gate their own group (dropdown/level-less filters -> v0.5), not
+- Group-specific live probes gate their own group (dropdown/level-less filters -> v0.6), not
   earlier releases.
 
-**Cost accepted:** six release cycles instead of one. Users of deferred families type raw
+**Cost accepted:** seven release cycles instead of one. Users of deferred families type raw
 `cdctl api` paths for a while. The delivery table above must stay in sync with
 [roadmap](roadmap.md).
 

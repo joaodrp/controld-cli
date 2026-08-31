@@ -355,6 +355,8 @@ fn drive_profile_lifecycle(config_home: &Path, token: &str, pk: &str, profile_na
             wild,
             "--action",
             "block",
+            "--comment",
+            "cdctl smoke",
             "--folder",
             &folder_id_arg,
             "--profile",
@@ -376,6 +378,7 @@ fn drive_profile_lifecycle(config_home: &Path, token: &str, pk: &str, profile_na
             "rule landed inside the smoke folder"
         );
         assert_eq!(rule["enabled"], true);
+        assert_eq!(rule["comment"], "cdctl smoke");
     }
 
     // d. rule update --disabled
@@ -399,6 +402,23 @@ fn drive_profile_lifecycle(config_home: &Path, token: &str, pk: &str, profile_na
     // PUT is a merge: the fields the update did not send must survive.
     assert_eq!(updated[0]["action"], "block");
     assert_eq!(updated[0]["folder_id"].as_i64(), Some(folder_id));
+    assert_eq!(updated[0]["comment"], "cdctl smoke");
+
+    // d2. rule update --comment= clears; the read-back shows null.
+    let assert = live_cdctl(config_home, token)
+        .args([
+            "rule",
+            "update",
+            one,
+            "--comment=",
+            "--profile",
+            pk,
+            "--json",
+        ])
+        .assert()
+        .success();
+    let cleared = json_stdout(assert.get_output(), "rule update --comment= --json");
+    assert_eq!(cleared[0]["comment"], serde_json::Value::Null);
 
     // e. rule list
     let listed = list_rules(config_home, token, pk, "rule list --json");

@@ -3,7 +3,7 @@
 Per-command contract: flags, human table columns, and normalized JSON fields.
 Written before implementation so the commands are consistent by construction, not by luck.
 
-A section or heading tagged with a release version (`(v0.4)`, `(v0.5)`, `(v0.6)`) describes a
+A section or heading tagged with a release version (`(v0.5)`, `(v0.6)`, `(v0.7)`) describes a
 planned command, not yet in the binary. See [`docs/roadmap.md`](roadmap.md) for the shipping
 sequence. Untagged sections are shipped.
 
@@ -95,7 +95,7 @@ whatever the count, since cardinality never changes the shape.
 | `filter enable/disable/set` | RB | the response is only a family-keyed `{do,status,lvl}` map (`[]` when empty). No titles, levels, or descriptions. Re-fetch `filter list` and print the affected families |
 | `service set` | RB | neither response nor request carries `category`/`locations`/`warning`, but `GET .../services` does |
 | `device create/update` | R | device object flat at `body` |
-| `access add` | RB | the ack is `body: []` plus a count message. The read-back window is the latest 50 IPs, hence the 50-IP cap ([access](#access-proxy-v06)) |
+| `access add` | RB | the ack is `body: []` plus a count message. The read-back window is the latest 50 IPs, hence the 50-IP cap ([access](#access-proxy-v07)) |
 
 **Validation, client-side, before the request:**
 - `--via` **required** when `--action spoof` or `--action redirect`, **rejected** otherwise.
@@ -110,7 +110,7 @@ whatever the count, since cardinality never changes the shape.
 ## Dry run
 
 Typed **remote-mutation** commands accept `-n, --dry-run` (the clig.dev standard flag): every
-typed remote mutation, with `rule import` and `rule restore` joining in v0.4. Local-state commands
+typed remote mutation, with `rule import` and `rule restore` joining in v0.5. Local-state commands
 (`auth login/logout`, `config set`) do **not** take it, and `cdctl api` is excluded. The escape
 hatch is gated by [D9](decisions.md#d9--cdctl-api-separately-gateable-get-by-default) (`-X` + `--yes`) instead.
 
@@ -163,7 +163,7 @@ hatch is gated by [D9](decisions.md#d9--cdctl-api-separately-gateable-get-by-def
 
   `service set`, `profile default set`, `profile option set`, and `filter enable/disable/set`
   send complete state, with one verified exception: service `via_v6` **merges** upstream, so it
-  appears in the intent only when `--via6` was given ([service](#service-v05)). Their plans are full
+  appears in the intent only when `--via6` was given ([service](#service-v06)). Their plans are full
   intents, never patches:
   `{service, action, via, via6, enabled}`, `{action, via, enabled}`, `{name, enabled, value}`,
   `{levels: {"<level-or-family>": true|false}}`. Merge-style updates
@@ -302,13 +302,13 @@ not reshape what it carries. It is gated by [D9](decisions.md#d9--cdctl-api-sepa
 | --- | --- |
 | `profile list` | — |
 | `profile get <id\|name>` | — |
-| `profile create <name>` (v0.5) | `--clone <PK>` |
-| `profile update <id>` (v0.5) | `--name <s>`, `--disable-until <time>`, `--enable` |
-| `profile delete <id>` (v0.5) | `--confirm=<name>`, `--yes` alone is never enough |
-| `profile option list` (v0.5) | — |
-| `profile option set <name>` (v0.5) | `--enabled/--disabled`, `--value <v>` |
-| `profile default get` (v0.5) | — |
-| `profile default set` (v0.5) | *action flags* |
+| `profile create <name>` (v0.6) | `--clone <PK>` |
+| `profile update <id>` (v0.6) | `--name <s>`, `--disable-until <time>`, `--enable` |
+| `profile delete <id>` (v0.6) | `--confirm=<name>`, `--yes` alone is never enough |
+| `profile option list` (v0.6) | — |
+| `profile option set <name>` (v0.6) | `--enabled/--disabled`, `--value <v>` |
+| `profile default get` (v0.6) | — |
+| `profile default set` (v0.6) | *action flags* |
 
 **Table:** `NAME, ID, RULES, UPDATED`. `RULES` shows the enabled count
 **JSON:** `{id, name, enabled_rules, enabled_filters, enabled_services, folders, options, default_action, enabled, disabled_until, updated}`
@@ -329,20 +329,20 @@ create. Readback shape-shifts (`disable: null` <-> `disable_ttl: <ts>`). Derive
 `profile get` is a **client-side filter over `GET /profiles`**. The API has no `GET /profiles/{id}`.
 Human mode: key/value lines over the full JSON field set, not the list table.
 
-**`profile option list`** (v0.5): table `OPTION, TITLE, TYPE, DEFAULT`.
+**`profile option list`** (v0.6): table `OPTION, TITLE, TYPE, DEFAULT`.
 JSON `{name, title, description, type, default, info_url}`. `type` is an open enum: live values
 are `toggle`, `field`, and `dropdown` (the third is absent from the API docs). Render unknown types
 as-is, never error. `default` is **raw JSON**: an integer for toggles/fields, an object map
 (`{"0.9": "Minimal"}`) or a **bare label array** (`ecs_subnet`) for dropdowns. Never assume a shape.
 
-**`profile option set <name> --enabled|--disabled [--value <v>]`** (v0.5): the API write takes a
+**`profile option set <name> --enabled|--disabled [--value <v>]`** (v0.6): the API write takes a
 required `status` plus an optional `value`. A single positional value cannot express
 enable/disable/select unambiguously. Validate `--value` per type against the live catalogue
 (field -> number, dropdown -> a key of its map). ⚠️ The dropdown write is **unprobed**.
-Verify before v0.5. Prints the new state `{name, value, enabled}` via read-back (no verified write
+Verify before v0.6. Prints the new state `{name, value, enabled}` via read-back (no verified write
 response exists).
 
-**`profile default get/set`** (v0.5): one row, `ACTION, VIA, ENABLED`. JSON `{action, via, enabled}`.
+**`profile default get/set`** (v0.6): one row, `ACTION, VIA, ENABLED`. JSON `{action, via, enabled}`.
 
 ---
 
@@ -351,14 +351,14 @@ response exists).
 | Command | Flags |
 | --- | --- |
 | `rule list` | `--folder <id\|name>` |
-| `rule create <hostname>...` | *action flags*, `--folder <id\|name>` |
-| `rule update <hostname>...` | *action flags*, `--folder`, `--root` |
+| `rule create <hostname>...` | *action flags*, `--folder <id\|name>`, `--comment <text>` |
+| `rule update <hostname>...` | *action flags*, `--folder`, `--root`, `--comment` |
 | `rule delete <hostname>...` | `--yes` |
-| `rule import <file\|->` (v0.4) | *action flags*, `--folder`, `--replace`, `--force-delete-first` |
-| `rule restore <manifest>` (v0.4) | `--force` *(accept a profile mismatch)* |
+| `rule import <file\|->` (v0.5) | *action flags*, `--folder`, `--replace`, `--force-delete-first` |
+| `rule restore <manifest>` (v0.5) | `--force` *(accept a profile mismatch)* |
 
-**Table:** `HOSTNAME, ACTION, VIA, ENABLED, FOLDER`
-**JSON:** `{hostname, action, via, via6, enabled, folder, folder_id, order}`
+**Table:** `HOSTNAME, ACTION, VIA, ENABLED, FOLDER, COMMENT`
+**JSON:** `{hostname, action, via, via6, enabled, folder, folder_id, order, comment}`
 
 - `hostname` <- `PK`. May be a wildcard (`*.example.com`).
 - `folder_id` <- `group`. **`0` normalizes to `null`** (a "no folder" sentinel, not folder zero).
@@ -374,6 +374,15 @@ response exists).
 - **A missing `action.do` is an error, not a default.** Never coerce to `0` (= BLOCK).
 - `rule update` sends only the flags given: **`PUT /rules` merges**, preserving omitted fields
   (verified live), so `rule update x.com --disabled` needs no `--action`.
+- `--comment` stores a note on the rule, **max 64 UTF-8 bytes** (the server's "64 characters"
+  message miscounts multibyte input). Enforced locally, exit `2`, as is leading/trailing
+  whitespace — the server trims it, storing a comment the verification could never match
+  ([write-verification](reference/write-verification.md#rule-comment-top-level-on-reads-empty-clears-64-rejects-whole-chunk-probed-2026-08-31)).
+- On `update`, `--comment=` (the attached empty value) **clears** the comment and omission
+  preserves it, the same merge as every other field. The empty spelling on `create` is refused
+  (exit `2`, only `update` has a comment to clear). The JSON `comment` is `null` when absent —
+  a cleared comment reads back absent, and an empty-string read (never observed) normalizes to
+  `null` too.
 - **`rule update` never creates a rule**: `PUT /rules` does not upsert (probed live: an unknown
   hostname 400s `Custom Rule does not exist`,
   [write-verification](reference/write-verification.md#put-rules-does-not-upsert-via-case-is-preserved--reject-at-create-probed-2026-07-18)). Every `update`/`delete` target is
@@ -426,7 +435,7 @@ response exists).
 
 `rule delete` must **percent-encode the hostname into the path**, wildcards included.
 
-### `rule import` semantics (v0.4)
+### `rule import` semantics (v0.5)
 
 Input: one hostname per line. `#` comments and blanks skipped. Hosts-file format accepted
 (`0.0.0.0 ads.example.com` -> `ads.example.com`). Hostnames are canonicalized (lowercased, trailing
@@ -450,7 +459,7 @@ add/converge/delete plan and exits `0`.
   blocklists belong in Control D's native filters, and the error says so.
 - **Diff -> converge -> add.** The scope's subset comes from the profile-wide fetch above. Rules in
   other folders inform the quota but never enter the plan. Hostnames already in the desired state
-  are skipped. Hostnames present with a **different action, state, `via`, or `via6` are converged
+  are skipped. Hostnames present with a **different action, state, `via`, `via6`, or comment are converged
   with `PUT`** (chunked, the merge is verified). Skipping them as "duplicates" would mean import never
   reaches the state the file declares. New hostnames are added with `POST`. A duplicate in a `POST`
   chunk atomically fails the chunk, which is why the diff is not optional.
@@ -493,10 +502,10 @@ add/converge/delete plan and exits `0`.
   `{"version": 1, "profile_id": "...", "rules": [<normalized rule objects>]}`. Rules carry
   `folder_id`, so restore stays exact when folder names collide, and heterogeneous actions
   round-trip (a plain hostname list cannot).
-- **`rule restore <manifest>`** (v0.4) is a **separate command**: no positional file and no `--action`
+- **`rule restore <manifest>`** (v0.5) is a **separate command**: no positional file and no `--action`
   (each rule carries its own), so it doesn't collide with the import grammar. It refuses a manifest
   whose `profile_id` differs from the target profile unless `--force` is given, and refuses unknown
-  `version` values. Recreates action, state, `via`, `via6`, and folder exactly. Idempotent by
+  `version` values. Recreates action, state, `via`, `via6`, folder, and comment exactly. Idempotent by
   **full-state diff, not by hostname**: a manifest entry is skipped only when the live rule
   already matches the entire desired tuple. A hostname present with any difference **converges via
   `PUT`** (the verified merge, since a user may have recreated, moved, or edited it since the manifest
@@ -506,7 +515,7 @@ add/converge/delete plan and exits `0`.
   verification as import.
 - **Chunks of 500, scalar params first, verify the full desired state.** After each chunk,
   re-fetch and assert the chunk's hostnames are present with the intended **action, enabled state,
-  `via`, `via6`, and folder**. Membership alone can miss a dropped trailing scalar (a truncated
+  `via`, `via6`, folder, and comment**. Membership alone can miss a dropped trailing scalar (a truncated
   `status=0` silently defaults to enabled). A raw 200 is meaningless (the server silently drops
   form variables past ~1001), and a total-count check is insufficient. A concurrent add elsewhere
   can mask a dropped hostname. After the last chunk, run **one final full-scope verification** so
@@ -546,7 +555,7 @@ add/converge/delete plan and exits `0`.
 
 ---
 
-## filter (v0.5)
+## filter (v0.6)
 
 | Command | Flags |
 | --- | --- |
@@ -582,7 +591,7 @@ add/converge/delete plan and exits `0`.
 
 ---
 
-## service (v0.5)
+## service (v0.6)
 
 | Command | Flags |
 | --- | --- |
@@ -622,10 +631,10 @@ catalogue, not the profile's rules.
 | --- | --- |
 | `device list` | — |
 | `device get <id\|name>` | — |
-| `device create <name>` (v0.6) | `--profile <p>` *(required)*, `--type <t>`, `--clients <n>`, `--analytics <none\|some\|full>` |
+| `device create <name>` (v0.7) | `--profile <p>` *(required)*, `--type <t>`, `--clients <n>`, `--analytics <none\|some\|full>` |
 | `device update <id\|name>` | `--name <s>`, `--enforce <PK\|name>` *(profile to enforce)*, `--status <active\|soft-disabled\|hard-disabled>`, `--analytics <none\|some\|full>`, `-n` |
-| `device delete <id>` (v0.6) | `--confirm=<name>`, `--yes` alone is never enough |
-| `device types` (v0.6) | — |
+| `device delete <id>` (v0.7) | `--confirm=<name>`, `--yes` alone is never enough |
+| `device types` (v0.7) | — |
 
 **Table:** `NAME, ID, PROFILE, STATUS, CLIENTS, CTRLD`
 **JSON:** `{id, name, profile: {id, name}, status, analytics, clients, learn_ip, icon, ctrld: {version, last_fetch} | null, resolvers: {doh, dot, v4, v6}}`
@@ -672,7 +681,7 @@ exit `8` (the patch is idempotent, re-running converges). Notes:
   `pending` device (probed live), but un-using a device is not a state a user can mean.
 - Writes are PUT-only: `status` is not accepted on `POST /devices`.
 
-**Writes (v0.6):** `--status active` on a `pending` device is rejected client-side (the flip
+**Writes (v0.7):** `--status active` on a `pending` device is rejected client-side (the flip
 happens on the first DNS query, not via the API). `--type` maps to the API's `icon` field (the
 icon key *is* the device type); `--clients` to `client_count`. Live, only `name` and `--profile`
 are enforced; a duplicate name is a conflict (exit 6). `device types` returns a nested dict
@@ -680,7 +689,7 @@ are enforced; a duplicate name is a conflict (exit 6). `device types` returns a 
 
 ---
 
-## access, proxy (v0.6)
+## access, proxy (v0.7)
 
 | Command | Flags |
 | --- | --- |
@@ -713,7 +722,7 @@ are enforced; a duplicate name is a conflict (exit 6). `device types` returns a 
 
 ---
 
-## account, billing, analytics, misc (v0.6)
+## account, billing, analytics, misc (v0.7)
 
 > **`org` is deferred to a later release** ([D15](decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes)): `cdctl` targets personal accounts.
 > The `--org` flag arrives with the org commands. Context-keyed config keeps them additive.

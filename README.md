@@ -23,19 +23,19 @@ CLI for the [Control D](https://controld.com) REST API. For humans, scripts, and
 
 ```console
 $ cdctl rule create ads.example.com trackers.example.net --action block
-┌──────────────────────┬────────┬─────┬─────────┬────────┐
-│ HOSTNAME             ┆ ACTION ┆ VIA ┆ ENABLED ┆ FOLDER │
-╞══════════════════════╪════════╪═════╪═════════╪════════╡
-│ ads.example.com      ┆ block  ┆ -   ┆ true    ┆ -      │
-│ trackers.example.net ┆ block  ┆ -   ┆ true    ┆ -      │
-└──────────────────────┴────────┴─────┴─────────┴────────┘
+┌──────────────────────┬────────┬─────┬─────────┬────────┬─────────┐
+│ HOSTNAME             ┆ ACTION ┆ VIA ┆ ENABLED ┆ FOLDER ┆ COMMENT │
+╞══════════════════════╪════════╪═════╪═════════╪════════╪═════════╡
+│ ads.example.com      ┆ block  ┆ -   ┆ true    ┆ -      ┆ -       │
+│ trackers.example.net ┆ block  ┆ -   ┆ true    ┆ -      ┆ -       │
+└──────────────────────┴────────┴─────┴─────────┴────────┴─────────┘
 
 $ cdctl rule create tv.example.com --action spoof --via 192.0.2.10
-┌────────────────┬────────┬────────────┬─────────┬────────┐
-│ HOSTNAME       ┆ ACTION ┆ VIA        ┆ ENABLED ┆ FOLDER │
-╞════════════════╪════════╪════════════╪═════════╪════════╡
-│ tv.example.com ┆ spoof  ┆ 192.0.2.10 ┆ true    ┆ -      │
-└────────────────┴────────┴────────────┴─────────┴────────┘
+┌────────────────┬────────┬────────────┬─────────┬────────┬─────────┐
+│ HOSTNAME       ┆ ACTION ┆ VIA        ┆ ENABLED ┆ FOLDER ┆ COMMENT │
+╞════════════════╪════════╪════════════╪═════════╪════════╪═════════╡
+│ tv.example.com ┆ spoof  ┆ 192.0.2.10 ┆ true    ┆ -      ┆ -       │
+└────────────────┴────────┴────────────┴─────────┴────────┴─────────┘
 
 $ cdctl rule list --fields hostname,action
 [

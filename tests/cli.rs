@@ -4342,7 +4342,8 @@ async fn rule_list_root_renders_all_three_modes_sorted_by_order() {
                 "enabled",
                 "folder",
                 "folder_id",
-                "order"
+                "order",
+                "comment"
             ]
         );
         let orders: Vec<i64> = rules.iter().map(|r| r["order"].as_i64().unwrap()).collect();
@@ -5358,6 +5359,73 @@ async fn rule_create_landed_in_the_wrong_folder_is_a_state_mismatch_not_write_dr
     .expect("command runs");
 }
 
+/// Create semantics are total: a create without `--comment` that lands on a
+/// rule carrying one is a state mismatch, and the converge retry must send
+/// the `--comment=` clear — a retry that omitted the flag would preserve the
+/// foreign comment (the `PUT` merge) and never reach the asserted state.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_create_comment_mismatch_converge_retry_carries_the_clear_spelling() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
+    Mock::given(method("POST"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_ack.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "a.example.com", "order": 1, "group": 0,
+                 "action": {"do": 0, "status": 1}, "comment": "foreign note"}
+            ]},
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "create",
+                "a.example.com",
+                "--action",
+                "block",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .code(1)
+            .stdout(predicates::str::is_empty());
+        let doc: serde_json::Value =
+            serde_json::from_slice(&assert.get_output().stderr).expect("one envelope");
+        assert_eq!(doc["error"]["code"], "write.partial_failure");
+        let retry_argv: Vec<&str> = doc["error"]["details"]["retry_argv"]
+            .as_array()
+            .expect("retry_argv present")
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        assert!(retry_argv.contains(&"update"), "converges via rule update");
+        assert!(
+            retry_argv.contains(&"--comment="),
+            "the retry must clear the foreign comment: {retry_argv:?}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
 /// A retryable read-back failure (a 500 on the verifying `GET`) remaps to
 /// `write.unverified`, exit 1, `retryable: false` — the write already landed,
 /// so exit 8 must not invite a replay. The remap still preserves the source
@@ -6031,6 +6099,276 @@ async fn rule_update_disabled_alone_sends_status_and_hostnames_only() {
             doc[0]["via"], "192.0.2.10",
             "preserved by the merge, not sent"
         );
+    })
+    .await
+    .expect("command runs");
+}
+
+/// `comment` rides the form as a scalar before the `hostnames[]` pairs and
+/// comes back top-level beside `action` on the read (probed 2026-08-31,
+/// write-verification.md); the verification requires it to match, and the
+/// output carries it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_create_with_comment_sends_it_and_the_readback_carries_it() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
+    Mock::given(method("POST"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .and(body_string(
+            "do=0&status=1&comment=made+by+cdctl&hostnames[]=a.com",
+        ))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_ack.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "a.com", "order": 1, "group": 0,
+                 "action": {"do": 0, "status": 1}, "comment": "made by cdctl"}
+            ]},
+            "success": true
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "create",
+                "a.com",
+                "--action",
+                "block",
+                "--comment",
+                "made by cdctl",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .success();
+        let json = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(doc[0]["comment"], "made by cdctl");
+    })
+    .await
+    .expect("command runs");
+}
+
+/// `--comment` alone is a valid change (no action flag needed): the form is
+/// `comment` plus the hostnames only, and the read-back must show the new
+/// comment before anything prints.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_update_comment_alone_sends_comment_and_hostnames_only() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
+    Mock::given(method("PUT"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .and(body_string("comment=new+note&hostnames[]=x.example.com"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_ack.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    // Fetched twice: `update`'s pre-write resolution and `verify_update`'s
+    // post-write read-back (rule.rs). The stored comment already matching
+    // the patch is fine for both — resolution needs only existence.
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "x.example.com", "order": 1, "group": 0,
+                 "action": {"do": 0, "status": 1}, "comment": "new note"}
+            ]},
+            "success": true
+        })))
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "update",
+                "x.example.com",
+                "--comment",
+                "new note",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .success();
+        let json = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(doc[0]["comment"], "new note");
+    })
+    .await
+    .expect("command runs");
+}
+
+/// The attached-empty spelling clears: `comment=` goes on the wire, and the
+/// verification accepts an absent read-back comment as the cleared state
+/// (probed 2026-08-31, write-verification.md).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_update_empty_comment_clears_and_verifies_against_an_absent_readback() {
+    let server = MockServer::start().await;
+    mount_profiles(&server, 1).await;
+    mount_groups_fixture(&server, "p_groups.json", 1).await;
+    Mock::given(method("PUT"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .and(body_string("comment=&hostnames[]=x.example.com"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(fixture("write_rule_ack.json"), "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    // Twice: resolution then read-back; no `comment` key at all is the
+    // cleared shape the server actually returns.
+    Mock::given(method("GET"))
+        .and(path(format!("/profiles/{AGGRESSIVE_PK}/rules")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "body": {"rules": [
+                {"PK": "x.example.com", "order": 1, "group": 0,
+                 "action": {"do": 0, "status": 1}}
+            ]},
+            "success": true
+        })))
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "update",
+                "x.example.com",
+                "--comment=",
+                "--profile",
+                AGGRESSIVE_PK,
+                "--json",
+            ])
+            .assert()
+            .success();
+        let json = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+        let doc: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(doc[0]["comment"], serde_json::Value::Null);
+    })
+    .await
+    .expect("command runs");
+}
+
+/// The 64-byte cap is enforced locally — fail fast with exit `2` instead of
+/// forwarding what the server would 400 (probed 2026-08-31).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_comment_over_64_bytes_is_rejected_locally() {
+    let server = MockServer::start().await;
+    mount_no_requests(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let long = "x".repeat(65);
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "create",
+                "a.example.com",
+                "--action",
+                "block",
+                "--comment",
+                &long,
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            stderr.contains("65 bytes") && stderr.contains("maximum is 64"),
+            "got: {stderr}"
+        );
+    })
+    .await
+    .expect("command runs");
+}
+
+/// Same control-character hardening as every other argument value.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_comment_with_a_control_character_is_rejected_locally() {
+    let server = MockServer::start().await;
+    mount_no_requests(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "update",
+                "a.example.com",
+                "--comment",
+                "line\u{7}break",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(stderr.contains("control character"), "got: {stderr}");
+    })
+    .await
+    .expect("command runs");
+}
+
+/// Only `update` has an existing comment to clear; the empty spelling on
+/// `create` can only be a mistake and is refused locally.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_create_empty_comment_is_rejected_locally() {
+    let server = MockServer::start().await;
+    mount_no_requests(&server).await;
+
+    let uri = server.uri();
+    let dir = tempdir();
+    tokio::task::spawn_blocking(move || {
+        let assert = cdctl_against(&uri, dir.path())
+            .args([
+                "rule",
+                "create",
+                "a.example.com",
+                "--action",
+                "block",
+                "--comment=",
+                "--profile",
+                AGGRESSIVE_PK,
+            ])
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty());
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(stderr.contains("omit the flag"), "got: {stderr}");
     })
     .await
     .expect("command runs");

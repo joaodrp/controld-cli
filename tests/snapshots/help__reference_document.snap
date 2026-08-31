@@ -71,6 +71,7 @@ Create rules
 - `--enabled` — Enable
 - `--disabled` — Disable
 - `--folder <id|name>` — Folder id or name to create the rules in
+- `--comment <text>` — Comment stored on each rule (max 64 bytes)
 - `-n, --dry-run` — Print the planned mutation without writing anything
 
 ### cdctl rule update
@@ -85,6 +86,7 @@ Update rules (sends only the flags given — `PUT /rules` merges)
 - `--disabled` — Disable
 - `--folder <id|name>` — Move to this folder (id or name)
 - `--root` — Move back to the root, out of any folder
+- `--comment <text>` — Set the comment, max 64 bytes (--comment= clears it, omission preserves it)
 - `-n, --dry-run` — Print the planned mutation without writing anything
 
 ### cdctl rule delete

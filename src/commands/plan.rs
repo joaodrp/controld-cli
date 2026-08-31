@@ -121,6 +121,7 @@ pub struct RuleCreateIntent {
     pub via6: Option<String>,
     pub enabled: bool,
     pub folder_id: Option<i64>,
+    pub comment: Option<String>,
 }
 
 /// `rule update`'s sparse patch — presence is meaningful, omitted fields are
@@ -141,19 +142,27 @@ pub struct RuleUpdateChanges {
     pub enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub folder_id: Option<FolderPatch>,
+    /// `Some("")` is the clear patch (`--comment=`), serialized as `""`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
 }
 
 impl RuleUpdateChanges {
     /// Built from a validated [`ActionSpec`] plus the resolved folder
     /// change — `rule update` and `verify_create`'s converge-with-`update`
     /// retry both need exactly this patch.
-    pub fn from_spec(spec: &ActionSpec, folder_id: Option<FolderPatch>) -> Self {
+    pub fn from_spec(
+        spec: &ActionSpec,
+        folder_id: Option<FolderPatch>,
+        comment: Option<String>,
+    ) -> Self {
         Self {
             action: spec.action,
             via: spec.via.clone(),
             via6: spec.via6.clone(),
             enabled: spec.enabled,
             folder_id,
+            comment,
         }
     }
 }
@@ -296,6 +305,7 @@ mod tests {
             via6: None,
             enabled: true,
             folder_id: None,
+            comment: None,
         };
         let value = serde_json::to_value(&intent).expect("serializes");
         assert_eq!(
@@ -306,7 +316,8 @@ mod tests {
                 "via": null,
                 "via6": null,
                 "enabled": true,
-                "folder_id": null
+                "folder_id": null,
+                "comment": null
             })
         );
     }
@@ -324,6 +335,22 @@ mod tests {
         assert_eq!(
             value,
             serde_json::json!({"hostnames": ["x.com"], "changes": {"enabled": false}})
+        );
+    }
+
+    #[test]
+    fn rule_update_clear_comment_serializes_as_an_empty_string() {
+        let intent = RuleUpdateIntent {
+            hostnames: vec!["x.com".into()],
+            changes: RuleUpdateChanges {
+                comment: Some(String::new()),
+                ..Default::default()
+            },
+        };
+        let value = serde_json::to_value(&intent).expect("serializes");
+        assert_eq!(
+            value,
+            serde_json::json!({"hostnames": ["x.com"], "changes": {"comment": ""}})
         );
     }
 

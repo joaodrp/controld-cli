@@ -14,9 +14,10 @@ feature, so it bumps the minor version (`features_always_increment_minor` in
 | --- | --- |
 | v0.2 | `device list/get` |
 | v0.3 | `device update` |
-| v0.4 | `rule import` + `rule restore` |
-| v0.5 | Protection: `profile` writes/options/default, `filter *`, `service *` |
-| v0.6 | Fleet & account: `device create/delete/types`, `access *`, `proxy`, `analytics`, `account`, `billing`, `network`, `ip` |
+| v0.4 | Rule comments (`--comment` on `rule create/update`) |
+| v0.5 | `rule import` + `rule restore` |
+| v0.6 | Protection: `profile` writes/options/default, `filter *`, `service *` |
+| v0.7 | Fleet & account: `device create/delete/types`, `access *`, `proxy`, `analytics`, `account`, `billing`, `network`, `ip` |
 | 1.0 | The full mapped surface |
 
 ## v0.2 — `device list/get`
@@ -57,10 +58,27 @@ Contract in [commands](commands.md#device-api-endpoints).
 - Dry run sends nothing and prints the resolved intent (profile as `{id, name}`).
 - Live: a fresh `cdctl-test-*` device runs the full update lifecycle and is torn down.
 
-## v0.4 — `rule import` + `rule restore`
+## v0.4 — Rule comments
+
+Upstream added an optional `comment` (max 64 chars) to custom rules; `spec-drift.yml` caught it
+on 2026-08-31 and the read/echo semantics were probed the same day
+([write-verification](reference/write-verification.md#rule-comment-top-level-on-reads-empty-clears-64-rejects-whole-chunk-probed-2026-08-31)). A small slice pulled ahead of import so the
+flag exists before manifests do. Contract in [commands](commands.md#rule).
+
+**Gate** *(v0.1 global gates inherited)*:
+
+- `--comment` rides `rule create`/`rule update`; the read-back verifies it like every other field.
+- `--comment=` on `update` clears and verifies against an absent read-back comment; on `create`
+  it exits `2`. Omission preserves (the `PUT /rules` merge).
+- An over-64-byte or whitespace-padded comment exits `2` before any request (fail-fast; the
+  server 400s the former and silently trims the latter).
+- `comment` lands in the JSON schema (`null` when absent) and the table (`COMMENT` column).
+- Live: the smoke lifecycle sets, preserves-through-merge, and clears a comment.
+
+## v0.5 — `rule import` + `rule restore`
 
 The feature that justifies the project: two blocklist-sync tools exist because it doesn't.
-Full semantics in [commands](commands.md#rule-import-semantics-v04): **folder-scoped**
+Full semantics in [commands](commands.md#rule-import-semantics-v05): **folder-scoped**
 diff -> converge -> add over one **profile-wide** fetch (quota against the **10,000 rules/profile
 cap**), cross-folder collisions fail fast (exit `6`, nothing written), chunks of **500** with
 scalar params first, **full desired-state verification** after every chunk plus a final full-scope
@@ -110,7 +128,7 @@ fit**. Point users at Control D's native filters.
   replace, and delete-first replace: `operation` discriminates, and `quota.peak`/`final` differ
   between the two replace modes.
 
-## v0.5 — Protection
+## v0.6 — Protection
 
 `profile create/update/delete`, `profile option list/set`, `profile default get/set`,
 `filter list/enable/disable/set`, `service list/set/categories/catalog`
@@ -130,7 +148,7 @@ fit**. Point users at Control D's native filters.
 - `profile default set --via6` exits `2` (shared syntax != shared capability).
 - Creation-intent snapshot for `profile create` incl. `--clone`.
 
-## v0.6 — Fleet & account
+## v0.7 — Fleet & account
 
 `device create/delete/types`, `access list/add/remove`, `proxy list`,
 `analytics levels/regions`, `account get`, `billing products/subscriptions` *(payments deferred,
