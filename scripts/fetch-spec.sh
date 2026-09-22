@@ -22,7 +22,7 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 echo "==> Fetching reference sidebar"
-curl -fsSL "$BASE/sidebar?page_type=reference" -o "$TMP/sidebar.json"
+curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 "$BASE/sidebar?page_type=reference" -o "$TMP/sidebar.json"
 
 python3 - "$TMP/sidebar.json" > "$TMP/slugs.txt" <<'PY'
 import json, re, sys
@@ -49,7 +49,7 @@ echo "==> Found $count endpoint pages"
 
 echo "==> Fetching all endpoint pages"
 mkdir -p "$TMP/pages"
-xargs -P 8 -I{} curl -fsSL "$BASE/reference/{}?reduce=false" -o "$TMP/pages/{}.json" < "$TMP/slugs.txt"
+xargs -P 8 -I{} curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 "$BASE/reference/{}?reduce=false" -o "$TMP/pages/{}.json" < "$TMP/slugs.txt"
 
 echo "==> Extracting and cross-verifying embedded spec"
 python3 - "$TMP/pages" "$OUT" <<'PY'
