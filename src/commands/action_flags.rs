@@ -699,7 +699,7 @@ pub(crate) mod tests {
             enabled: None,
             validated: (),
         };
-        assert!(spec.form_pairs().is_empty());
+        assert_eq!(spec.form_pairs(), Vec::<(&str, String)>::new());
     }
 
     #[test]

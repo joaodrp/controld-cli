@@ -162,7 +162,7 @@ mod tests {
             .keyed("profiles")
             .expect("keyed body");
         let list = profiles.as_array().expect("profiles is an array");
-        assert!(!list.is_empty());
+        assert_ne!(*list, Vec::<Value>::new());
         assert!(list[0]["PK"].is_string());
     }
 
