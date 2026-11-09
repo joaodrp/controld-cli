@@ -1,7 +1,7 @@
 # OpenAPI Spec: Provenance & Validation
 
-**[`controld-openapi.json`](controld-openapi.json)**: Control D Public API 1.0.1, OpenAPI 3.0.1.
-35 paths, 46 operations. Refresh: `./scripts/fetch-spec.sh`.
+**[`controld-openapi.json`](controld-openapi.json)**: Control D 1.0.1, OpenAPI 3.0.1.
+40 paths, 55 operations. Refresh: `./scripts/fetch-spec.sh`.
 
 ## Where it came from
 
@@ -14,7 +14,7 @@ Control D publish no downloadable spec. The file their docs load is permission-g
 But **every rendered reference page embeds the complete spec** in its payload, at
 `.data.api.schema`. `fetch-spec.sh` enumerates the endpoint pages from the docs sidebar and extracts it.
 
-**Why we trust it:** all **46 endpoint pages ship a byte-identical spec** (SHA-256 over canonicalised
+**Why we trust it:** all **55 endpoint pages ship a byte-identical spec** (SHA-256 over canonicalised
 JSON). The script asserts this every run: a stale page fails the fetch instead of corrupting the spec.
 
 **Rejected sources:** `controld-mcp`'s spec (third-party *reconstruction*), `llms.txt` (lists 5 of 46),
@@ -31,8 +31,9 @@ JSON). The script asserts this every run: a stale page fails the fetch instead o
 
 Warnings worth knowing:
 
-- **All 46 operations lack an `operationId`**: blocks clean codegen, and we assign our own.
-- **No operation documents any error response**: the error envelope exists only in prose.
+- **All 55 operations lack an `operationId`**: blocks clean codegen, and we assign our own.
+- **Only the 4 profile-restriction operations document error responses** (`400`/`402`/`403`/`404`,
+  description only, no body schema). Everywhere else the error envelope exists only in prose.
 - 40 examples fail to validate against their own schemas. Two are signal:
   - *"`action` requires `do`"*: the spec marks `do` required, yet real responses **omit it**.
     `controld-go` reads a missing `do` as `0` = **BLOCK**. Treat missing `do` as an error.
@@ -40,8 +41,10 @@ Warnings worth knowing:
 
 ## Content types
 
-The spec settles this: **18 writes are `application/x-www-form-urlencoded`, and exactly one
-(`PUT /profiles/{id}/filters`) is `application/json`.**
+The spec settles this: **20 writes are `application/x-www-form-urlencoded`, and three are
+`application/json`**: `PUT /profiles/{id}/filters`, plus the Organization-tagged internal-domains
+create and modify (`POST /network-settings/internal-domains`,
+`PUT /network-settings/internal-domains/{entry_id}`).
 
 Live, the API **ignores `Content-Type` and sniffs the body**, undocumented, so we send what the spec
 declares ([D16](../decisions.md#d16--documented-surface-only)).
@@ -58,7 +61,7 @@ Verified against the live API: see [read-verification](read-verification.md) and
 - 12 operations have an **empty response schema**, including `GET /proxies`, the authoritative list
   of legal REDIRECT targets.
 - **Rate limits and pagination: entirely undocumented.**
-- **Live endpoints exist outside the 35 paths.** `/endpointschedules` (full CRUD) and `/schedules`
+- **Live endpoints exist outside the 40 paths.** `/endpointschedules` (full CRUD) and `/schedules`
   are absent from the spec and from the API reference, yet both answer on a personal account. The
   spec is a subset of the API, not a description of it.
 - Documented request fields can have **undocumented response counterparts**: `profile_id2` is

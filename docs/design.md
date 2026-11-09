@@ -116,7 +116,7 @@ Nouns are chosen once per resource, cross-referenced against the API name everyw
 | --- | --- |
 | `filter list [--external]` | `GET /profiles/{id}/filters`, `GET /profiles/{id}/filters/external` |
 | `filter enable <name>` / `filter disable <name>` | `PUT /profiles/{id}/filters/filter/{filter}` |
-| `filter set <name>=<on\|off>...` (batch) | `PUT /profiles/{id}/filters`: **the one `application/json` write** |
+| `filter set <name>=<on\|off>...` (batch) | `PUT /profiles/{id}/filters`: **the one `application/json` write outside the Organization-tagged internal-domains operations** |
 
 `<name>` is a **level name** from `levels[]` for leveled families (`ads_small`, `ads_medium`, `ads`,
 `porn_strict`). A family with no levels is addressed by its **family id** (`noai`, `dating`, ...).
@@ -158,7 +158,7 @@ Nouns are chosen once per resource, cross-referenced against the API name everyw
 > **No `analytics query`.** No public query-log API exists. The dashboard has one. The API does not.
 > Do not promise it.
 
-> **`GET /mobileconfig/{device_id}`** is documented on the docs site but absent from the spec's 46
+> **`GET /mobileconfig/{device_id}`** is documented on the docs site but absent from the spec's
 > operations (binary `.mobileconfig` response). No typed command. `cdctl api` reaches it.
 
 ### org — **deferred to a later release** ([D15](decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes))

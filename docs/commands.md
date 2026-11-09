@@ -587,7 +587,8 @@ add/converge/delete plan and exits `0`.
 - `filter list` must make the legal level names obvious. This is the most confusing part of the API
   surface, and clearing it up is the CLI's job.
 - Third-party filter PKs are **`x-`-prefixed**. Set `third_party: true`.
-- `PUT /profiles/{id}/filters` is the **only `application/json` write** in the API.
+- `PUT /profiles/{id}/filters` is the **only `application/json` write** outside the
+  Organization-tagged internal-domains create and modify.
 
 ---
 
@@ -758,7 +759,7 @@ One exact encoding per input form, nothing is sniffed ([D16](decisions.md#d16--d
 | Input | Wire |
 | --- | --- |
 | `-F key=value` *(repeatable)* | `application/x-www-form-urlencoded` body. **Keys are sent literally**: write `-F 'hostnames[]=a' -F 'hostnames[]=b'` yourself. Values are form-encoded, keys are never rewritten. Requires a non-GET `-X` (exit `2` otherwise, no documented GET takes a form body) |
-| `--input -` | stdin sent **verbatim** with `Content-Type: application/json`: the API's one JSON write is `PUT .../filters`. No validation, no reshaping. Requires a non-GET `-X <method>` (exit `2` otherwise, a GET never carries a body here) |
+| `--input -` | stdin sent **verbatim** with `Content-Type: application/json`: the spec's JSON writes are `PUT .../filters` and the Organization-tagged internal-domains create and modify. No validation, no reshaping. Requires a non-GET `-X <method>` (exit `2` otherwise, a GET never carries a body here) |
 | `-F` **and** `--input -` | mutually exclusive: exit `2` |
 | Query parameters | ride in the path: `cdctl api '/access?device_id=abc'`, taken verbatim. [D9](decisions.md#d9--cdctl-api-separately-gateable-get-by-default) origin rules still apply |
 | `DELETE` with a body | `-X DELETE -F 'ips[]=1.2.3.4' -F device_id=abc`, covers `DELETE /access` |
