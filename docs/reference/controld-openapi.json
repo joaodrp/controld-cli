@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.1",
   "info": {
-    "title": "Control D Public API",
+    "title": "Control D",
     "description": "",
     "version": "1.0.1"
   },
@@ -757,6 +757,447 @@
                 }
               }
             }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/profiles/restrictions": {
+      "get": {
+        "summary": "Profiles - List Available Restrictions",
+        "deprecated": false,
+        "description": "List the available restrictions that can be enabled on a profile. Each entry contains only its PK, display name, and description; rule definitions and internal availability fields are not exposed. An empty array means no restrictions are currently available. This catalog is separate from Profile Options, including the block_attacks option. Requires a bearer API token with read access.",
+        "tags": [
+          "Profiles"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Available restriction catalog.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "body": {
+                      "type": "object",
+                      "properties": {
+                        "restrictions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "PK": {
+                                "type": "string",
+                                "description": "Restriction identifier used in profile restriction requests."
+                              },
+                              "name": {
+                                "type": "string",
+                                "description": "Display name."
+                              },
+                              "description": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "Description of the restriction, or null when not set."
+                              }
+                            },
+                            "required": [
+                              "PK",
+                              "name",
+                              "description"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "restrictions"
+                      ]
+                    },
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "body",
+                    "success"
+                  ]
+                },
+                "example": {
+                  "body": {
+                    "restrictions": [
+                      {
+                        "PK": "safesearch",
+                        "name": "Safe Search",
+                        "description": "Enforce Safe Search."
+                      }
+                    ]
+                  },
+                  "success": true
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/profiles/{profile_id}/restrictions": {
+      "get": {
+        "summary": "Profiles - List Enabled Restrictions",
+        "deprecated": false,
+        "description": "List the restriction identifiers configured on this profile, sorted lexically. The response is an array of names, not catalog objects. Use GET /profiles/restrictions to obtain current names and descriptions for available restrictions. Requires a bearer API token with read access.",
+        "tags": [
+          "Profiles"
+        ],
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "description": "Primary key (PK) of the profile",
+            "required": true,
+            "example": "abcd123",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Configured restriction identifiers in lexical order. The array is empty when no restrictions are configured.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "body": {
+                      "type": "object",
+                      "properties": {
+                        "restrictions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "description": "Restriction identifier (PK)."
+                          }
+                        }
+                      },
+                      "required": [
+                        "restrictions"
+                      ]
+                    },
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "body",
+                    "success"
+                  ]
+                },
+                "example": {
+                  "body": {
+                    "restrictions": [
+                      "safesearch"
+                    ]
+                  },
+                  "success": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The profile does not exist in the authenticated user or organization scope."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "summary": "Profiles - Disable Restriction by Body",
+        "deprecated": false,
+        "description": "Disable one restriction by supplying its identifier as PK in the request body. This is an alternative to DELETE /profiles/{profile_id}/restrictions/{name}, not a bulk deletion operation. Repeated disables succeed, including when the restriction is no longer in the available catalog. Requires a bearer API token with write access. Organization members must have Admin permissions or higher. Locked profiles cannot be modified.",
+        "tags": [
+          "Profiles"
+        ],
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "description": "Primary key (PK) of the profile",
+            "required": true,
+            "example": "abcd123",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "PK": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255,
+                    "description": "Restriction identifier to disable on the profile.",
+                    "example": "safesearch"
+                  }
+                },
+                "required": [
+                  "PK"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The restriction is disabled on this profile. The catalog definition is not deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "body": {
+                      "type": "array",
+                      "items": {},
+                      "maxItems": 0
+                    },
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "body",
+                    "success",
+                    "message"
+                  ]
+                },
+                "example": {
+                  "body": [],
+                  "success": true,
+                  "message": "Restriction disabled"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "PK is missing, empty, or invalid."
+          },
+          "403": {
+            "description": "Write access is not permitted, the organization role is insufficient, or the profile is locked."
+          },
+          "404": {
+            "description": "The profile does not exist in the authenticated user or organization scope."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/profiles/{profile_id}/restrictions/{name}": {
+      "put": {
+        "summary": "Profiles - Modify Restriction",
+        "deprecated": false,
+        "description": "Enable or disable one restriction on the profile. Enabling requires an existing, currently available identifier from GET /profiles/restrictions. Disabling does not require the restriction to remain in the available catalog. Repeating either operation does not create duplicate entries. Returns the complete updated list of restriction identifiers configured on the profile. Requires a bearer API token with write access. Organization members must have Admin permissions or higher. Locked profiles cannot be modified.",
+        "tags": [
+          "Profiles"
+        ],
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "description": "Primary key (PK) of the profile",
+            "required": true,
+            "example": "abcd123",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Restriction identifier (PK), not its display name. Obtain available identifiers from GET /profiles/restrictions.",
+            "required": true,
+            "example": "safesearch",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "integer",
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "description": "1 enables the restriction; 0 disables it.",
+                    "example": 1
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Configured restriction identifiers in lexical order. The array is empty when no restrictions are configured.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "body": {
+                      "type": "object",
+                      "properties": {
+                        "restrictions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "description": "Restriction identifier (PK)."
+                          }
+                        }
+                      },
+                      "required": [
+                        "restrictions"
+                      ]
+                    },
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "body",
+                    "success"
+                  ]
+                },
+                "example": {
+                  "body": {
+                    "restrictions": [
+                      "safesearch"
+                    ]
+                  },
+                  "success": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The status is missing or is not 0 or 1; the restriction name is missing; or an enabled restriction does not exist or is unavailable."
+          },
+          "402": {
+            "description": "The account or organization subscription does not permit profile changes."
+          },
+          "403": {
+            "description": "Write access is not permitted, the organization role is insufficient, or the profile is locked."
+          },
+          "404": {
+            "description": "The profile does not exist in the authenticated user or organization scope."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "summary": "Profiles - Disable Restriction",
+        "deprecated": false,
+        "description": "Disable one restriction on the profile. Equivalent to PUT on this path with status=0, but returns a confirmation message instead of the updated list. No request body is required. Repeated deletes succeed, including when the restriction is no longer in the available catalog. This does not delete the restriction definition. Alternatively, DELETE /profiles/{profile_id}/restrictions accepts the identifier in the body as PK. Requires a bearer API token with write access. Organization members must have Admin permissions or higher. Locked profiles cannot be modified.",
+        "tags": [
+          "Profiles"
+        ],
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "description": "Primary key (PK) of the profile",
+            "required": true,
+            "example": "abcd123",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Restriction identifier (PK), not its display name. Obtain available identifiers from GET /profiles/restrictions.",
+            "required": true,
+            "example": "safesearch",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The restriction is disabled on this profile. The catalog definition is not deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "body": {
+                      "type": "array",
+                      "items": {},
+                      "maxItems": 0
+                    },
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "body",
+                    "success",
+                    "message"
+                  ]
+                },
+                "example": {
+                  "body": [],
+                  "success": true,
+                  "message": "Restriction disabled"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Write access is not permitted, the organization role is insufficient, or the profile is locked."
+          },
+          "404": {
+            "description": "The profile does not exist in the authenticated user or organization scope."
           }
         },
         "security": [
@@ -6134,6 +6575,1171 @@
           }
         },
         "security": []
+      }
+    },
+    "/network-settings/internal-domains": {
+      "get": {
+        "summary": "Internal Domains - List",
+        "deprecated": false,
+        "description": "List the Organization's Internal Domains: domain suffixes that managed ctrld resolves outside Control D. Returns local entries, entries inherited from the parent Organization, and the effective list that Endpoints receive.",
+        "tags": [
+          "Organization"
+        ],
+        "parameters": [
+          {
+            "name": "X-Force-Org-Id",
+            "in": "header",
+            "description": "(Optional) Sub-Organization ID. Lets a parent Organization's token act on that Sub-Organization.",
+            "required": false,
+            "example": "123456abcdef",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Internal Domains state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "body": {
+                      "type": "object",
+                      "properties": {
+                        "inheritance": {
+                          "type": "object",
+                          "properties": {
+                            "apply_to_suborgs": {
+                              "type": "boolean",
+                              "description": "The parent Organization shares its entries with all Sub-Organizations."
+                            },
+                            "inherited_from_parent": {
+                              "type": "boolean",
+                              "description": "This Organization receives entries from its parent."
+                            }
+                          },
+                          "required": [
+                            "apply_to_suborgs",
+                            "inherited_from_parent"
+                          ]
+                        },
+                        "internal_domains": {
+                          "type": "object",
+                          "properties": {
+                            "local": {
+                              "type": "array",
+                              "description": "Entries owned by this Organization.",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid"
+                                  },
+                                  "domain": {
+                                    "type": "string",
+                                    "description": "Lowercase domain suffix. Matches the domain and all of its subdomains."
+                                  },
+                                  "mode": {
+                                    "type": "string",
+                                    "enum": [
+                                      "os",
+                                      "resolvers"
+                                    ],
+                                    "description": "`os` uses the Endpoint's current network or VPN DNS. `resolvers` uses the addresses in `resolvers`."
+                                  },
+                                  "resolvers": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "description": "Resolver addresses in the order they are used. Empty when `mode` is `os`."
+                                  },
+                                  "comment": {
+                                    "type": "string"
+                                  },
+                                  "inherited": {
+                                    "type": "boolean",
+                                    "description": "True when the entry is inherited from the parent Organization. Inherited entries are read-only."
+                                  },
+                                  "created_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  },
+                                  "updated_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "domain",
+                                  "mode",
+                                  "resolvers",
+                                  "comment",
+                                  "inherited"
+                                ]
+                              }
+                            },
+                            "inherited": {
+                              "type": "array",
+                              "description": "Read-only entries shared by the parent Organization.",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid"
+                                  },
+                                  "domain": {
+                                    "type": "string",
+                                    "description": "Lowercase domain suffix. Matches the domain and all of its subdomains."
+                                  },
+                                  "mode": {
+                                    "type": "string",
+                                    "enum": [
+                                      "os",
+                                      "resolvers"
+                                    ],
+                                    "description": "`os` uses the Endpoint's current network or VPN DNS. `resolvers` uses the addresses in `resolvers`."
+                                  },
+                                  "resolvers": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "description": "Resolver addresses in the order they are used. Empty when `mode` is `os`."
+                                  },
+                                  "comment": {
+                                    "type": "string"
+                                  },
+                                  "inherited": {
+                                    "type": "boolean",
+                                    "description": "True when the entry is inherited from the parent Organization. Inherited entries are read-only."
+                                  },
+                                  "created_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  },
+                                  "updated_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "domain",
+                                  "mode",
+                                  "resolvers",
+                                  "comment",
+                                  "inherited"
+                                ]
+                              }
+                            },
+                            "effective": {
+                              "type": "array",
+                              "description": "What Endpoints receive: local and inherited entries combined, sorted by domain. A local entry replaces an inherited entry for the same domain.",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "domain": {
+                                    "type": "string"
+                                  },
+                                  "mode": {
+                                    "type": "string",
+                                    "enum": [
+                                      "os",
+                                      "resolvers"
+                                    ]
+                                  },
+                                  "resolvers": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "domain",
+                                  "mode",
+                                  "resolvers"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "local",
+                            "inherited",
+                            "effective"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "inheritance",
+                        "internal_domains"
+                      ]
+                    },
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "body",
+                    "success"
+                  ]
+                },
+                "example": {
+                  "body": {
+                    "inheritance": {
+                      "apply_to_suborgs": false,
+                      "inherited_from_parent": false
+                    },
+                    "internal_domains": {
+                      "local": [
+                        {
+                          "id": "3f8e2a4c-1b7d-4c9e-9a51-6d2f0b8e4c17",
+                          "domain": "corp.example.com",
+                          "mode": "resolvers",
+                          "resolvers": [
+                            "10.0.0.53",
+                            "10.0.1.53"
+                          ],
+                          "comment": "Active Directory",
+                          "inherited": false,
+                          "created_at": "2026-10-20T14:03:11+00:00",
+                          "updated_at": "2026-10-20T14:03:11+00:00"
+                        }
+                      ],
+                      "inherited": [],
+                      "effective": [
+                        {
+                          "domain": "corp.example.com",
+                          "mode": "resolvers",
+                          "resolvers": [
+                            "10.0.0.53",
+                            "10.0.1.53"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "success": true
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Internal Domains - Create",
+        "deprecated": false,
+        "description": "Add an Internal Domain. Requires Admin or Owner permission. Adding a domain that already exists returns HTTP 409. Returns the complete Internal Domains state.",
+        "tags": [
+          "Organization"
+        ],
+        "parameters": [
+          {
+            "name": "X-Force-Org-Id",
+            "in": "header",
+            "description": "(Optional) Sub-Organization ID. Lets a parent Organization's token act on that Sub-Organization.",
+            "required": false,
+            "example": "123456abcdef",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "domain": {
+                    "type": "string",
+                    "maxLength": 253,
+                    "description": "Domain suffix, such as `corp.example.com`. No scheme, path, port, wildcard or IP address. Use punycode for internationalized names.",
+                    "example": "corp.example.com"
+                  },
+                  "resolvers": {
+                    "type": "array",
+                    "maxItems": 4,
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "(Optional) Up to 4 unicast IPv4/IPv6 resolver addresses, in the order they are used. Private addresses are allowed. Omit or send an empty array to use the Endpoint's network or VPN DNS.",
+                    "example": [
+                      "10.0.0.53",
+                      "10.0.1.53"
+                    ]
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "os",
+                      "resolvers"
+                    ],
+                    "description": "(Optional) `os` requires `resolvers` to be empty or omitted. `resolvers` requires at least one address. If omitted, the mode follows `resolvers`."
+                  },
+                  "comment": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "description": "Description of the entry",
+                    "example": "Active Directory"
+                  }
+                },
+                "required": [
+                  "domain"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Domain added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "body": {
+                      "type": "object",
+                      "properties": {
+                        "inheritance": {
+                          "type": "object",
+                          "properties": {
+                            "apply_to_suborgs": {
+                              "type": "boolean",
+                              "description": "The parent Organization shares its entries with all Sub-Organizations."
+                            },
+                            "inherited_from_parent": {
+                              "type": "boolean",
+                              "description": "This Organization receives entries from its parent."
+                            }
+                          },
+                          "required": [
+                            "apply_to_suborgs",
+                            "inherited_from_parent"
+                          ]
+                        },
+                        "internal_domains": {
+                          "type": "object",
+                          "properties": {
+                            "local": {
+                              "type": "array",
+                              "description": "Entries owned by this Organization.",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid"
+                                  },
+                                  "domain": {
+                                    "type": "string",
+                                    "description": "Lowercase domain suffix. Matches the domain and all of its subdomains."
+                                  },
+                                  "mode": {
+                                    "type": "string",
+                                    "enum": [
+                                      "os",
+                                      "resolvers"
+                                    ],
+                                    "description": "`os` uses the Endpoint's current network or VPN DNS. `resolvers` uses the addresses in `resolvers`."
+                                  },
+                                  "resolvers": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "description": "Resolver addresses in the order they are used. Empty when `mode` is `os`."
+                                  },
+                                  "comment": {
+                                    "type": "string"
+                                  },
+                                  "inherited": {
+                                    "type": "boolean",
+                                    "description": "True when the entry is inherited from the parent Organization. Inherited entries are read-only."
+                                  },
+                                  "created_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  },
+                                  "updated_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "domain",
+                                  "mode",
+                                  "resolvers",
+                                  "comment",
+                                  "inherited"
+                                ]
+                              }
+                            },
+                            "inherited": {
+                              "type": "array",
+                              "description": "Read-only entries shared by the parent Organization.",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid"
+                                  },
+                                  "domain": {
+                                    "type": "string",
+                                    "description": "Lowercase domain suffix. Matches the domain and all of its subdomains."
+                                  },
+                                  "mode": {
+                                    "type": "string",
+                                    "enum": [
+                                      "os",
+                                      "resolvers"
+                                    ],
+                                    "description": "`os` uses the Endpoint's current network or VPN DNS. `resolvers` uses the addresses in `resolvers`."
+                                  },
+                                  "resolvers": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "description": "Resolver addresses in the order they are used. Empty when `mode` is `os`."
+                                  },
+                                  "comment": {
+                                    "type": "string"
+                                  },
+                                  "inherited": {
+                                    "type": "boolean",
+                                    "description": "True when the entry is inherited from the parent Organization. Inherited entries are read-only."
+                                  },
+                                  "created_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  },
+                                  "updated_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "domain",
+                                  "mode",
+                                  "resolvers",
+                                  "comment",
+                                  "inherited"
+                                ]
+                              }
+                            },
+                            "effective": {
+                              "type": "array",
+                              "description": "What Endpoints receive: local and inherited entries combined, sorted by domain. A local entry replaces an inherited entry for the same domain.",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "domain": {
+                                    "type": "string"
+                                  },
+                                  "mode": {
+                                    "type": "string",
+                                    "enum": [
+                                      "os",
+                                      "resolvers"
+                                    ]
+                                  },
+                                  "resolvers": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "domain",
+                                  "mode",
+                                  "resolvers"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "local",
+                            "inherited",
+                            "effective"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "inheritance",
+                        "internal_domains"
+                      ]
+                    },
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "body",
+                    "success"
+                  ]
+                },
+                "example": {
+                  "body": {
+                    "inheritance": {
+                      "apply_to_suborgs": false,
+                      "inherited_from_parent": false
+                    },
+                    "internal_domains": {
+                      "local": [
+                        {
+                          "id": "3f8e2a4c-1b7d-4c9e-9a51-6d2f0b8e4c17",
+                          "domain": "corp.example.com",
+                          "mode": "resolvers",
+                          "resolvers": [
+                            "10.0.0.53",
+                            "10.0.1.53"
+                          ],
+                          "comment": "Active Directory",
+                          "inherited": false,
+                          "created_at": "2026-10-20T14:03:11+00:00",
+                          "updated_at": "2026-10-20T14:03:11+00:00"
+                        }
+                      ],
+                      "inherited": [],
+                      "effective": [
+                        {
+                          "domain": "corp.example.com",
+                          "mode": "resolvers",
+                          "resolvers": [
+                            "10.0.0.53",
+                            "10.0.1.53"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "success": true
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/network-settings/internal-domains/{entry_id}": {
+      "put": {
+        "summary": "Internal Domains - Modify",
+        "deprecated": false,
+        "description": "Modify a local Internal Domain. Requires Admin or Owner permission. Send at least one field; omitted fields keep their value. Inherited entries are read-only and return HTTP 404. Returns the complete Internal Domains state.",
+        "tags": [
+          "Organization"
+        ],
+        "parameters": [
+          {
+            "name": "entry_id",
+            "in": "path",
+            "description": "Internal Domain entry ID (`id` from Internal Domains - List)",
+            "required": true,
+            "example": "3f8e2a4c-1b7d-4c9e-9a51-6d2f0b8e4c17",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Force-Org-Id",
+            "in": "header",
+            "description": "(Optional) Sub-Organization ID. Lets a parent Organization's token act on that Sub-Organization.",
+            "required": false,
+            "example": "123456abcdef",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "domain": {
+                    "type": "string",
+                    "maxLength": 253,
+                    "description": "Domain suffix, such as `corp.example.com`. No scheme, path, port, wildcard or IP address. Use punycode for internationalized names.",
+                    "example": "corp.example.com"
+                  },
+                  "resolvers": {
+                    "type": "array",
+                    "maxItems": 4,
+                    "nullable": true,
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "(Optional) Replaces the resolver list. An empty array or null switches the entry to the Endpoint's network or VPN DNS.",
+                    "example": [
+                      "10.0.0.53"
+                    ]
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "os",
+                      "resolvers"
+                    ],
+                    "description": "(Optional) `os` clears the resolver list. `resolvers` keeps the stored list unless you also send `resolvers`. `os` together with a non-empty `resolvers` is rejected."
+                  },
+                  "comment": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "description": "Description of the entry",
+                    "example": "Active Directory"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Domain modified",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "body": {
+                      "type": "object",
+                      "properties": {
+                        "inheritance": {
+                          "type": "object",
+                          "properties": {
+                            "apply_to_suborgs": {
+                              "type": "boolean",
+                              "description": "The parent Organization shares its entries with all Sub-Organizations."
+                            },
+                            "inherited_from_parent": {
+                              "type": "boolean",
+                              "description": "This Organization receives entries from its parent."
+                            }
+                          },
+                          "required": [
+                            "apply_to_suborgs",
+                            "inherited_from_parent"
+                          ]
+                        },
+                        "internal_domains": {
+                          "type": "object",
+                          "properties": {
+                            "local": {
+                              "type": "array",
+                              "description": "Entries owned by this Organization.",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid"
+                                  },
+                                  "domain": {
+                                    "type": "string",
+                                    "description": "Lowercase domain suffix. Matches the domain and all of its subdomains."
+                                  },
+                                  "mode": {
+                                    "type": "string",
+                                    "enum": [
+                                      "os",
+                                      "resolvers"
+                                    ],
+                                    "description": "`os` uses the Endpoint's current network or VPN DNS. `resolvers` uses the addresses in `resolvers`."
+                                  },
+                                  "resolvers": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "description": "Resolver addresses in the order they are used. Empty when `mode` is `os`."
+                                  },
+                                  "comment": {
+                                    "type": "string"
+                                  },
+                                  "inherited": {
+                                    "type": "boolean",
+                                    "description": "True when the entry is inherited from the parent Organization. Inherited entries are read-only."
+                                  },
+                                  "created_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  },
+                                  "updated_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "domain",
+                                  "mode",
+                                  "resolvers",
+                                  "comment",
+                                  "inherited"
+                                ]
+                              }
+                            },
+                            "inherited": {
+                              "type": "array",
+                              "description": "Read-only entries shared by the parent Organization.",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid"
+                                  },
+                                  "domain": {
+                                    "type": "string",
+                                    "description": "Lowercase domain suffix. Matches the domain and all of its subdomains."
+                                  },
+                                  "mode": {
+                                    "type": "string",
+                                    "enum": [
+                                      "os",
+                                      "resolvers"
+                                    ],
+                                    "description": "`os` uses the Endpoint's current network or VPN DNS. `resolvers` uses the addresses in `resolvers`."
+                                  },
+                                  "resolvers": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "description": "Resolver addresses in the order they are used. Empty when `mode` is `os`."
+                                  },
+                                  "comment": {
+                                    "type": "string"
+                                  },
+                                  "inherited": {
+                                    "type": "boolean",
+                                    "description": "True when the entry is inherited from the parent Organization. Inherited entries are read-only."
+                                  },
+                                  "created_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  },
+                                  "updated_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "domain",
+                                  "mode",
+                                  "resolvers",
+                                  "comment",
+                                  "inherited"
+                                ]
+                              }
+                            },
+                            "effective": {
+                              "type": "array",
+                              "description": "What Endpoints receive: local and inherited entries combined, sorted by domain. A local entry replaces an inherited entry for the same domain.",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "domain": {
+                                    "type": "string"
+                                  },
+                                  "mode": {
+                                    "type": "string",
+                                    "enum": [
+                                      "os",
+                                      "resolvers"
+                                    ]
+                                  },
+                                  "resolvers": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "domain",
+                                  "mode",
+                                  "resolvers"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "local",
+                            "inherited",
+                            "effective"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "inheritance",
+                        "internal_domains"
+                      ]
+                    },
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "body",
+                    "success"
+                  ]
+                },
+                "example": {
+                  "body": {
+                    "inheritance": {
+                      "apply_to_suborgs": false,
+                      "inherited_from_parent": false
+                    },
+                    "internal_domains": {
+                      "local": [
+                        {
+                          "id": "3f8e2a4c-1b7d-4c9e-9a51-6d2f0b8e4c17",
+                          "domain": "corp.example.com",
+                          "mode": "resolvers",
+                          "resolvers": [
+                            "10.0.0.53",
+                            "10.0.1.53"
+                          ],
+                          "comment": "Active Directory",
+                          "inherited": false,
+                          "created_at": "2026-10-20T14:03:11+00:00",
+                          "updated_at": "2026-10-20T14:03:11+00:00"
+                        }
+                      ],
+                      "inherited": [],
+                      "effective": [
+                        {
+                          "domain": "corp.example.com",
+                          "mode": "resolvers",
+                          "resolvers": [
+                            "10.0.0.53",
+                            "10.0.1.53"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "success": true
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "summary": "Internal Domains - Delete",
+        "deprecated": false,
+        "description": "Delete a local Internal Domain. Requires Admin or Owner permission. Inherited entries return HTTP 404. Returns the complete Internal Domains state.",
+        "tags": [
+          "Organization"
+        ],
+        "parameters": [
+          {
+            "name": "entry_id",
+            "in": "path",
+            "description": "Internal Domain entry ID (`id` from Internal Domains - List)",
+            "required": true,
+            "example": "3f8e2a4c-1b7d-4c9e-9a51-6d2f0b8e4c17",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Force-Org-Id",
+            "in": "header",
+            "description": "(Optional) Sub-Organization ID. Lets a parent Organization's token act on that Sub-Organization.",
+            "required": false,
+            "example": "123456abcdef",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Domain deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "body": {
+                      "type": "object",
+                      "properties": {
+                        "inheritance": {
+                          "type": "object",
+                          "properties": {
+                            "apply_to_suborgs": {
+                              "type": "boolean",
+                              "description": "The parent Organization shares its entries with all Sub-Organizations."
+                            },
+                            "inherited_from_parent": {
+                              "type": "boolean",
+                              "description": "This Organization receives entries from its parent."
+                            }
+                          },
+                          "required": [
+                            "apply_to_suborgs",
+                            "inherited_from_parent"
+                          ]
+                        },
+                        "internal_domains": {
+                          "type": "object",
+                          "properties": {
+                            "local": {
+                              "type": "array",
+                              "description": "Entries owned by this Organization.",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid"
+                                  },
+                                  "domain": {
+                                    "type": "string",
+                                    "description": "Lowercase domain suffix. Matches the domain and all of its subdomains."
+                                  },
+                                  "mode": {
+                                    "type": "string",
+                                    "enum": [
+                                      "os",
+                                      "resolvers"
+                                    ],
+                                    "description": "`os` uses the Endpoint's current network or VPN DNS. `resolvers` uses the addresses in `resolvers`."
+                                  },
+                                  "resolvers": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "description": "Resolver addresses in the order they are used. Empty when `mode` is `os`."
+                                  },
+                                  "comment": {
+                                    "type": "string"
+                                  },
+                                  "inherited": {
+                                    "type": "boolean",
+                                    "description": "True when the entry is inherited from the parent Organization. Inherited entries are read-only."
+                                  },
+                                  "created_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  },
+                                  "updated_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "domain",
+                                  "mode",
+                                  "resolvers",
+                                  "comment",
+                                  "inherited"
+                                ]
+                              }
+                            },
+                            "inherited": {
+                              "type": "array",
+                              "description": "Read-only entries shared by the parent Organization.",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid"
+                                  },
+                                  "domain": {
+                                    "type": "string",
+                                    "description": "Lowercase domain suffix. Matches the domain and all of its subdomains."
+                                  },
+                                  "mode": {
+                                    "type": "string",
+                                    "enum": [
+                                      "os",
+                                      "resolvers"
+                                    ],
+                                    "description": "`os` uses the Endpoint's current network or VPN DNS. `resolvers` uses the addresses in `resolvers`."
+                                  },
+                                  "resolvers": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "description": "Resolver addresses in the order they are used. Empty when `mode` is `os`."
+                                  },
+                                  "comment": {
+                                    "type": "string"
+                                  },
+                                  "inherited": {
+                                    "type": "boolean",
+                                    "description": "True when the entry is inherited from the parent Organization. Inherited entries are read-only."
+                                  },
+                                  "created_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  },
+                                  "updated_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "domain",
+                                  "mode",
+                                  "resolvers",
+                                  "comment",
+                                  "inherited"
+                                ]
+                              }
+                            },
+                            "effective": {
+                              "type": "array",
+                              "description": "What Endpoints receive: local and inherited entries combined, sorted by domain. A local entry replaces an inherited entry for the same domain.",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "domain": {
+                                    "type": "string"
+                                  },
+                                  "mode": {
+                                    "type": "string",
+                                    "enum": [
+                                      "os",
+                                      "resolvers"
+                                    ]
+                                  },
+                                  "resolvers": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "domain",
+                                  "mode",
+                                  "resolvers"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "local",
+                            "inherited",
+                            "effective"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "inheritance",
+                        "internal_domains"
+                      ]
+                    },
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "body",
+                    "success"
+                  ]
+                },
+                "example": {
+                  "body": {
+                    "inheritance": {
+                      "apply_to_suborgs": false,
+                      "inherited_from_parent": false
+                    },
+                    "internal_domains": {
+                      "local": [
+                        {
+                          "id": "3f8e2a4c-1b7d-4c9e-9a51-6d2f0b8e4c17",
+                          "domain": "corp.example.com",
+                          "mode": "resolvers",
+                          "resolvers": [
+                            "10.0.0.53",
+                            "10.0.1.53"
+                          ],
+                          "comment": "Active Directory",
+                          "inherited": false,
+                          "created_at": "2026-10-20T14:03:11+00:00",
+                          "updated_at": "2026-10-20T14:03:11+00:00"
+                        }
+                      ],
+                      "inherited": [],
+                      "effective": [
+                        {
+                          "domain": "corp.example.com",
+                          "mode": "resolvers",
+                          "resolvers": [
+                            "10.0.0.53",
+                            "10.0.1.53"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "success": true
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     }
   },
