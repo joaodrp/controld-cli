@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1](https://github.com/joaodrp/controld-cli/compare/v0.4.0...v0.4.1) - 2026-11-09
+
+### Other
+
+- satisfy clippy's new `assert_is_empty` lint
+- plan profile restrictions into v0.6, defer internal domains
+- refresh spec facts after the restrictions/internal-domains update
+- *(reference)* vendor spec update adding restrictions and internal domains
+- retry transient fetch failures in spec drift check
+
 ## [0.4.0](https://github.com/joaodrp/controld-cli/compare/v0.3.0...v0.4.0) - 2026-08-31
 
 ### Added
