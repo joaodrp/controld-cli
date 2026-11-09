@@ -40,7 +40,7 @@ cp .env.example .env
 ```
 
 `cargo test` never touches the network: the live suite is opt-in (below). `fetch-spec.sh`
-re-fetches the OpenAPI spec and fails if the 46 docs pages disagree. `.env` supplies
+re-fetches the OpenAPI spec and fails if the docs pages disagree. `.env` supplies
 `CONTROLD_API_TOKEN`, needed only for the live suite and manual probes.
 
 Toolchain: pins live in `Cargo.toml`; the edition/MSRV choice and stack rationale in

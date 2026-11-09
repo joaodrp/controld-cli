@@ -516,3 +516,8 @@ its integration point.
    original note claimed `cdctl api -F` already sent literal keys, but it did not: reqwest's form
    encoder emitted `hostnames%5B%5D=` there too, and an earlier `cdctl api -F` wire test had pinned the encoded
    form under a test name that said otherwise.)
+10. **Profile restrictions** (`/profiles/restrictions`, `/profiles/{id}/restrictions[/{name}]`):
+    first caught by `spec-drift.yml` on 2026-10-12, unprobed, verify before v0.6. Owed: the
+    catalog on a personal account (empty? plan-gated `402`?), the response shapes against the spec
+    examples, whether `PUT status=0` really disables (read-back after the ack), the error for an
+    unknown name, and the locked-profile `403`.

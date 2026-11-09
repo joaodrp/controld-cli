@@ -354,7 +354,7 @@ mod tests {
         assert_eq!(ctrld.version.as_deref(), Some("v1.5.3"));
         assert_eq!(ctrld.last_fetch.as_deref(), Some("2026-07-11T10:22:50Z"));
         assert_eq!(first.resolvers.dot, "dev6ed2281d.dns.controld.com");
-        assert!(first.resolvers.v4.is_empty());
+        assert_eq!(first.resolvers.v4, Vec::<String>::new());
         assert_eq!(first.resolvers.v6.len(), 2);
     }
 

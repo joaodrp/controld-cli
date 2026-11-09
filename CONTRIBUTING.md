@@ -44,17 +44,17 @@ CONTROLD_LIVE_TESTS=1 cargo test --test live
 ## The API spec
 
 Control D publish no downloadable OpenAPI spec, but every rendered docs page embeds it.
-[`scripts/fetch-spec.sh`](scripts/fetch-spec.sh) extracts it and asserts all 46 endpoint pages
+[`scripts/fetch-spec.sh`](scripts/fetch-spec.sh) extracts it and asserts all endpoint pages
 ship a byte-identical copy:
 
 ```console
 $ ./scripts/fetch-spec.sh
 ==> Fetching reference sidebar
-==> Found 46 endpoint pages
+==> Found 55 endpoint pages
 ==> Fetching all endpoint pages
 ==> Extracting and cross-verifying embedded spec
-    all 46 pages agree (sha256 0404ebecf30b38f9)
-    35 paths, 46 operations
+    all 55 pages agree (sha256 11e761c6c9ae66d4)
+    40 paths, 55 operations
 ==> Unchanged (matches docs/reference/controld-openapi.json)
 ```
 

@@ -347,7 +347,7 @@ mod tests {
         store.save(&config).expect("save");
 
         let loaded = store.load().expect("load");
-        assert!(loaded.warnings.is_empty());
+        assert_eq!(loaded.warnings, Vec::<String>::new());
         let context = loaded.config.active_context().expect("active context");
         assert_eq!(
             context.token.as_ref().expect("token").expose_secret(),

@@ -16,7 +16,7 @@ feature, so it bumps the minor version (`features_always_increment_minor` in
 | v0.3 | `device update` |
 | v0.4 | Rule comments (`--comment` on `rule create/update`) |
 | v0.5 | `rule import` + `rule restore` |
-| v0.6 | Protection: `profile` writes/options/default, `filter *`, `service *` |
+| v0.6 | Protection: `profile` writes/options/default, `filter *`, `service *`, `restriction *` |
 | v0.7 | Fleet & account: `device create/delete/types`, `access *`, `proxy`, `analytics`, `account`, `billing`, `network`, `ip` |
 | 1.0 | The full mapped surface |
 
@@ -131,10 +131,12 @@ fit**. Point users at Control D's native filters.
 ## v0.6 — Protection
 
 `profile create/update/delete`, `profile option list/set`, `profile default get/set`,
-`filter list/enable/disable/set`, `service list/set/categories/catalog`
+`filter list/enable/disable/set`, `service list/set/categories/catalog`,
+`restriction list/enable/disable`
 
-- Live probes owed **before the gate**: the `dropdown` option write and the level-less filter
-  write (Open items 5 and 7, [decisions](decisions.md#open)), captured as sanitized fixtures.
+- Live probes owed **before the gate**: the `dropdown` option write, the level-less filter
+  write, and the restriction lifecycle (Open items 5, 7 and 10, [decisions](decisions.md#open)),
+  captured as sanitized fixtures.
 
 **Gate** *(v0.1 global gates inherited)*:
 
@@ -147,6 +149,10 @@ fit**. Point users at Control D's native filters.
   round-trips through the GET fixture (`p_service_v6.json`).
 - `profile default set --via6` exits `2` (shared syntax != shared capability).
 - Creation-intent snapshot for `profile create` incl. `--clone`.
+- Restrictions: `enable`/`disable` succeed only on a converged `GET` read-back (the disable ack
+  is never the verdict). A name absent from the catalog exits `3` on `enable` before any write.
+  An empty catalog renders as `[]`, not an error. `list` joins enabled identifiers with catalog
+  names, and an enabled identifier no longer in the catalog still lists (with `name: null`).
 
 ## v0.7 — Fleet & account
 
@@ -168,7 +174,7 @@ no verifiable schema, [D2](decisions.md#d2--the-cli-is-the-stability-layer-own-t
 
 ## 1.0
 
-The full mapped surface: 40/46 operations, org ([D15](decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes)) and `billing payments`
+The full mapped surface: 43/55 operations, org incl. internal domains ([D15](decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes)) and `billing payments`
 ([D2](decisions.md#d2--the-cli-is-the-stability-layer-own-the-output-schema)) stay deferred, reachable via `cdctl api`. 1.0 declares the contracts, frozen
 since v0.1, semver-guaranteed.
 
