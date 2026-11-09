@@ -131,6 +131,20 @@ Nouns are chosen once per resource, cross-referenced against the API name everyw
 | `service categories` | `GET /services/categories` |
 | `service catalog <category>` | `GET /services/categories/{category}` |
 
+### restriction
+
+| Command | API |
+| --- | --- |
+| `restriction list` | `GET /profiles/{profile_id}/restrictions`: identifiers only (`["safesearch"]`), joined client-side with the catalog for names |
+| `restriction list --available` | `GET /profiles/restrictions`: the catalog (`PK`, `name`, `description`), account-wide |
+| `restriction enable <name>` / `restriction disable <name>` | `PUT /profiles/{profile_id}/restrictions/{name}` with `status=1\|0` |
+
+`<name>` is the catalog `PK` (`safesearch`), never the display name. Both `DELETE` forms
+(`.../restrictions/{name}`, and `.../restrictions` with `PK` in the body) duplicate `status=0`
+and are left to `cdctl api`. Disable acks `body: []` plus a message, the same shape as the
+silent no-op rule delete, so every write is verified by a `GET` read-back, never by the ack.
+**Unprobed**: the contract waits on the live probe in [Open item 10](decisions.md#open).
+
 ### device (API calls these "endpoints")
 
 | Command | API |
@@ -173,6 +187,11 @@ but **not implemented in v1**. They are a business feature, and a personal accou
 | `org suborg list`, `org suborg create <name>` | `GET /organizations/sub_organizations` (**underscored**), `POST /organizations/suborg` |
 | `org update ...` | `PUT /organizations` (⚠️ **billable event**) |
 
+The four **internal-domains** operations (`GET`/`POST /network-settings/internal-domains`,
+`PUT`/`DELETE /network-settings/internal-domains/{entry_id}`) are Organization-tagged ("the
+Organization's Internal Domains", Admin or Owner permission, `X-Force-Org-Id` aware) and are
+deferred with the rest of `org` under the same reasoning. Unprobed on a personal account.
+
 **They must be addable without a breaking change.** Two things make that true and ship in v1:
 
 1. **`org` is a single new top-level noun**: purely additive, cannot collide.
@@ -193,9 +212,10 @@ Until then, `cdctl api /organizations/organization` reaches them.
 | `api <path> [-X <method>] [-F k=v]... [--input -]` | Raw passthrough ([D9](decisions.md#d9--cdctl-api-separately-gateable-get-by-default)). **GET by default**. Non-GET needs `-X <method>` **and** `--yes`. Both body forms (`-F`, `--input -`) require a non-GET `-X`. A distinct verb so sandboxes can deny `Bash(cdctl api:*)` while allowing `Bash(cdctl:*)`. Encoding is explicit, never sniffed: [commands](commands.md#cdctl-api-request-encoding) |
 | `completions <shell>`, `reference` | Must work **without a token** ([D7](decisions.md#d7--resolve-auth-lazily)) |
 
-**Coverage: 40/46 operations mapped for v1. The 5 `organizations/*` operations are deferred by scope
-([D15](decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes)). `billing payments` is deferred until a real payload makes its schema
-verifiable ([D2](decisions.md#d2--the-cli-is-the-stability-layer-own-the-output-schema)). All are reachable today via `cdctl api`.**
+**Coverage: 43/55 operations mapped for v1. The 5 `organizations/*` operations and the 4
+internal-domains operations are deferred by scope ([D15](decisions.md#d15--personal-accounts-only-orgs-addable-without-breaking-changes)). `billing payments` is deferred until a
+real payload makes its schema verifiable ([D2](decisions.md#d2--the-cli-is-the-stability-layer-own-the-output-schema)). The 2 restriction `DELETE` forms duplicate
+`PUT status=0` and stay unmapped. All are reachable today via `cdctl api`.**
 
 Plus one shape absent from the spec's `paths` object: **`GET /profiles/{id}/rules`** with the folder
 segment omitted. Only the prose of the `folder_id` parameter description documents it, and that
